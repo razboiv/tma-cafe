@@ -2,7 +2,7 @@
     {
         "id": "burger-1",
         "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=center&w=1920&q=80",
-        "name": "Hamburger",
+        "name": "Красная Роза",
         "description": "From aged beef, with homemade ketchup, romaine lettuce and tomato.",
         "variants": [
             {
@@ -23,7 +23,7 @@
     {
         "id": "burger-2",
         "image": "https://images.unsplash.com/photo-1571091655789-405eb7a3a3a8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=center&w=1920&q=80",
-        "name": "Jalapeno & Habanero burger",
+        "name": "Белая Роза",
         "description": "From aged beef, with slices of jalapeño and habanero peppers, Cheddar cheese, homemade guacamole, arugula, romaine lettuce, spicy tomato salsa and grilled corn.",
         "variants": [
             {
