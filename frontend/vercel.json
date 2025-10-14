@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/info",        "destination": "https://tma-cafe-ox4a.vercel.app/info" },
+    { "source": "/categories",  "destination": "https://tma-cafe-ox4a.vercel.app/categories" },
+    { "source": "/menu/:path*", "destination": "https://tma-cafe-ox4a.vercel.app/menu/:path*" },
+    { "source": "/order",       "destination": "https://tma-cafe-ox4a.vercel.app/order" }
+  ]
+}
