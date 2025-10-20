@@ -2,19 +2,19 @@
     {
         "id": "burgers",
         "icon": "icons/icon-burger.svg",
-        "name": "Розы",
+        "name": "Burgers",
         "backgroundColor": "#F79683"
     },
     {
         "id": "pizza",
         "icon": "icons/icon-pizza.svg",
-        "name": "Тюльпаны",
+        "name": "Pizza",
         "backgroundColor": "#F5DEB3"
     },
     {
         "id": "pasta",
         "icon": "icons/icon-pasta.svg",
-        "name": "Пионы",
+        "name": "Pasta",
         "backgroundColor": "#8FBC8F"
     },
     {
