@@ -174,5 +174,11 @@ def json_data(file_path: str):
             return json.load(f)
     raise FileNotFoundError(file_path)
 
+# Health check endpoint для UptimeRobot
+@app.route('/health', methods=['GET'])
+def health():
+    return {'status': 'ok'}, 200
+
+
 # Обновляем webhook при старте (как в шаблоне)
 bot.refresh_webhook()
