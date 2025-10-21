@@ -28,13 +28,12 @@ CORS(app, origins=[o for o in allowed_origins if o is not None])
 # ║ Telegram webhook endpoint                                                ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 @app.route(bot.WEBHOOK_PATH, methods=['POST'])
+@app.route(f"{bot.WEBHOOK_PATH}/", methods=['POST'])  # чтобы работало и со слэшем, и без
 def bot_webhook():
     """
-    Точка входа для апдейтов от Telegram.
-    Важно: URL вебхука = WEBHOOK_URL + WEBHOOK_PATH (без лишних /bot/bot).
+    Entry point for Bot update sent via Telegram API.
     """
-    update_json = request.get_json(force=True)
-    bot.process_update(update_json)
+    bot.process_update(request.get_json())
     return {'message': 'OK'}, 200
 
 
