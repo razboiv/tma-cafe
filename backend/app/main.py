@@ -14,7 +14,7 @@ load_dotenv()
 
 app = Flask(__name__)
 # обрабатываем /info и /info/
-app.url_map.strict_slashes = False
+app.url_map.strict_slashes = True
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CORS: разрешаем фронту ходить на бэк
