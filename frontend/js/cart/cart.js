@@ -20,7 +20,7 @@ class CartItem {
   }
 
   getId() {
-    return ${this.cafeItem.id}-${this.variant.id};
+    return `${this.cafeItem.id}-${this.variant.id}`;
   }
 
   getDisplayTotalCost() {
@@ -33,25 +33,24 @@ class CartItem {
  * Cart class holds all cart items
  */
 export class Cart {
-  // Используем обычные статические поля для совместимости
   static _items = [];
   static onItemsChangeListener = null;
 
-  // Инициализация хранилища БЕЗ static { }
+  // Load items from localStorage safely
   static _init() {
     try {
       const saved = localStorage.getItem("cartItems") || "[]";
       const parsed = JSON.parse(saved);
+
       if (Array.isArray(parsed)) {
         Cart._items = parsed.map(raw => CartItem.fromRaw(raw));
       } else {
-        localStorage.removeItem("cartItems");
         Cart._items = [];
+        localStorage.removeItem("cartItems");
       }
     } catch (e) {
-      // битый JSON — чистим
-      localStorage.removeItem("cartItems");
       Cart._items = [];
+      localStorage.removeItem("cartItems");
     }
   }
 
@@ -64,33 +63,34 @@ export class Cart {
   }
 
   static addItem(cafeItem, variant, quantity) {
-    const newItem = new CartItem(cafeItem, variant, quantity);
-    const existing = Cart._findItem(newItem.getId());
+    const it = new CartItem(cafeItem, variant, quantity);
+    const existing = Cart._findItem(it.getId());
 
     if (existing) existing.quantity += quantity;
-    else Cart._items.push(newItem);
+    else Cart._items.push(it);
 
     Cart._save();
     Cart._notify();
   }
 
   static increaseQuantity(cartItem, amount) {
-    const found = Cart._findItem(cartItem.getId());
-    if (found) {
-      found.quantity += amount;
+    const it = Cart._findItem(cartItem.getId());
+    if (it) {
+      it.quantity += amount;
       Cart._save();
       Cart._notify();
     }
   }
 
   static decreaseQuantity(cartItem, amount) {
-    const found = Cart._findItem(cartItem.getId());
-    if (found) {
-      if (found.quantity > amount) {
-        found.quantity -= amount;
+    const it = Cart._findItem(cartItem.getId());
+    if (it) {
+      if (it.quantity > amount) {
+        it.quantity -= amount;
       } else {
-        removeIf(Cart._items, it => it.getId() === found.getId());
+        removeIf(Cart._items, x => x.getId() === it.getId());
       }
+
       Cart._save();
       Cart._notify();
     }
@@ -103,7 +103,7 @@ export class Cart {
   }
 
   static _findItem(id) {
-    return Cart._items.find(it => it.getId() === id);
+    return Cart._items.find(x => x.getId() === id);
   }
 
   static _save() {
@@ -117,5 +117,5 @@ export class Cart {
   }
 }
 
-// Запускаем инициализацию
+// Initialize cart on module load
 Cart._init();
