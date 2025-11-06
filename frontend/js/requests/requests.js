@@ -1,41 +1,38 @@
-// Set base URL of your backend.
-// Без завершающего слеша!
+// Set base URL depending on your environment.
+// Don't forget to add it to allowed origins on backend.
 const baseUrl = 'https://tma-cafe-backend.onrender.com';
 
 /**
  * Performs GET request.
- * @param {string} endpoint e.g. '/info'
- * @param {*} onSuccess callback
+ *
+ * @param {string} endpoint API endpoint path, e.g. '/info'.
+ * @param {*} onSuccess Callback on successful request.
  */
 export function get(endpoint, onSuccess) {
   $.ajax({
     url: baseUrl + endpoint,
     dataType: 'json',
-    success: (result) => onSuccess(result),
+    success: result => onSuccess(result)
   });
 }
 
 /**
- * Performs POST request (JSON).
- * @param {string} endpoint e.g. '/order'
- * @param {object} data plain object (мы сами сериализуем в JSON)
- * @param {*} onResult callback({ ok, data? , error? })
+ * Performs POST request.
+ *
+ * @param {string} endpoint API endpoint path, e.g. '/order'.
+ * @param {string} data Request body in JSON format (already stringified by caller or object).
+ * @param {*} onResult Callback on request result.
+ *                      In case of success, returns { ok: true, data: <data-from-backend> },
+ *                      otherwise { ok: false, error: 'Something went wrong' }.
  */
 export function post(endpoint, data, onResult) {
   $.ajax({
     type: 'POST',
     url: baseUrl + endpoint,
-    data: JSON.stringify(data),          // <<< главное изменение
-    processData: false,                  // не превращать объект в query-string
+    data: typeof data === 'string' ? data : JSON.stringify(data),
     contentType: 'application/json; charset=utf-8',
     dataType: 'json',
-    success: (result) => onResult({ ok: true, data: result }),
-    error: (xhr) => {
-      let msg =
-        (xhr.responseJSON && xhr.responseJSON.message) ||
-        xhr.statusText ||
-        'Something went wrong.';
-      onResult({ ok: false, error: msg });
-    },
+    success: result => onResult({ ok: true, data: result }),
+    error: xhr => onResult({ ok: false, error: xhr.responseText || 'Something went wrong.' })
   });
 }
