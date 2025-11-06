@@ -7,22 +7,24 @@ from flask import Flask, request
 from flask_cors import CORS
 from telebot.types import LabeledPrice
 
+# наши модули рядом
 from . import auth, bot
 
-# ================================
-# env
-# ================================
+# ==========================
+# Загрузка переменных .env
+# ==========================
 load_dotenv()
 
 app = Flask(__name__)
-# чтобы /bot и /bot/ считались одним путём
+
+# чтобы /bot и /bot/ считались одним и тем же путём (без 307/404)
 app.url_map.strict_slashes = False
 
-# ================================
-# CORS
-# ================================
-APP_URL = os.getenv("APP_URL")
-DEV_APP_URL = os.getenv("DEV_APP_URL")
+# ==========================
+# CORS (разрешаем фронту/Telegram)
+# ==========================
+APP_URL = os.getenv("APP_URL")          # прод-URL фронта (например, https://luvcore.shop)
+DEV_APP_URL = os.getenv("DEV_APP_URL")  # опционально для локалки
 
 allowed_origins = [o for o in [
     APP_URL,
@@ -32,42 +34,40 @@ allowed_origins = [o for o in [
     "https://telegram.org",
 ] if o]
 
+# ВАЖНО: без resources/regex, иначе regex типа "/*" и падение во flask-cors
 CORS(
     app,
-    resources={r"/**": {
-        "origins": allowed_origins or "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": False
-    }}
+    origins=allowed_origins or "*",
+    supports_credentials=False,
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"],
 )
 
-# ================================
-# health
-# ================================
+# ==========================
+# Health / debug
+# ==========================
 @app.route("/", methods=["GET"])
 def root_ok():
     return {"ok": True}, 200
 
-# ================================
-# Telegram webhook (POST)
-# ================================
+# ==========================
+# Telegram Webhook (POST)
+# Держим оба варианта пути
+# ==========================
 @app.route(bot.WEBHOOK_PATH, methods=["POST"])
 @app.route(f"/{bot.WEBHOOK_PATH}", methods=["POST"])
 def bot_webhook():
-    update = request.get_json(force=True, silent=True)
+    """
+    Точка входа для апдейтов Telegram.
+    """
+    update = request.get_json(force=True, silent=True) or {}
     bot.process_update(update)
     return {"message": "OK"}, 200
 
-# ================================
-# Public API for Mini App
-# ================================
-def json_data(file_path: str):
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(file_path)
-    with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
 
+# ==========================
+# Public API для Mini App
+# ==========================
 @app.route("/info")
 def info():
     try:
@@ -77,14 +77,16 @@ def info():
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
+
 @app.route("/categories")
 def categories():
     try:
         return json_data("data/categories.json")
     except FileNotFoundError:
-        return {"message": "Categories file not found"}, 404
+        return {"message": "categories file not found"}, 404
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
+
 
 @app.route("/menu/<category_id>")
 def category_menu(category_id: str):
@@ -95,114 +97,125 @@ def category_menu(category_id: str):
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
+
 @app.route("/menu/details/<menu_item_id>")
 def menu_item_details(menu_item_id: str):
+    """
+    Ищем элемент меню по id в папке data/menu/*.json
+    """
     try:
-        folder = "data/menu"
-        for file in os.listdir(folder):
-            if not file.endswith(".json"):
+        data_folder_path = "data/menu"
+        desired = None
+
+        for data_file in os.listdir(data_folder_path):
+            if not data_file.endswith(".json"):
                 continue
-            items = json_data(os.path.join(folder, file))
-            found = next((m for m in items if m.get("id") == menu_item_id), None)
-            if found:
-                return found
+            menu_items = json_data(f"{data_folder_path}/{data_file}")
+            desired = next((m for m in menu_items if m.get("id") == menu_item_id), None)
+            if desired:
+                return desired
+
         return {"message": f"Item {menu_item_id} not found"}, 404
     except FileNotFoundError:
         return {"message": "Menu data not found"}, 404
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
-# ================================
-# /order — создание инвойса
-# ================================
+
+# ==========================
+# /order — создание инвойса (Telegram Payments)
+# ==========================
 @app.route("/order", methods=["POST"])
 def create_order():
     """
-    Принимаем initData + корзину и создаём ссылку-инвойс через Telegram Payments.
-    Возвращаем { ok: true, invoiceUrl }.
+    Принимаем telegram'ное initData + корзину и создаём ссылку-инвойс
+    через Telegram Payments (провайдер — твой из BotFather).
+    Возвращаем invoiceUrl, чтобы Mini App открыла платёж.
     """
+    # Гарантируем JSON-объект
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {"message": "Request must be a JSON object"}, 400
 
-    # 1) Безопасно разбираем JSON (иногда Flask даёт строку)
-    body = request.get_data(cache=False, as_text=True) or ""
-    try:
-        request_data = request.get_json(silent=True)
-        if isinstance(request_data, str):
-            request_data = json.loads(request_data)
-        if request_data is None:
-            request_data = json.loads(body) if body.strip() else {}
-    except Exception:
-        return {"message": "Invalid JSON"}, 400
-
-    # 2) Проверяем initData (auth)
-    auth_data = request_data.get("_auth")
+    # 1) initData из Mini App
+    auth_data = data.get("_auth")
     if not auth_data or not auth.validate_auth_data(bot.BOT_TOKEN, auth_data):
         return {"message": "Invalid auth data"}, 401
 
-    # 3) Проверяем корзину
-    order_items = request_data.get("cartItems")
-    if not isinstance(order_items, list) or len(order_items) == 0:
+    # 2) корзина
+    order_items = data.get("cartItems")
+    if not order_items or not isinstance(order_items, list):
         return {"message": "Cart is empty"}, 400
 
-    # Формируем позиции
     labeled_prices: list[LabeledPrice] = []
-    total_minor = 0  # сумма в минимальных единицах (центах)
+    total_minor = 0  # сумма в минорных единицах валюты (копейки/центы)
 
-    try:
-        for item in order_items:
-            # ожидаем: { cafeteria: {name}, variant: {name, cost}, quantity }
-            cafeteria = item.get("cafeteria") or {}
-            variant = item.get("variant") or {}
-            quantity = int(item.get("quantity") or 0)
+    # В твоём фронте variant.cost уже в минорных единицах (напр., 1199 = $11.99)
+    for item in order_items:
+        # ожидаем: {"cafeteria": {"name": ...}, "variant": {"name": ..., "cost": ...}, "quantity": N}
+        try:
+            name = item["cafeteria"]["name"]
+            variant = item["variant"]["name"]
+            cost_minor = int(item["variant"]["cost"])
+            quantity = int(item["quantity"])
+        except Exception:
+            return {"message": "Bad cart item format"}, 400
 
-            name = str(cafeteria.get("name") or "").strip()
-            variant_name = str(variant.get("name") or "").strip()
-            cost_cents = int(variant.get("cost"))  # уже в центах (пример: 1199)
+        if quantity <= 0 or cost_minor <= 0:
+            return {"message": "Bad cart item values"}, 400
 
-            if not name or not variant_name or quantity <= 0:
-                return {"message": "Bad cart item format"}, 400
+        amount = cost_minor * quantity  # уже минорные единицы
+        total_minor += amount
 
-            amount = cost_cents * quantity  # уже минимальные единицы
-            total_minor += amount
-
-            labeled_prices.append(
-                LabeledPrice(
-                    label=f"{name} ({variant_name}) x{quantity}",
-                    amount=amount
-                )
+        labeled_prices.append(
+            LabeledPrice(
+                label=f"{name} ({variant}) x{quantity}",
+                amount=amount
             )
-    except Exception:
-        return {"message": "Bad cart item format"}, 400
+        )
 
-    # 4) Токен провайдера
+    # 3) токен платёжного провайдера
     provider_token = os.getenv("PAYMENT_PROVIDER_TOKEN")
     if not provider_token:
         return {"message": "PAYMENT_PROVIDER_TOKEN not set"}, 500
 
-    # 5) Собираем инвойс
+    # полезная нагрузка — сюда можете подставлять свой order_id
     payload = f"order-{total_minor}"
-    try:
-        invoice_url = bot.create_invoice_link(
-            title="Order #1",
-            description="Оплата корзины в MiniApp",
-            payload=payload,
-            provider_token=provider_token,
-            currency="USD",          # цены в проекте в центах USD
-            prices=labeled_prices,
-            # при необходимости:
-            # need_name=True, need_phone_number=True, need_shipping_address=True
-        )
-    except Exception as e:
-        # вернём понятную ошибку, чтобы видеть корень в сети
-        return {"message": f"Failed to create invoice: {e}"}, 500
+
+    # создаём ссылку на инвойс
+    invoice_url = bot.create_invoice_link(
+        title="Заказ в магазине",
+        description="Оплата корзины в MiniApp",
+        payload=payload,
+        provider_token=provider_token,
+        currency="RUB",
+        prices=labeled_prices,
+        need_name=True,  # по необходимости
+        need_phone_number=True,
+        need_shipping_address=False,
+    )
 
     return {"ok": True, "invoiceUrl": invoice_url}, 200
 
 
-# UptimeRobot /health
+# ==========================
+# Helpers
+# ==========================
+def json_data(file_path: str):
+    """
+    Считываем JSON из файла (UTF-8) и отдаём как dict/list.
+    """
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    raise FileNotFoundError(file_path)
+
+
+# Health check endpoint для UptimeRobot
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}, 200
 
 
-# сброс вебхука при старте (как и в шаблоне)
+# Обновляем вебхук при старте
 bot.refresh_webhook()
