@@ -2,11 +2,10 @@ import { removeIf } from "../utils/array.js";
 import { toDisplayCost } from "../utils/currency.js";
 
 /**
- * Model class representing Cart item.
- * This is combination of:
+ * Model class representing Cart item:
  *  - Cafe (Menu) item
- *  - selected variant
- *  - quantity
+ *  - Selected variant
+ *  - Quantity
  */
 class CartItem {
   constructor(cafeItem, variant, quantity) {
@@ -15,8 +14,12 @@ class CartItem {
     this.quantity = quantity;
   }
 
-  static fromRaw(raw) {
-    return new CartItem(raw.cafeItem, raw.variant, raw.quantity);
+  static fromRaw(rawCartItem) {
+    return new CartItem(
+      rawCartItem.cafeItem,
+      rawCartItem.variant,
+      rawCartItem.quantity
+    );
   }
 
   getId() {
@@ -27,95 +30,125 @@ class CartItem {
     const total = this.variant.cost * this.quantity;
     return toDisplayCost(total);
   }
+
+  /**
+   * Очень важно: при сериализации в JSON отправляем на бэкенд
+   * структуру, которую он ожидает: { cafeteria, variant, quantity }
+   */
+  toJSON() {
+    // Нормализуем цену: число (11.99), без валютных символов
+    let cost = this.variant?.cost;
+    if (typeof cost !== 'number') {
+      cost = parseFloat(String(cost ?? '')
+        .replace(/[^\d.,]/g, '')
+        .replace(',', '.')) || 0;
+    }
+
+    return {
+      cafeteria: { name: this.cafeItem?.name ?? '' },
+      variant: {
+        name: this.variant?.name ?? '',
+        cost: cost
+      },
+      quantity: Number(this.quantity) || 1
+    };
+  }
 }
 
 /**
- * Cart class holds all cart items
+ * Cart class holds current cart state and allows to manipulate it.
+ * Все методы статические → храним единый state.
  */
 export class Cart {
-  static _items = [];
-  static onItemsChangeListener = null;
+  static #cartItems = [];
+  static onItemsChangeListener;
 
-  // Load items from localStorage safely
-  static _init() {
-    try {
-      const saved = localStorage.getItem("cartItems") || "[]";
-      const parsed = JSON.parse(saved);
-
-      if (Array.isArray(parsed)) {
-        Cart._items = parsed.map(raw => CartItem.fromRaw(raw));
-      } else {
-        Cart._items = [];
-        localStorage.removeItem("cartItems");
+  // Восстанавливаем state из localStorage
+  static {
+    const savedCartItemsJson = localStorage.getItem('cartItems');
+    if (savedCartItemsJson != null) {
+      try {
+        const savedRaw = JSON.parse(savedCartItemsJson);
+        const restored = Array.isArray(savedRaw)
+          ? savedRaw.map((raw) => CartItem.fromRaw(raw))
+          : [];
+        this.#cartItems = restored;
+      } catch {
+        localStorage.removeItem('cartItems');
+        this.#cartItems = [];
       }
-    } catch (e) {
-      Cart._items = [];
-      localStorage.removeItem("cartItems");
     }
   }
 
+  /** @returns {CartItem[]} */
   static getItems() {
-    return Cart._items;
+    return this.#cartItems;
   }
 
+  /** @returns {number} total portions */
   static getPortionCount() {
-    return Cart._items.reduce((sum, it) => sum + it.quantity, 0);
+    let portionCount = 0;
+    for (let i = 0; i < this.#cartItems.length; i++) {
+      portionCount += this.#cartItems[i].quantity;
+    }
+    return portionCount;
   }
 
+  /**
+   * Add new Cafe item (or increase qty if same variant already exists).
+   */
   static addItem(cafeItem, variant, quantity) {
-    const it = new CartItem(cafeItem, variant, quantity);
-    const existing = Cart._findItem(it.getId());
-
-    if (existing) existing.quantity += quantity;
-    else Cart._items.push(it);
-
-    Cart._save();
-    Cart._notify();
+    const adding = new CartItem(cafeItem, variant, quantity);
+    const existing = this.#findItem(adding.getId());
+    if (existing != null) {
+      existing.quantity += quantity;
+    } else {
+      this.#cartItems.push(adding);
+    }
+    this.#saveItems();
+    this.#notifyAboutItemsChanged();
   }
 
-  static increaseQuantity(cartItem, amount) {
-    const it = Cart._findItem(cartItem.getId());
-    if (it) {
-      it.quantity += amount;
-      Cart._save();
-      Cart._notify();
+  static increaseQuantity(cartItem, quantity) {
+    const existing = this.#findItem(cartItem.getId());
+    if (existing != null) {
+      existing.quantity += quantity;
+      this.#saveItems();
+      this.#notifyAboutItemsChanged();
     }
   }
 
-  static decreaseQuantity(cartItem, amount) {
-    const it = Cart._findItem(cartItem.getId());
-    if (it) {
-      if (it.quantity > amount) {
-        it.quantity -= amount;
+  static decreaseQuantity(cartItem, quantity) {
+    const existing = this.#findItem(cartItem.getId());
+    if (existing != null) {
+      if (existing.quantity > quantity) {
+        existing.quantity -= quantity;
       } else {
-        removeIf(Cart._items, x => x.getId() === it.getId());
+        removeIf(this.#cartItems, (it) => it.getId() === existing.getId());
       }
-
-      Cart._save();
-      Cart._notify();
+      this.#saveItems();
+      this.#notifyAboutItemsChanged();
     }
   }
 
   static clear() {
-    Cart._items = [];
-    Cart._save();
-    Cart._notify();
+    this.#cartItems = [];
+    this.#saveItems();
+    this.#notifyAboutItemsChanged();
   }
 
-  static _findItem(id) {
-    return Cart._items.find(x => x.getId() === id);
+  static #findItem(id) {
+    return this.#cartItems.find((it) => it.getId() === id);
   }
 
-  static _save() {
-    localStorage.setItem("cartItems", JSON.stringify(Cart._items));
+  static #saveItems() {
+    // Сохраняем как обычные поля (без методов классов)
+    localStorage.setItem('cartItems', JSON.stringify(this.#cartItems));
   }
 
-  static _notify() {
-    if (Cart.onItemsChangeListener) {
-      Cart.onItemsChangeListener(Cart._items);
+  static #notifyAboutItemsChanged() {
+    if (this.onItemsChangeListener != null) {
+      this.onItemsChangeListener(this.#cartItems);
     }
   }
 }
-
-// Initialize cart on module load
-Cart._init();
