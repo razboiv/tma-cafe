@@ -12,7 +12,7 @@ from telebot.types import LabeledPrice
 from . import auth, bot
 
 # ================================
-#  Загрузка переменных .env
+# Загрузка переменных .env
 # ================================
 load_dotenv()
 
@@ -21,9 +21,9 @@ app = Flask(__name__)
 app.url_map.strict_slashes = False
 
 # ================================
-#  CORS (разрешаем фронту/Telegram)
+# CORS (разрешаем фронту/Telegram)
 # ================================
-APP_URL = os.getenv("APP_URL")          # прод-URL фронта (например, https://luvcore.shop)
+APP_URL = os.getenv("APP_URL")          # прод-URL фронта (например, https://ваш-домен)
 DEV_APP_URL = os.getenv("DEV_APP_URL")  # опционально для локалки
 
 allowed_origins = [o for o in [
@@ -36,16 +36,15 @@ allowed_origins = [o for o in [
 
 CORS(
     app,
-    resources={r"/*": {
-        "origins": allowed_origins or "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": False,
-    }}
+    resources=r"/*",
+    origins=allowed_origins or "*",
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    supports_credentials=False,
 )
 
 # ================================
-#  Health / Debug
+# Health / debug
 # ================================
 @app.route("/", methods=["GET"])
 def root_ok():
@@ -53,11 +52,11 @@ def root_ok():
 
 
 # ================================
-#  Telegram Webhook (POST)
-#  Важно: держим оба варианта пути, чтобы не ловить 307/404
+# Telegram Webhook (POST)
+# Важно: держим оба варианта путей, чтобы не ловить 307/404
 # ================================
 @app.route(bot.WEBHOOK_PATH, methods=["POST"])
-@app.route(f"/{bot.WEBHOOK_PATH}", methods=["POST"])
+@app.route(f"{bot.WEBHOOK_PATH}/", methods=["POST"])
 def bot_webhook():
     """
     Точка входа для апдейтов Telegram.
@@ -68,7 +67,7 @@ def bot_webhook():
 
 
 # ================================
-#  Public API for Mini App
+# Public API for Mini App
 # ================================
 @app.route("/info")
 def info():
@@ -122,48 +121,53 @@ def menu_item_details(menu_item_id: str):
 
 
 # ================================
-#  /order — создание инвойса (Telegram Payments)
+# /order — создание инвойса (Telegram Payments)
 # ================================
 @app.route("/order", methods=["POST"])
 def create_order():
     """
     Принимаем telegram'ное initData + корзину и создаём ссылку-инвойс
-    через Telegram Payments (провайдер — твой в BotFather).
-    Возвращаем invoiceUrl, чтобы Mini App открыл платёж.
+    через Telegram Payments (провайдер — ваш провайдер из BotFather).
+    Возвращаем { invoiceUrl } чтобы Mini App открыл платежку.
     """
-    req = request.get_json(force=True, silent=True) or {}
+
+    # Аккуратно разбираем JSON
+    request_data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(request_data, dict):
+        return {"message": "Bad request body"}, 400
 
     # 1) проверяем initData
-    auth_data = req.get("_auth")
+    auth_data = request_data.get("_auth")
     if not auth_data or not auth.validate_auth_data(bot.BOT_TOKEN, auth_data):
         return {"message": "Invalid auth data"}, 401
 
     # 2) проверяем корзину
-    order_items = req.get("cartItems")
-    if not order_items:
+    order_items = request_data.get("cartItems")
+    if not order_items or not isinstance(order_items, list):
         return {"message": "Cart is empty"}, 400
 
     labeled_prices: list[LabeledPrice] = []
     total_kopecks = 0
 
-    # Приводим товары к позициям для Telegram Payments
-    # ВНИМАНИЕ: фронт отправляет поле cafeItem (а не cafeteria)
+    # Конвертируем товары в позиции для Telegram Payments
     for item in order_items:
-        cafe = item["cafeItem"]
-        variant = item["variant"]
-        quantity = int(item["quantity"])
+        # ожидаем формат фронта:
+        # { cafeteria: { name }, variant: { name, cost }, quantity }
+        try:
+            name = item["cafeteria"]["name"]
+            variant = item["variant"]["name"]
+            cost_rub = int(item["variant"]["cost"])
+            quantity = int(item["quantity"])
+        except Exception:
+            return {"message": "Bad cart item format"}, 400
 
-        name = cafe["name"]
-        variant_name = variant["name"]
-        cost_rub = int(variant["cost"])
-
-        amount = cost_rub * quantity * 100  # Telegram принимает сумму в копейках
+        amount = cost_rub * quantity * 100  # руб → копейки
         total_kopecks += amount
 
         labeled_prices.append(
             LabeledPrice(
-                label=f"{name} ({variant_name}) ×{quantity}",
-                amount=amount
+                label=f"{name} ({variant}) x{quantity}",
+                amount=amount,
             )
         )
 
@@ -172,7 +176,7 @@ def create_order():
     if not provider_token:
         return {"message": "PAYMENT_PROVIDER_TOKEN not set"}, 500
 
-    # полезная нагрузка — сюда можете подставлять свой order_id
+    # Полезная нагрузка (можете подставлять свой order_id)
     payload = f"order-{total_kopecks}"
 
     # создаём ссылку на инвойс
@@ -183,14 +187,15 @@ def create_order():
         provider_token=provider_token,
         currency="RUB",
         prices=labeled_prices,
-        # need_name=True, need_phone_number=True, need_shipping_address=True  # при необходимости
+        # при необходимости:
+        # need_name=True, need_phone_number=True, need_shipping_address=True
     )
 
     return {"ok": True, "invoiceUrl": invoice_url}, 200
 
 
 # ================================
-#  Helpers
+# Helpers
 # ================================
 def json_data(file_path: str):
     """
@@ -202,11 +207,11 @@ def json_data(file_path: str):
     raise FileNotFoundError(file_path)
 
 
-# Health-check endpoint для UptimeRobot / Render
+# Health check endpoint для UptimeRobot
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}, 200
 
 
-# Обновляем вебхук при старте
+# Обновляем вебхук при старте (как в шаблоне)
 bot.refresh_webhook()
