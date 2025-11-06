@@ -9,116 +9,113 @@ import { toDisplayCost } from "../utils/currency.js";
  *  - quantity
  */
 class CartItem {
-    constructor(cafeItem, variant, quantity) {
-        this.cafeItem = cafeItem;
-        this.variant = variant;
-        this.quantity = quantity;
-    }
+  constructor(cafeItem, variant, quantity) {
+    this.cafeItem = cafeItem;
+    this.variant = variant;
+    this.quantity = quantity;
+  }
 
-    static fromRaw(raw) {
-        return new CartItem(
-            raw.cafeItem,
-            raw.variant,
-            raw.quantity
-        );
-    }
+  static fromRaw(raw) {
+    return new CartItem(raw.cafeItem, raw.variant, raw.quantity);
+  }
 
-    getId() {
-        return ${this.cafeItem.id}-${this.variant.id};
-    }
+  getId() {
+    return ${this.cafeItem.id}-${this.variant.id};
+  }
 
-    getDisplayTotalCost() {
-        const total = this.variant.cost * this.quantity;
-        return toDisplayCost(total);
-    }
+  getDisplayTotalCost() {
+    const total = this.variant.cost * this.quantity;
+    return toDisplayCost(total);
+  }
 }
 
 /**
  * Cart class holds all cart items
  */
 export class Cart {
+  // Используем обычные статические поля для совместимости
+  static _items = [];
+  static onItemsChangeListener = null;
 
-    static #cartItems = [];
-    static onItemsChangeListener = null;
-
-    // --- SAFE INITIALIZATION BLOCK ---
-    static {
-        try {
-            const saved = localStorage.getItem("cartItems") || "[]";
-            const parsed = JSON.parse(saved);
-
-            if (Array.isArray(parsed)) {
-                this.#cartItems = parsed.map(raw => CartItem.fromRaw(raw));
-            } else {
-                localStorage.removeItem("cartItems");
-                this.#cartItems = [];
-            }
-        } catch (e) {
-            console.warn("Cart: corrupted localStorage cleaned");
-            localStorage.removeItem("cartItems");
-            this.#cartItems = [];
-        }
+  // Инициализация хранилища БЕЗ static { }
+  static _init() {
+    try {
+      const saved = localStorage.getItem("cartItems") || "[]";
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        Cart._items = parsed.map(raw => CartItem.fromRaw(raw));
+      } else {
+        localStorage.removeItem("cartItems");
+        Cart._items = [];
+      }
+    } catch (e) {
+      // битый JSON — чистим
+      localStorage.removeItem("cartItems");
+      Cart._items = [];
     }
-    // -----------------------------------
+  }
 
-    static getItems() {
-        return this.#cartItems;
+  static getItems() {
+    return Cart._items;
+  }
+
+  static getPortionCount() {
+    return Cart._items.reduce((sum, it) => sum + it.quantity, 0);
+  }
+
+  static addItem(cafeItem, variant, quantity) {
+    const newItem = new CartItem(cafeItem, variant, quantity);
+    const existing = Cart._findItem(newItem.getId());
+
+    if (existing) existing.quantity += quantity;
+    else Cart._items.push(newItem);
+
+    Cart._save();
+    Cart._notify();
+  }
+
+  static increaseQuantity(cartItem, amount) {
+    const found = Cart._findItem(cartItem.getId());
+    if (found) {
+      found.quantity += amount;
+      Cart._save();
+      Cart._notify();
     }
+  }
 
-    static getPortionCount() {
-        return this.#cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  static decreaseQuantity(cartItem, amount) {
+    const found = Cart._findItem(cartItem.getId());
+    if (found) {
+      if (found.quantity > amount) {
+        found.quantity -= amount;
+      } else {
+        removeIf(Cart._items, it => it.getId() === found.getId());
+      }
+      Cart._save();
+      Cart._notify();
     }
+  }
 
-    static addItem(cafeItem, variant, quantity) {
-        const newItem = new CartItem(cafeItem, variant, quantity);
-        const existing = this.#findItem(newItem.getId());
+  static clear() {
+    Cart._items = [];
+    Cart._save();
+    Cart._notify();
+  }
 
-        if (existing) existing.quantity += quantity;
-        else this.#cartItems.push(newItem);
+  static _findItem(id) {
+    return Cart._items.find(it => it.getId() === id);
+  }
 
-        this.#save();
-        this.#notify();
+  static _save() {
+    localStorage.setItem("cartItems", JSON.stringify(Cart._items));
+  }
+
+  static _notify() {
+    if (Cart.onItemsChangeListener) {
+      Cart.onItemsChangeListener(Cart._items);
     }
-
-    static increaseQuantity(cartItem, amount) {
-        const found = this.#findItem(cartItem.getId());
-        if (found) {
-            found.quantity += amount;
-            this.#save();
-            this.#notify();
-        }
-    }
-
-    static decreaseQuantity(cartItem, amount) {
-        const found = this.#findItem(cartItem.getId());
-        if (found) {
-            if (found.quantity > amount) {
-                found.quantity -= amount;
-            } else {
-                removeIf(this.#cartItems, item => item.getId() === found.getId());
-            }
-            this.#save();
-            this.#notify();
-        }
-    }
-
-    static clear() {
-        this.#cartItems = [];
-        this.#save();
-        this.#notify();
-    }
-
-    static #findItem(id) {
-        return this.#cartItems.find(item => item.getId() === id);
-    }
-
-    static #save() {
-        localStorage.setItem("cartItems", JSON.stringify(this.#cartItems));
-    }
-
-    static #notify() {
-        if (this.onItemsChangeListener) {
-            this.onItemsChangeListener(this.#cartItems);
-        }
-    }
+  }
 }
+
+// Запускаем инициализацию
+Cart._init();
