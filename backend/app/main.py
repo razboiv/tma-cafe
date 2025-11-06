@@ -5,7 +5,7 @@ import telebot
 from telebot import types
 import json
 
-import auth  # твой local auth.py (Telegram initData check)
+from . import auth  # твой local auth.py (Telegram initData check)
 
 app = Flask(__name__)
 CORS(app)
