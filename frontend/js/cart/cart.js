@@ -1,6 +1,13 @@
 import { removeIf } from "../utils/array.js";
 import { toDisplayCost } from "../utils/currency.js";
 
+/**
+ * Model class representing Cart item.
+ * This is combination of:
+ *  - Cafe (Menu) item
+ *  - selected variant
+ *  - quantity
+ */
 class CartItem {
     constructor(cafeItem, variant, quantity) {
         this.cafeItem = cafeItem;
@@ -8,11 +15,11 @@ class CartItem {
         this.quantity = quantity;
     }
 
-    static fromRaw(rawCartItem) {
+    static fromRaw(raw) {
         return new CartItem(
-            rawCartItem.cafeItem,
-            rawCartItem.variant,
-            rawCartItem.quantity
+            raw.cafeItem,
+            raw.variant,
+            raw.quantity
         );
     }
 
@@ -21,86 +28,96 @@ class CartItem {
     }
 
     getDisplayTotalCost() {
-        const totalCost = this.variant.cost * this.quantity;
-        return toDisplayCost(totalCost);
+        const total = this.variant.cost * this.quantity;
+        return toDisplayCost(total);
     }
 }
 
+/**
+ * Cart class holds all cart items
+ */
 export class Cart {
-    static #cartItems = [];
-    static onItemsChangeListener;
 
+    static #cartItems = [];
+    static onItemsChangeListener = null;
+
+    // --- SAFE INITIALIZATION BLOCK ---
     static {
-        const savedCartItemsJson = localStorage.getItem('cartItems');
-        if (savedCartItemsJson != null) {
-            const savedRawCartItems = JSON.parse(savedCartItemsJson);
-            const savedCartItems = savedRawCartItems.map(raw => CartItem.fromRaw(raw));
-            this.#cartItems = savedCartItems;
+        try {
+            const saved = localStorage.getItem("cartItems") || "[]";
+            const parsed = JSON.parse(saved);
+
+            if (Array.isArray(parsed)) {
+                this.#cartItems = parsed.map(raw => CartItem.fromRaw(raw));
+            } else {
+                localStorage.removeItem("cartItems");
+                this.#cartItems = [];
+            }
+        } catch (e) {
+            console.warn("Cart: corrupted localStorage cleaned");
+            localStorage.removeItem("cartItems");
+            this.#cartItems = [];
         }
     }
+    // -----------------------------------
 
     static getItems() {
         return this.#cartItems;
     }
 
     static getPortionCount() {
-        let portionCount = 0;
-        for (let i = 0; i < this.#cartItems.length; i++) {
-            portionCount += this.#cartItems[i].quantity;
-        }
-        return portionCount;
+        return this.#cartItems.reduce((sum, item) => sum + item.quantity, 0);
     }
 
     static addItem(cafeItem, variant, quantity) {
-        const addingCartItem = new CartItem(cafeItem, variant, quantity);
-        const existingItem = this.#findItem(addingCartItem.getId());
-        if (existingItem != null) {
-            existingItem.quantity += quantity;
-        } else {
-            this.#cartItems.push(addingCartItem);
-        }
-        this.#saveItems();
-        this.#notifyAboutItemsChanged();
+        const newItem = new CartItem(cafeItem, variant, quantity);
+        const existing = this.#findItem(newItem.getId());
+
+        if (existing) existing.quantity += quantity;
+        else this.#cartItems.push(newItem);
+
+        this.#save();
+        this.#notify();
     }
 
-    static increaseQuantity(cartItem, quantity) {
-        const existingItem = this.#findItem(cartItem.getId());
-        if (existingItem != null) {
-            existingItem.quantity += quantity;
-            this.#saveItems();
-            this.#notifyAboutItemsChanged();
+    static increaseQuantity(cartItem, amount) {
+        const found = this.#findItem(cartItem.getId());
+        if (found) {
+            found.quantity += amount;
+            this.#save();
+            this.#notify();
         }
     }
 
-    static decreaseQuantity(cartItem, quantity) {
-        const existingItem = this.#findItem(cartItem.getId());
-        if (existingItem != null) {
-            if (existingItem.quantity > quantity) {
-                existingItem.quantity -= quantity;
+    static decreaseQuantity(cartItem, amount) {
+        const found = this.#findItem(cartItem.getId());
+        if (found) {
+            if (found.quantity > amount) {
+                found.quantity -= amount;
             } else {
-                removeIf(this.#cartItems, item => item.getId() === existingItem.getId());
+                removeIf(this.#cartItems, item => item.getId() === found.getId());
             }
-            this.#saveItems();
-            this.#notifyAboutItemsChanged();
+            this.#save();
+            this.#notify();
         }
     }
 
     static clear() {
         this.#cartItems = [];
-        this.#saveItems();
-        this.#notifyAboutItemsChanged();
+        this.#save();
+        this.#notify();
     }
 
     static #findItem(id) {
-        return this.#cartItems.find(cartItem => cartItem.getId() === id);
+        return this.#cartItems.find(item => item.getId() === id);
     }
 
-    static #saveItems() {
-        localStorage.setItem('cartItems', JSON.stringify(this.#cartItems));
+    static #save() {
+        localStorage.setItem("cartItems", JSON.stringify(this.#cartItems));
     }
 
-    static #notifyAboutItemsChanged() {
-        if (this.onItemsChangeListener != null) {
+    static #notify() {
+        if (this.onItemsChangeListener) {
             this.onItemsChangeListener(this.#cartItems);
         }
     }
