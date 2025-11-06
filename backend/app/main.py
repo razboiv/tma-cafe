@@ -3,24 +3,24 @@ import os
 import json
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_cors import CORS
 from telebot.types import LabeledPrice
 
-from . import auth, bot  # наши модули рядом
+from . import auth, bot
 
-# =========================
-# Загрузка переменных .env
-# =========================
+# ================================
+# env
+# ================================
 load_dotenv()
 
 app = Flask(__name__)
-# чтобы '/bot' и '/bot/' считались одним и тем же путём
+# чтобы /bot и /bot/ считались одним путём
 app.url_map.strict_slashes = False
 
-# =========================
-# CORS (разрешаем фронту/Telegram)
-# =========================
+# ================================
+# CORS
+# ================================
 APP_URL = os.getenv("APP_URL")
 DEV_APP_URL = os.getenv("DEV_APP_URL")
 
@@ -29,41 +29,40 @@ allowed_origins = [o for o in [
     DEV_APP_URL,
     "https://t.me",
     "https://web.telegram.org",
-    "https://web.telegram.org/a",
+    "https://telegram.org",
 ] if o]
 
 CORS(
     app,
-    resources=r"/.*",
-    origins=allowed_origins or "*",
-    methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-    supports_credentials=False,
+    resources={r"/**": {
+        "origins": allowed_origins or "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": False
+    }}
 )
 
-# Health/debug
+# ================================
+# health
+# ================================
 @app.route("/", methods=["GET"])
 def root_ok():
-    return jsonify({"ok": True}), 200
+    return {"ok": True}, 200
 
-
-# =========================
-# Telegram Webhook (POST)
-# =========================
+# ================================
+# Telegram webhook (POST)
+# ================================
 @app.route(bot.WEBHOOK_PATH, methods=["POST"])
 @app.route(f"/{bot.WEBHOOK_PATH}", methods=["POST"])
 def bot_webhook():
-    """Точка входа для апдейтов Telegram."""
     update = request.get_json(force=True, silent=True)
     bot.process_update(update)
-    return jsonify({"message": "OK"}), 200
+    return {"message": "OK"}, 200
 
-
-# =========================
+# ================================
 # Public API for Mini App
-# =========================
+# ================================
 def json_data(file_path: str):
-    """Считываем JSON из файла (UTF-8) и отдаём как dict/list."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(file_path)
     with open(file_path, "r", encoding="utf-8") as f:
@@ -74,142 +73,136 @@ def info():
     try:
         return json_data("data/info.json")
     except FileNotFoundError:
-        return jsonify({"message": "Info file not found"}), 404
+        return {"message": "Info file not found"}, 404
     except Exception as e:
-        return jsonify({"message": f"Unexpected error: {e}"}), 500
+        return {"message": f"Unexpected error: {e}"}, 500
 
 @app.route("/categories")
 def categories():
     try:
         return json_data("data/categories.json")
     except FileNotFoundError:
-        return jsonify({"message": "Categories file not found"}), 404
+        return {"message": "Categories file not found"}, 404
     except Exception as e:
-        return jsonify({"message": f"Unexpected error: {e}"}), 500
+        return {"message": f"Unexpected error: {e}"}, 500
 
 @app.route("/menu/<category_id>")
 def category_menu(category_id: str):
     try:
         return json_data(f"data/menu/{category_id}.json")
     except FileNotFoundError:
-        return jsonify({"message": f"No menu found for {category_id}"}), 404
+        return {"message": f"No menu found for {category_id}"}, 404
     except Exception as e:
-        return jsonify({"message": f"Unexpected error: {e}"}), 500
+        return {"message": f"Unexpected error: {e}"}, 500
 
 @app.route("/menu/details/<menu_item_id>")
 def menu_item_details(menu_item_id: str):
     try:
-        data_folder_path = "data/menu"
-        for data_file in os.listdir(data_folder_path):
-            if not data_file.endswith(".json"):
+        folder = "data/menu"
+        for file in os.listdir(folder):
+            if not file.endswith(".json"):
                 continue
-            menu_items = json_data(f"{data_folder_path}/{data_file}")
-            found = next((m for m in menu_items if m.get("id") == menu_item_id), None)
+            items = json_data(os.path.join(folder, file))
+            found = next((m for m in items if m.get("id") == menu_item_id), None)
             if found:
                 return found
-        return jsonify({"message": f"Item {menu_item_id} not found"}), 404
+        return {"message": f"Item {menu_item_id} not found"}, 404
     except FileNotFoundError:
-        return jsonify({"message": "Menu data not found"}), 404
+        return {"message": "Menu data not found"}, 404
     except Exception as e:
-        return jsonify({"message": f"Unexpected error: {e}"}), 500
+        return {"message": f"Unexpected error: {e}"}, 500
 
-
-# =========================
-# /order — создание инвойса (Telegram Payments)
-# =========================
+# ================================
+# /order — создание инвойса
+# ================================
 @app.route("/order", methods=["POST"])
 def create_order():
     """
-    Принимаем telegram'ное initData + корзину и создаём ссылку-инвойс через Telegram Payments.
-    Возвращаем { ok: true, invoiceUrl } чтобы Mini App открыл платёж.
+    Принимаем initData + корзину и создаём ссылку-инвойс через Telegram Payments.
+    Возвращаем { ok: true, invoiceUrl }.
     """
-    # 0) Берём JSON из тела; если пришёл как строка — пробуем распарсить.
-    payload = request.get_json(silent=True)
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except Exception:
-            payload = None
 
-    if not isinstance(payload, dict):
-        return jsonify({"message": "Bad request body: not JSON/dict"}), 400
+    # 1) Безопасно разбираем JSON (иногда Flask даёт строку)
+    body = request.get_data(cache=False, as_text=True) or ""
+    try:
+        request_data = request.get_json(silent=True)
+        if isinstance(request_data, str):
+            request_data = json.loads(request_data)
+        if request_data is None:
+            request_data = json.loads(body) if body.strip() else {}
+    except Exception:
+        return {"message": "Invalid JSON"}, 400
 
-    # 1) проверяем initData
-    auth_data = payload.get("_auth")
-    if not auth_data:
-        return jsonify({"message": "Invalid auth data"}), 401
-    if not auth.validate_auth_data(bot.BOT_TOKEN, auth_data):
-        return jsonify({"message": "Auth validation failed"}), 401
+    # 2) Проверяем initData (auth)
+    auth_data = request_data.get("_auth")
+    if not auth_data or not auth.validate_auth_data(bot.BOT_TOKEN, auth_data):
+        return {"message": "Invalid auth data"}, 401
 
-    # 2) проверяем корзину
-    cart_items = payload.get("cartItems")
-    if not isinstance(cart_items, list) or len(cart_items) == 0:
-        return jsonify({"message": "Cart is empty"}), 400
+    # 3) Проверяем корзину
+    order_items = request_data.get("cartItems")
+    if not isinstance(order_items, list) or len(order_items) == 0:
+        return {"message": "Cart is empty"}, 400
 
-    labeled_prices = []
-    total_kopecks = 0
+    # Формируем позиции
+    labeled_prices: list[LabeledPrice] = []
+    total_minor = 0  # сумма в минимальных единицах (центах)
 
-    # 3) валидируем каждую позицию
-    for idx, item in enumerate(cart_items, start=1):
-        if not isinstance(item, dict):
-            return jsonify({"message": f"Bad cart item format at #{idx}"}), 400
+    try:
+        for item in order_items:
+            # ожидаем: { cafeteria: {name}, variant: {name, cost}, quantity }
+            cafeteria = item.get("cafeteria") or {}
+            variant = item.get("variant") or {}
+            quantity = int(item.get("quantity") or 0)
 
-        cafe = item.get("cafeteria") or {}
-        variant = item.get("variant") or {}
-        quantity = item.get("quantity")
+            name = str(cafeteria.get("name") or "").strip()
+            variant_name = str(variant.get("name") or "").strip()
+            cost_cents = int(variant.get("cost"))  # уже в центах (пример: 1199)
 
-        name = (cafe or {}).get("name")
-        var_name = (variant or {}).get("name")
-        cost = (variant or {}).get("cost")
+            if not name or not variant_name or quantity <= 0:
+                return {"message": "Bad cart item format"}, 400
 
-        if name is None or var_name is None or quantity is None or cost is None:
-            return jsonify({"message": f"Bad cart item format at #{idx}"}), 400
+            amount = cost_cents * quantity  # уже минимальные единицы
+            total_minor += amount
 
-        try:
-            quantity = int(quantity)
-            cost_kopecks = int(cost)  # 1199 -> 1199 копеек (т.е. 11.99)
-        except Exception:
-            return jsonify({"message": f"Bad number in item #{idx}"}), 400
-
-        amount = cost_kopecks * quantity
-        total_kopecks += amount
-
-        labeled_prices.append(
-            LabeledPrice(
-                label=f"{name} ({var_name}) x{quantity}",
-                amount=amount
+            labeled_prices.append(
+                LabeledPrice(
+                    label=f"{name} ({variant_name}) x{quantity}",
+                    amount=amount
+                )
             )
-        )
+    except Exception:
+        return {"message": "Bad cart item format"}, 400
 
-    # 4) токен платёжного провайдера
+    # 4) Токен провайдера
     provider_token = os.getenv("PAYMENT_PROVIDER_TOKEN")
     if not provider_token:
-        return jsonify({"message": "PAYMENT_PROVIDER_TOKEN not set"}), 500
+        return {"message": "PAYMENT_PROVIDER_TOKEN not set"}, 500
 
-    payload_str = f"order-{total_kopecks}"
+    # 5) Собираем инвойс
+    payload = f"order-{total_minor}"
+    try:
+        invoice_url = bot.create_invoice_link(
+            title="Order #1",
+            description="Оплата корзины в MiniApp",
+            payload=payload,
+            provider_token=provider_token,
+            currency="USD",          # цены в проекте в центах USD
+            prices=labeled_prices,
+            # при необходимости:
+            # need_name=True, need_phone_number=True, need_shipping_address=True
+        )
+    except Exception as e:
+        # вернём понятную ошибку, чтобы видеть корень в сети
+        return {"message": f"Failed to create invoice: {e}"}, 500
 
-    # 5) создаём ссылку на инвойс
-    invoice_url = bot.create_invoice_link(
-        title="Заказ в магазине",
-        description="Оплата корзины в MiniApp",
-        payload=payload_str,
-        provider_token=provider_token,
-        currency="RUB",
-        prices=labeled_prices,
-        # need_* при надобности:
-        # need_name=True, need_phone_number=True, need_shipping_address=True
-    )
-
-    return jsonify({"ok": True, "invoiceUrl": invoice_url}), 200
+    return {"ok": True, "invoiceUrl": invoice_url}, 200
 
 
-# =========================
-# Health для аптайм-роботов
-# =========================
+# UptimeRobot /health
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"}), 200
+    return {"status": "ok"}, 200
 
 
-# На старте обновляем вебхук (как в шаблоне)
+# сброс вебхука при старте (как и в шаблоне)
 bot.refresh_webhook()
