@@ -1,30 +1,39 @@
-// Set base URL depending on your environment.
-// Don't forget to add it to allowed origins on backend.
-const baseUrl = 'https://tma-cafe-backend.onrender.com'; // <-- без завершающего слеша
+// Set base URL of your backend.
+// Без завершающего слеша!
+const baseUrl = 'https://tma-cafe-backend.onrender.com';
 
-/** Performs GET request. */
+/**
+ * Performs GET request.
+ * @param {string} endpoint e.g. '/info'
+ * @param {*} onSuccess callback
+ */
 export function get(endpoint, onSuccess) {
   $.ajax({
-    url: baseUrl + endpoint,      // endpoint начинается со слеша, например '/info'
+    url: baseUrl + endpoint,
     dataType: 'json',
     success: (result) => onSuccess(result),
   });
 }
 
-/** Performs POST request. */
+/**
+ * Performs POST request (JSON).
+ * @param {string} endpoint e.g. '/order'
+ * @param {object} data plain object (мы сами сериализуем в JSON)
+ * @param {*} onResult callback({ ok, data? , error? })
+ */
 export function post(endpoint, data, onResult) {
   $.ajax({
     type: 'POST',
-    url: baseUrl + endpoint,      // endpoint: '/order'
-    data: JSON.stringify(data),   // <-- ВАЖНО: сериализуем в JSON!
+    url: baseUrl + endpoint,
+    data: JSON.stringify(data),          // <<< главное изменение
+    processData: false,                  // не превращать объект в query-string
     contentType: 'application/json; charset=utf-8',
     dataType: 'json',
-    processData: false,           // <-- чтобы jQuery не трогал тело
     success: (result) => onResult({ ok: true, data: result }),
     error: (xhr) => {
-      // вытащим сообщение сервера, если есть
-      const msg =
-        (xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error)) ||
+      let msg =
+        (xhr.responseJSON && xhr.responseJSON.message) ||
+        xhr.statusText ||
         'Something went wrong.';
       onResult({ ok: false, error: msg });
     },
