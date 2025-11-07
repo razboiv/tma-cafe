@@ -1,37 +1,44 @@
-// ✅ Base URL твоего backend без последнего слэша
-const baseUrl = "https://tma-cafe-backend.onrender.com";
+// frontend/js/requests/requests.js
+
+// БЕЗ завершающего слеша!
+const baseUrl = 'https://tma-cafe-backend.onrender.com';
 
 /**
- * GET запрос
+ * GET
+ * @param {string} endpoint - например '/info'
+ * @param {Function} onSuccess
  */
 export function get(endpoint, onSuccess) {
   $.ajax({
     url: baseUrl + endpoint,
-    dataType: "json",
+    dataType: 'json',
     success: (result) => onSuccess(result),
+    error: () => onSuccess({ ok: false, error: 'Network error' })
   });
 }
 
 /**
- * POST запрос (JSON) — корректная отправка
+ * POST
+ * @param {string} endpoint - например '/order'
+ * @param {Object} data - тело запроса (JS-объект)
+ * @param {Function} onResult
  */
 export function post(endpoint, data, onResult) {
   $.ajax({
-    type: "POST",
+    type: 'POST',
     url: baseUrl + endpoint,
-    data: JSON.stringify(data),              // ✅ Отправляем как JSON строку
-    contentType: "application/json; charset=UTF-8", // ✅ Указываем JSON
-    dataType: "json",                        // ✅ Ждём JSON в ответ
-    processData: false,                      // ✅ Не превращать тело в form-data
-    success: (result) => {
-      onResult({ ok: true, data: result });
-    },
+    data: JSON.stringify(data),                        // отправляем JSON-строку
+    contentType: 'application/json; charset=utf-8',   // говорим серверу, что это JSON
+    dataType: 'json',                                  // ожидаем JSON в ответе
+    success: (result) => onResult({ ok: true, data: result }),
     error: (xhr) => {
-      const msg =
-        (xhr.responseJSON && xhr.responseJSON.message) ||
-        xhr.responseText ||
-        "Something went wrong";
-      onResult({ ok: false, error: msg });
-    },
+      // попробуем достать сообщение об ошибке из JSON
+      try {
+        const parsed = JSON.parse(xhr.responseText);
+        return onResult({ ok: false, error: parsed.message || 'Something went wrong.' });
+      } catch (_) {
+        return onResult({ ok: false, error: 'Something went wrong.' });
+      }
+    }
   });
 }
