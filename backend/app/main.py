@@ -1,4 +1,3 @@
-# backend/app/main.py
 import os
 import json
 from dotenv import load_dotenv
@@ -6,7 +5,6 @@ from flask import Flask, request
 from flask_cors import CORS
 from telebot.types import LabeledPrice
 
-# локальные модули из того же пакета app
 from . import auth
 from . import bot
 
@@ -35,12 +33,12 @@ CORS(
     supports_credentials=False,
 )
 
-# ---------- health ----------
+
 @app.route("/", methods=["GET"])
 def root_ok():
     return {"ok": True}, 200
 
-# ---------- telegram webhook ----------
+
 @app.route(bot.WEBHOOK_PATH, methods=["POST"])
 @app.route(f"/{bot.WEBHOOK_PATH}", methods=["POST"])
 def bot_webhook():
@@ -48,12 +46,13 @@ def bot_webhook():
     bot.process_update(update)
     return {"message": "OK"}, 200
 
-# ---------- public API ----------
+
 def _json_data(path: str):
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 @app.route("/info")
 def info():
@@ -64,6 +63,7 @@ def info():
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
+
 @app.route("/categories")
 def categories():
     try:
@@ -73,6 +73,7 @@ def categories():
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
+
 @app.route("/menu/<category_id>")
 def category_menu(category_id: str):
     try:
@@ -81,6 +82,7 @@ def category_menu(category_id: str):
         return {"message": f"No menu found for {category_id}"}, 404
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
+
 
 @app.route("/menu/details/<menu_item_id>")
 def menu_item_details(menu_item_id: str):
@@ -99,7 +101,7 @@ def menu_item_details(menu_item_id: str):
     except Exception as e:
         return {"message": f"Unexpected error: {e}"}, 500
 
-# ---------- order ----------
+
 @app.route("/order", methods=["POST"])
 def create_order():
     try:
@@ -107,12 +109,10 @@ def create_order():
         if not isinstance(req, dict):
             return {"message": "Request must be a JSON object"}, 400
 
-        # 1) validate initData
         auth_data = req.get("_auth")
         if not auth_data or not auth.validate_auth_data(os.getenv("BOT_TOKEN", ""), auth_data):
             return {"message": "Invalid auth data"}, 401
 
-        # 2) build labeled prices
         order_items = req.get("cartItems")
         if not isinstance(order_items, list) or not order_items:
             return {"message": "Cart is empty"}, 400
@@ -121,7 +121,6 @@ def create_order():
         total_kopecks = 0
 
         for item in order_items:
-            # ожидаем: {"cafeteria":{"name":...}, "variant":{"name":..., "cost": <int>}, "quantity": <int>}
             try:
                 name = item["cafeteria"]["name"]
                 variant_name = item["variant"]["name"]
@@ -153,19 +152,17 @@ def create_order():
             provider_token=provider_token,
             currency="RUB",
             prices=labeled_prices,
-            # need_name=True, need_phone_number=True, need_shipping_address=True
         )
 
         return {"ok": True, "invoiceUrl": invoice_url}, 200
 
     except Exception as e:
-        # чтобы не возвращать HTML 500, а JSON
         return {"message": f"Server error: {e}"}, 500
 
-# ---------- uptime health ----------
+
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}, 200
 
-# обновим вебхук на старте
+
 bot.refresh_webhook()
