@@ -1,44 +1,28 @@
-// frontend/js/requests/requests.js
+export async function apiRequest(route, payload = {}) {
+    const url = `https://tma-cafe-backend.onrender.com/api/${route}`;
 
-// БЕЗ завершающего слеша!
-const baseUrl = 'https://tma-cafe-backend.onrender.com';
+    const auth = window.Telegram.WebApp.initData || "";
+    payload["_auth"] = auth;
 
-/**
- * GET
- * @param {string} endpoint - например '/info'
- * @param {Function} onSuccess
- */
-export function get(endpoint, onSuccess) {
-  $.ajax({
-    url: baseUrl + endpoint,
-    dataType: 'json',
-    success: (result) => onSuccess(result),
-    error: () => onSuccess({ ok: false, error: 'Network error' })
-  });
-}
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
 
-/**
- * POST
- * @param {string} endpoint - например '/order'
- * @param {Object} data - тело запроса (JS-объект)
- * @param {Function} onResult
- */
-export function post(endpoint, data, onResult) {
-  $.ajax({
-    type: 'POST',
-    url: baseUrl + endpoint,
-    data: JSON.stringify(data),                        // отправляем JSON-строку
-    contentType: 'application/json; charset=utf-8',   // говорим серверу, что это JSON
-    dataType: 'json',                                  // ожидаем JSON в ответе
-    success: (result) => onResult({ ok: true, data: result }),
-    error: (xhr) => {
-      // попробуем достать сообщение об ошибке из JSON
-      try {
-        const parsed = JSON.parse(xhr.responseText);
-        return onResult({ ok: false, error: parsed.message || 'Something went wrong.' });
-      } catch (_) {
-        return onResult({ ok: false, error: 'Something went wrong.' });
-      }
+        const data = await response.json();
+        return data;
+    } catch (err) {
+        console.error("API error:", err);
+        return { error: true };
     }
-  });
 }
+
+export const API = {
+    info: (payload) => apiRequest("info", payload),
+    categories: (payload) => apiRequest("categories", payload),
+    cart: (payload) => apiRequest("cart", payload)
+};
