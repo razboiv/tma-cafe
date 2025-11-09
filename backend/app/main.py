@@ -1,54 +1,41 @@
-import os
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import json
-from flask import Flask, jsonify
-from flask_cors import CORS
+import os
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI()
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), "data")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 
 
-def read_json(path):
-    full_path = os.path.join(BASE_DIR, path)
+def load_json(path):
+    full_path = os.path.join(DATA_DIR, path)
     if not os.path.exists(full_path):
-        return None
-    with open(full_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        raise HTTPException(status_code=404, detail=f"{path} not found")
+
+    with open(full_path, "r", encoding="utf-8") as file:
+        return json.load(file)
 
 
-@app.route("/info")
-def info():
-    data = read_json("info.json")
-    if data:
-        return jsonify(data)
-    return jsonify({"message": "info.json not found"}), 404
+@app.get("/info")
+def get_info():
+    return load_json("info.json")
 
 
-@app.route("/categories")
-def categories():
-    data = read_json("categories.json")
-    if data:
-        return jsonify(data)
-    return jsonify({"message": "categories.json not found"}), 404
+@app.get("/categories")
+def get_categories():
+    return load_json("categories.json")
 
 
-@app.route("/menu/popular")
-def menu_popular():
-    data = read_json("menu/popular.json")
-    if data:
-        return jsonify(data)
-    return jsonify({"message": "popular.json not found"}), 404
-
-
-@app.route("/menu/<item>")
-def menu_item(item):
-    filename = f"menu/{item}.json"
-    data = read_json(filename)
-    if data:
-        return jsonify(data)
-    return jsonify({"message": f'{filename} not found'}), 404
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+@app.get("/menu/popular")
+def get_popular():
+    return load_json("menu/popular.json")
