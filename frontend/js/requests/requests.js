@@ -1,18 +1,24 @@
-const baseUrl = 'https://tma-cafe-backend.onrender.com'; // без завершающего '/'
+const baseUrl = 'https://tma-cafe-backend.onrender.com';
 
-export function post(endpoint, data, onResult) {
-  $.ajax({
-    type: 'POST',
-    url: baseUrl + endpoint,        // пример: '/order'
-    data: JSON.stringify(data),     // JSON-строка
-    contentType: 'application/json; charset=utf-8',
-    dataType: 'json',
-    processData: false,
-    success: (result) => onResult({ ok: true, data: result }),
-    error: (xhr) => {
-      let err = 'Something went wrong.';
-      try { err = xhr.responseJSON?.message || err; } catch(_) {}
-      onResult({ ok: false, error: err });
-    },
-  });
+export async function get(path) {
+    const url = `${baseUrl}${path}`;
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    return response.json();
+}
+
+export async function post(path, data = {}) {
+    const url = `${baseUrl}${path}`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    });
+    return response.json();
 }
