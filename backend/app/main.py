@@ -62,6 +62,53 @@ def get_popular():
 
 @app.post("/order")
 def create_order():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return json_error("Request must be a JSON object", 400)
+
+    auth_str = payload.get("_auth")
+    cart_items = payload.get("cartItems", [])
+
+    # Проверка Telegram init data
+    bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
+    if bot_token:
+        try:
+            if not isinstance(auth_str, str) or not tgauth.validate_auth_data(bot_token, auth_str):
+                return json_error("Invalid Telegram auth data", 401)
+        except:
+            return json_error("Auth validation failed", 401)
+
+    if not isinstance(cart_items, list):
+        return json_error("cartItems must be an array", 400)
+
+    normalized = []
+
+    for i, it in enumerate(cart_items):
+        # ✅ твой реальный формат
+        item_id = it.get("id")
+        name = it.get("name")
+        price = it.get("price")
+        qty = it.get("quantity", 1)
+
+        if not item_id:
+            return json_error(f"Bad cart item at index {i}: missing id", 400)
+
+        normalized.append({
+            "item": str(item_id),
+            "name": name,
+            "quantity": int(qty),
+            "cost": int(price) if isinstance(price, (int, float)) else None
+        })
+
+    # Генерация ID заказа
+    order_id = os.urandom(6).hex()
+
+    return jsonify({
+        "ok": True,
+        "orderId": order_id,
+        "items": normalized
+    }), 200
+
     # Всегда пытаемся парсить JSON
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
