@@ -1,151 +1,115 @@
 # backend/app/main.py
-from __future__ import annotations
-
-import os, json
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+import os
+import hmac
+import hashlib
+import urllib.parse as urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
-# --- optional: мягкая проверка Telegram initData ---
-try:
-    # auth.py лежит рядом: backend/app/auth.py
-    import auth as tgauth
-except Exception:
-    tgauth = None  # на всякий случай
-
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR.parent / "data"   # backend/data
 
 app = Flask(__name__)
 CORS(app)
 
-
-def load_json(name: str) -> Tuple[Any, str | None]:
-    """Читаем backend/data/*.json безопасно."""
-    p = DATA_DIR / f"{name}.json"
-    if not p.exists():
-        return None, f"{name}.json not found"
-    try:
-        with p.open("r", encoding="utf-8") as f:
-            return json.load(f), None
-    except Exception as e:
-        return None, f"failed to read {name}.json: {e}"
-
-
-def json_error(message: str, code: int):
-    resp = jsonify({"message": message})
-    resp.status_code = code
-    return resp
-
-
-# ------------- PUBLIC GET -------------
+# ---- Health / Info ----
+@app.get("/")
+def root():
+    # Нужен Render для health check
+    return "ok true", 200
 
 @app.get("/info")
-def get_info():
-    data, err = load_json("info")
-    if err:
-        return json_error(err, 404)
-    return jsonify(data)
+def info():
+    return jsonify({
+        "ok": True,
+        "name": "tma-cafe-backend",
+        "env": os.getenv("NODE_ENV", "production")
+    }), 200
 
+# ---- Telegram WebApp auth verify ----
+def verify_init_data(init_data: str, bot_token: str) -> bool:
+    """
+    Проверка подписи initData из Telegram WebApp:
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
+    """
+    try:
+        secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
 
-@app.get("/categories")
-def get_categories():
-    data, err = load_json("categories")
-    if err:
-        return json_error(err, 404)
-    return jsonify(data)
+        # Разбираем initData вида "k=v&k2=v2..."
+        pairs = [p for p in init_data.split("&") if p]
+        kv = {}
+        hash_value = None
+        for p in pairs:
+            if "=" not in p:
+                continue
+            k, v = p.split("=", 1)
+            if k == "hash":
+                hash_value = v
+            else:
+                # Значения в строке проверки должны быть URL-decoded
+                kv[k] = urlparse.unquote_plus(v)
 
+        if not hash_value:
+            return False
 
-@app.get("/menu/popular")
-def get_popular():
-    data, err = load_json("popular")
-    if err:
-        return json_error(err, 404)
-    return jsonify(data)
+        # data_check_string — все пары кроме hash, сортировка по ключу, формат "key=value" через \n
+        data_check_string = "\n".join(f"{k}={kv[k]}" for k in sorted(kv.keys()))
 
+        calc_hash = hmac.new(
+            secret_key,
+            data_check_string.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
 
-# ------------- ORDER ------------------
+        return calc_hash == hash_value
+    except Exception:
+        return False
 
+# ---- Order endpoint ----
 @app.post("/order")
-def create_order():
-    # Логируем «как есть»
-    app.logger.info("ORDER: raw content-type=%s", request.headers.get("content-type"))
-    app.logger.info("ORDER: raw data=%s", request.get_data(as_text=True))
+def order():
+    """
+    Принимает JSON:
+    {
+      "_auth": "<initData из Telegram WebApp>",
+      "cartItems": [
+         {"cafeteria": {"name": "Hamburger"},
+          "variant": {"name": "Small","cost": 1199},
+          "quantity": 1}
+      ]
+    }
+    Возвращает ok и рассчитанный total. Дальше сюда можно подвязать платежку.
+    """
+    payload = request.get_json(silent=True) or {}
+
+    init_data = payload.get("_auth") or payload.get("auth") or ""
+    cart_items = payload.get("cartItems", [])
+
+    bot_token = os.getenv("BOT_TOKEN", "")
+    if not bot_token:
+        return jsonify({"ok": False, "error": "BOT_TOKEN is not set"}), 500
+
+    if not init_data or not verify_init_data(init_data, bot_token):
+        return jsonify({"ok": False, "error": "auth_failed"}), 401
 
     try:
-        # 1) Пытаемся распарсить JSON
-        payload = request.get_json(silent=True)
-        if not isinstance(payload, dict):
-            return json_error("Request must be a JSON object", 400)
+        total = 0
+        for item in cart_items:
+            variant = item.get("variant", {})
+            cost = int(variant.get("cost", 0))
+            qty = int(item.get("quantity", 1))
+            total += cost * qty
 
-        auth_str = payload.get("_auth")
-        cart_items = payload.get("cartItems", [])
-
-        # 2) Мягкая проверка Telegram initData
-        bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
-        if bot_token and tgauth and hasattr(tgauth, "validate_auth_data"):
-            try:
-                if not isinstance(auth_str, str) or not tgauth.validate_auth_data(bot_token, auth_str):
-                    return json_error("Invalid Telegram auth data", 401)
-            except Exception as e:
-                app.logger.exception("ORDER: auth validation failed: %s", e)
-                return json_error("Auth validation failed", 401)
-
-        # 3) Базовая валидация корзины
-        if not isinstance(cart_items, list):
-            return json_error("cartItems must be an array", 400)
-
-        # 4) Нормализация
-        normalized: List[Dict[str, Any]] = []
-        for i, it in enumerate(cart_items):
-            if not isinstance(it, dict):
-                return json_error(f"Bad cart item at index {i}", 400)
-
-            caf = it.get("cafeteria") or {}
-            var = it.get("variant") or {}
-            qty = it.get("quantity", 1)
-
-            caf_id = caf.get("id") or caf.get("name")
-            var_id = var.get("id") or var.get("name")
-            cost = var.get("cost")
-
-            if not caf_id or not var_id:
-                return json_error(f"Bad cart item format at index {i}", 400)
-
-            normalized.append({
-                "item": str(caf_id),
-                "variant": str(var_id),
-                "quantity": int(qty or 1),
-                "cost": int(cost) if isinstance(cost, (int, float, str)) and str(cost).isdigit() else None,
-            })
-
-        # 5) Здесь могла бы быть реальная логика оплаты/создания заказа
-        import secrets
-        order_id = secrets.token_hex(6)
-
-        resp = {"ok": True, "orderId": order_id, "items": normalized}
-        app.logger.info("ORDER: response=%s", resp)
-        return jsonify(resp), 200
+        # здесь вы можете вернуть то, что требуется фронту для pay
+        return jsonify({
+            "ok": True,
+            "result": {
+                "total": total,
+                "currency": "RUB"  # или нужную вам валюту
+            }
+        }), 200
 
     except Exception as e:
-        # Любая неучтенная ошибка → JSON + лог
-        app.logger.exception("ORDER: unhandled error: %s", e)
-        return json_error("Internal server error", 500)
+        return jsonify({"ok": False, "error": str(e)}), 400
 
-
-# --------- Глобальные обработчики ошибок (JSON) ---------
-
-@app.errorhandler(404)
-def not_found(e):
-    return json_error("Not found", 404)
-
-@app.errorhandler(500)
-def internal_error(e):
-    app.logger.exception("Unhandled server error")
-    return json_error("Internal server error", 500)
-
-
+# Локальный запуск (на Render не используется, но не мешает)
 if __name__ == "__main__":
-    # локальный запуск
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)
