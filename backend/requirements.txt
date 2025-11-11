@@ -1,4 +1,4 @@
-﻿blinker==1.6.2
+blinker==1.6.2
 certifi==2023.7.22
 charset-normalizer==3.3.0
 click==8.1.7
@@ -15,5 +15,3 @@ requests==2.31.0
 urllib3==2.0.6
 Werkzeug==3.0.0
 gunicorn==21.2.0
-fastapi==0.115.2
-uvicorn==0.23.2
