@@ -45,6 +45,14 @@ def bot_webhook():
     # Заглушка, чтобы POST /bot не отдавал 405
     return "ok", 200
 
+@app.get("/")
+def ping():
+    return jsonify({"ok": True, "service": "tma-cafe-backend"})
+
+# логируем все зарегистрированные маршруты при старте
+with app.app_context():
+    app.logger.info("URL MAP: " + ", ".join(sorted(r.rule for r in app.url_map.iter_rules())))
+
 if __name__ == "__main__":
     # Локальный запуск; в Render запустит gunicorn
     port = int(os.getenv("PORT", "8000"))
