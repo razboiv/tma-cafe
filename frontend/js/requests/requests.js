@@ -1,34 +1,54 @@
-// frontend/js/requests.js
+// frontend/js/requests/requests.js
 
-async function fetchWithRetry(url, options = {}, retries = 3, delay = 1000) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    } catch (err) {
-      console.warn(`⚠️ Attempt ${attempt} failed: ${err.message}`);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, delay));
-        console.log("🔄 Retrying...");
-      } else {
-        throw err;
-      }
+// Базовый URL бэкенда на Render (без завершающего /)
+const API_BASE = ('https://tma-cafe-backend.onrender.com').replace(/\/+$/, '');
+
+// Собираем абсолютный URL
+function makeUrl(path) {
+  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+// Универсальный fetch с ретраями и проверкой JSON
+async function fetchWithRetry(path, options = {}, retries = 2, backoffMs = 500) {
+  const url = makeUrl(path);
+  try {
+    const res = await fetch(url, { credentials: 'omit', ...options });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`${options.method || 'GET'} ${path} failed: ${res.status} ${text}`);
     }
+
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`${options.method || 'GET'} ${path} expected JSON, got: ${text}`);
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (retries > 0) {
+      await new Promise(r => setTimeout(r, backoffMs));
+      return fetchWithRetry(path, options, retries - 1, backoffMs * 2);
+    }
+    throw err;
   }
 }
 
-// Пример использования
-const API_URL = "https://tma-cafe-backend.onrender.com";
-
-export async function getInfo() {
-  return fetchWithRetry(`${API_URL}/info`);
+/* -------- Старые совместимые API (для текущих страниц) -------- */
+export async function get(path) {
+  return fetchWithRetry(path, { method: 'GET' });
 }
 
-export async function getCategories() {
-  return fetchWithRetry(`${API_URL}/categories`);
+export async function post(path, payload) {
+  return fetchWithRetry(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload ?? {})
+  });
 }
 
-export async function getPopularMenu() {
-  return fetchWithRetry(`${API_URL}/menu/popular`);
-}
+/* -------- Новые удобные шорткаты (можно использовать в новом коде) -------- */
+export const getInfo = () => get('/info');
+export const getCategories = () => get('/categories');
+export const getPopularMenu = () => get('/menu/popular');
