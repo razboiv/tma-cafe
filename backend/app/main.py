@@ -13,7 +13,7 @@ from flask_cors import CORS
 
 # --- расположение данных ---
 BASE_DIR = Path(__file__).resolve().parent  # backend/app
-DATA_DIR = BASE_DIR / "data"                # backend/app/data
+DATA_DIR = BASE_DIR.parent / "data"                # backend/app/data
 
 app = Flask(__name__)
 CORS(app)
