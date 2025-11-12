@@ -1,74 +1,77 @@
 # backend/app/main.py
+
 from __future__ import annotations
 
 import os
 import json
 import secrets
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional, Tuple, List, Dict, Any
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-
-# --- расположение данных ---
-BASE_DIR = Path(__file__).resolve().parent  # backend/app
-DATA_DIR = BASE_DIR.parent / "data"                # backend/app/data
+# ---- базовые пути ----
+BASE_DIR = Path(__file__).resolve().parent          # backend/app
+DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
+MENU_DIR = DATA_DIR / "menu"                        # backend/data/menu
 
 app = Flask(__name__)
 CORS(app)
 
-
-# ---------- Утилиты ----------
-
-def _safe_json_path(relpath: str) -> Path:
-    """Безопасно получает путь к JSON внутри backend/data."""
-    rel = relpath.strip("/")
-    candidate = (DATA_DIR / f"{rel}.json").resolve()
-    if not str(candidate).startswith(str(DATA_DIR.resolve())):
-        # Попытка выйти за пределы data
+# ---- utils ----
+def _json_path(rel: str) -> Path:
+    """
+    Возвращает безопасный путь к JSON внутри backend/data.
+    Поддерживает подкаталоги, напр. 'menu/popular' или 'menu/burgers'.
+    """
+    rel = rel.strip("/").replace("\\", "/")
+    p = (DATA_DIR / f"{rel}.json").resolve()
+    # защита от выхода из каталога данных
+    if not str(p).startswith(str(DATA_DIR.resolve())):
+        # заведомо несуществующий файл => отдадим 404
         return DATA_DIR / "__forbidden__.json"
-    return candidate
+    return p
 
-
-def load_json(relpath: str) -> Tuple[Optional[object], Optional[str]]:
-    """Читает JSON по относительному пути внутри backend/data."""
-    p = _safe_json_path(relpath)
-    if not p.exists():
-        return None, f"{p.name} not found"
+def load_json(rel: str) -> Tuple[Optional[Any], Optional[str]]:
+    """
+    Безопасно читает JSON 'backend/data/<rel>.json'.
+    Возвращает (data, error_message).
+    """
+    path = _json_path(rel)
+    if not path.exists():
+        return None, f"{path.name} not found"
     try:
-        with p.open("r", encoding="utf-8") as f:
+        with path.open("r", encoding="utf-8") as f:
             return json.load(f), None
     except Exception as e:
-        return None, f"failed to read {relpath}.json: {e}"
-
+        return None, f"failed to read '{rel}.json': {e}"
 
 def json_error(message: str, code: int):
     resp = jsonify({"message": message})
     resp.status_code = code
     return resp
 
-
-# ---------- Публичные GET ----------
+# ---- health & root ----
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "env": os.getenv("ENV", "production")})
 
 @app.get("/")
 def root():
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "env": os.getenv("ENV", "production"),
+        "version": os.getenv("VERSION", "mini-patch-2025-11-11"),
+    })
 
-
-@app.get("/health")
-def health():
-    """Проверка состояния для UptimeRobot и Render"""
-    return jsonify({"ok": True, "status": "healthy"}), 200
-
-
+# ---- публичные GET ----
 @app.get("/info")
 def get_info():
     data, err = load_json("info")
     if err:
         return json_error(err, 404)
     return jsonify(data)
-
 
 @app.get("/categories")
 def get_categories():
@@ -77,7 +80,6 @@ def get_categories():
         return json_error(err, 404)
     return jsonify(data)
 
-
 @app.get("/menu/popular")
 def get_popular():
     data, err = load_json("menu/popular")
@@ -85,27 +87,42 @@ def get_popular():
         return json_error(err, 404)
     return jsonify(data)
 
-
 @app.get("/menu/<category>")
-def get_category_menu(category: str):
-    """Например: /menu/burgers → читает backend/data/menu/burgers.json"""
+def get_menu_category(category: str):
+    """
+    Отдаёт список позиций для категории:
+    /menu/burgers -> backend/data/menu/burgers.json
+    /menu/pasta   -> backend/data/menu/pasta.json и т.д.
+    """
     data, err = load_json(f"menu/{category}")
     if err:
         return json_error(err, 404)
     return jsonify(data)
 
+@app.get("/menu/details/<item_id>")
+def get_menu_item(item_id: str):
+    """
+    Ищет одну позицию по id в любом JSON из backend/data/menu/*.json.
+    Например: /menu/details/burger-1
+    """
+    if not MENU_DIR.exists():
+        return json_error("menu folder not found", 404)
 
-@app.get("/menu/details/<item>")
-def get_item_details(item: str):
-    """Например: /menu/details/burger-1 → backend/data/menu/details/burger-1.json"""
-    data, err = load_json(f"menu/details/{item}")
-    if err:
-        return json_error(err, 404)
-    return jsonify(data)
+    try:
+        for path in MENU_DIR.glob("*.json"):
+            with path.open("r", encoding="utf-8") as f:
+                content = json.load(f)
+            # файлы категорий — массив объектов
+            if isinstance(content, list):
+                for it in content:
+                    if isinstance(it, dict) and str(it.get("id")) == item_id:
+                        return jsonify(it)
+        return json_error(f"{item_id}.json not found", 404)
+    except Exception as e:
+        app.logger.exception("Failed to search item details")
+        return json_error(f"failed to search '{item_id}': {e}", 500)
 
-
-# ---------- Создание заказа ----------
-
+# ---- создание заказа ----
 @app.post("/order")
 def create_order():
     payload = request.get_json(silent=True)
@@ -115,6 +132,7 @@ def create_order():
     auth_str = payload.get("_auth")
     cart_items = payload.get("cartItems", [])
 
+    # мягкая проверка initData, если нужен токен — добавь в env
     bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
     if bot_token and not isinstance(auth_str, str):
         return json_error("Invalid Telegram auth data", 401)
@@ -122,10 +140,11 @@ def create_order():
     if not isinstance(cart_items, list):
         return json_error("cartItems must be an array", 400)
 
-    normalized = []
+    normalized: List[Dict[str, Any]] = []
     for i, it in enumerate(cart_items):
         if not isinstance(it, dict):
             return json_error(f"Bad cart item at index {i}", 400)
+
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
@@ -145,27 +164,17 @@ def create_order():
         })
 
     order_id = secrets.token_hex(6)
-    return jsonify({
-        "ok": True,
-        "orderId": order_id,
-        "items": normalized,
-    }), 200
+    return jsonify({"ok": True, "orderId": order_id, "items": normalized}), 200
 
-
-# ---------- Обработчики ошибок ----------
-
+# ---- error handlers ----
 @app.errorhandler(404)
 def not_found(e):
     return json_error("Not found", 404)
-
 
 @app.errorhandler(500)
 def internal_error(e):
     app.logger.exception("Unhandled server error")
     return json_error("Internal server error", 500)
-
-
-# ---------- Локальный запуск ----------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
