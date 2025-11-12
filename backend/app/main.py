@@ -12,35 +12,32 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # --- расположение данных ---
-BASE_DIR = Path(__file__).resolve().parent          # backend/app
-DATA_DIR = BASE_DIR.parent / "data"                  # backend/data
+BASE_DIR = Path(__file__).resolve().parent  # backend/app
+DATA_DIR = BASE_DIR.parent / "data"         # backend/data
 
 app = Flask(__name__)
 CORS(app)
 
-
-# ---------- утилиты ----------
+# ----------- Утилиты -----------
 
 def _safe_json_path(relpath: str) -> Path:
     """
-    Возвращает безопасный путь к JSON в папке backend/data.
-    Поддерживает подпапки, например 'menu/popular'.
+    Возвращает безопасный путь к JSON в backend/data.
+    Поддерживает подпапки, например menu/popular.
     """
-    # убираем ведущие слеши
-    rel = relpath.lstrip("/")
-
-    # запрещаем выход из каталога данных
+    rel = relpath.strip("/")
     candidate = (DATA_DIR / f"{rel}.json").resolve()
+
+    # защита от выхода за каталог
     if not str(candidate).startswith(str(DATA_DIR.resolve())):
-        # попытка ../ — отдаем путь, который точно не существует
         return DATA_DIR / "__forbidden__.json"
+
     return candidate
 
 
 def load_json(relpath: str) -> Tuple[Optional[object], Optional[str]]:
     """
-    Безопасно читает JSON по относительному пути внутри backend/data.
-    Возвращает (data, error_message).
+    Безопасно читает JSON по пути внутри backend/data.
     """
     p = _safe_json_path(relpath)
     if not p.exists():
@@ -58,11 +55,17 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ---------- публичные GET ----------
+# ----------- Public GET -----------
 
 @app.get("/")
 def root():
     return jsonify({"ok": True})
+
+
+@app.get("/health")
+def health_check():
+    """Render/UptimeRobot health endpoint"""
+    return jsonify({"status": "healthy"}), 200
 
 
 @app.get("/info")
@@ -83,14 +86,14 @@ def get_categories():
 
 @app.get("/menu/popular")
 def get_popular():
-    # ВАЖНО: читаем из backend/data/menu/popular.json
+    # читаем backend/data/menu/popular.json
     data, err = load_json("menu/popular")
     if err:
         return json_error(err, 404)
     return jsonify(data)
 
 
-# ---------- создание заказа ----------
+# ----------- POST /order -----------
 
 @app.post("/order")
 def create_order():
@@ -101,7 +104,6 @@ def create_order():
     auth_str = payload.get("_auth")
     cart_items = payload.get("cartItems", [])
 
-    # (опционально) мягкая проверка Telegram initData
     bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
     if bot_token and not isinstance(auth_str, str):
         return json_error("Invalid Telegram auth data", 401)
@@ -141,7 +143,7 @@ def create_order():
     }), 200
 
 
-# ---------- error handlers ----------
+# ----------- Error handlers -----------
 
 @app.errorhandler(404)
 def not_found(e):
@@ -154,6 +156,6 @@ def internal_error(e):
     return json_error("Internal server error", 500)
 
 
+# ----------- Local run -----------
 if __name__ == "__main__":
-    # локальный запуск
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
