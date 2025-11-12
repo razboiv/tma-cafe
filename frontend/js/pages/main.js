@@ -1,6 +1,6 @@
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import { get } from "../requests/requests.js";
+import { getInfo, getCategories, getPopularMenu } from "../requests/requests.js";
 import { TelegramSDK } from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
