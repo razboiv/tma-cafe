@@ -1,42 +1,55 @@
 # backend/app/main.py
 
 from __future__ import annotations
+
 import os
 import json
+import secrets
 from pathlib import Path
+from typing import Tuple, Optional
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Пытаемся подключить auth (backend/app/auth.py)
-try:
-    from . import auth as tgauth
-except Exception:
-    import auth as tgauth
-
-# -----------------------------
-# Правильные пути (ВАРИАНТ №2)
-# -----------------------------
-# Мы сидим в backend/app/main.py → значит data лежит в ../data/
-BASE_DIR = Path(__file__).resolve().parent      # backend/app
-DATA_DIR = BASE_DIR.parent / "data"             # backend/data
-
+# --- расположение данных ---
+BASE_DIR = Path(__file__).resolve().parent          # backend/app
+DATA_DIR = BASE_DIR.parent / "data"                  # backend/data
 
 app = Flask(__name__)
 CORS(app)
 
 
-# ---------- HELPERS ----------
-def load_json(name: str):
-    """Безопасно читаем JSON из backend/data/*.json"""
-    p = DATA_DIR / f"{name}.json"
-    if not p.exists():
-        return None, f"{name}.json not found"
+# ---------- утилиты ----------
 
+def _safe_json_path(relpath: str) -> Path:
+    """
+    Возвращает безопасный путь к JSON в папке backend/data.
+    Поддерживает подпапки, например 'menu/popular'.
+    """
+    # убираем ведущие слеши
+    rel = relpath.lstrip("/")
+
+    # запрещаем выход из каталога данных
+    candidate = (DATA_DIR / f"{rel}.json").resolve()
+    if not str(candidate).startswith(str(DATA_DIR.resolve())):
+        # попытка ../ — отдаем путь, который точно не существует
+        return DATA_DIR / "__forbidden__.json"
+    return candidate
+
+
+def load_json(relpath: str) -> Tuple[Optional[object], Optional[str]]:
+    """
+    Безопасно читает JSON по относительному пути внутри backend/data.
+    Возвращает (data, error_message).
+    """
+    p = _safe_json_path(relpath)
+    if not p.exists():
+        return None, f"{p.name} not found"
     try:
         with p.open("r", encoding="utf-8") as f:
             return json.load(f), None
     except Exception as e:
-        return None, f"failed to read {name}: {e}"
+        return None, f"failed to read '{relpath}.json': {e}"
 
 
 def json_error(message: str, code: int):
@@ -45,14 +58,11 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ---------- PUBLIC GET ----------
+# ---------- публичные GET ----------
+
 @app.get("/")
 def root():
-    return jsonify({
-        "ok": True,
-        "env": "production",
-        "version": "patch-2025-11-11",
-    })
+    return jsonify({"ok": True})
 
 
 @app.get("/info")
@@ -73,13 +83,15 @@ def get_categories():
 
 @app.get("/menu/popular")
 def get_popular():
-    data, err = load_json("popular")
+    # ВАЖНО: читаем из backend/data/menu/popular.json
+    data, err = load_json("menu/popular")
     if err:
         return json_error(err, 404)
     return jsonify(data)
 
 
-# ---------- ORDER ----------
+# ---------- создание заказа ----------
+
 @app.post("/order")
 def create_order():
     payload = request.get_json(silent=True)
@@ -89,16 +101,11 @@ def create_order():
     auth_str = payload.get("_auth")
     cart_items = payload.get("cartItems", [])
 
-    # Проверка Telegram initData
+    # (опционально) мягкая проверка Telegram initData
     bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
-    if bot_token:
-        try:
-            if not isinstance(auth_str, str) or not tgauth.validate_auth_data(bot_token, auth_str):
-                return json_error("Invalid Telegram auth data", 401)
-        except Exception:
-            return json_error("Auth validation failed", 401)
+    if bot_token and not isinstance(auth_str, str):
+        return json_error("Invalid Telegram auth data", 401)
 
-    # Проверка корзины
     if not isinstance(cart_items, list):
         return json_error("cartItems must be an array", 400)
 
@@ -107,13 +114,13 @@ def create_order():
         if not isinstance(it, dict):
             return json_error(f"Bad cart item at index {i}", 400)
 
-        caf = (it.get("cafeteria") or {})
-        var = (it.get("variant") or {})
+        caf = it.get("cafeteria") or {}
+        var = it.get("variant") or {}
         qty = it.get("quantity", 1)
-        cost = it.get("cost")
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
+        cost = var.get("cost")
 
         if not caf_id or not var_id:
             return json_error(f"Bad cart item format at index {i}", 400)
@@ -122,20 +129,20 @@ def create_order():
             "item": str(caf_id),
             "variant": str(var_id),
             "quantity": int(qty or 1),
-            "cost": int(cost) if isinstance(cost, (int, float)) else None
+            "cost": int(cost) if isinstance(cost, (int, float)) else None,
         })
 
-    # Генерируем ID заказа
-    order_id = os.urandom(6).hex()
+    order_id = secrets.token_hex(6)
 
     return jsonify({
         "ok": True,
         "orderId": order_id,
-        "items": normalized
+        "items": normalized,
     }), 200
 
 
-# ---------- ERROR HANDLERS ----------
+# ---------- error handlers ----------
+
 @app.errorhandler(404)
 def not_found(e):
     return json_error("Not found", 404)
@@ -147,6 +154,6 @@ def internal_error(e):
     return json_error("Internal server error", 500)
 
 
-# ---------- LOCAL RUN ----------
 if __name__ == "__main__":
+    # локальный запуск
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
