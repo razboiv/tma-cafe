@@ -1,99 +1,63 @@
 // frontend/js/requests/requests.js
 
-// Базовый URL твоего бэкенда на Render.
-const API_BASE = ('https://tma-cafe-backend.onrender.com').replace(/\/+$/, '');
+// Базовый URL бэкенда на Render (без завершающего /)
+const API_BASE = 'https://tma-cafe-backend.onrender.com'.replace(/\/+$/, '');
 
-// Нормализуем путь: гарантируем ведущий слэш.
+// Нормализуем путь
 function url(path) {
   return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-/**
- * Обёртка вокруг fetch с автоповтором.
- * retries — сколько раз пробуем (всего попыток = retries + 1).
- */
-async function fetchWithRetry(path, options = {}, retries = 2) {
-  const fullUrl = url(path);
+// Универсальная функция с автоповтором
+async function fetchWithRetry(method, path, body, tries = 3, delayMs = 800) {
+  const target = url(path);
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= tries; attempt++) {
     try {
-      const res = await fetch(fullUrl, {
-        // по умолчанию GET
-        method: options.method || 'GET',
-        headers: options.headers || {},
-        body: options.body,
+      const res = await fetch(target, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: body != null ? JSON.stringify(body) : undefined,
         credentials: 'omit',
       });
 
-      const text = await res.text();
-      const contentType = res.headers.get('content-type') || '';
+      const ct = res.headers.get('content-type') || '';
 
-      // Если ответ неуспешный — бросаем ошибку (её поймает внешний код)
+      if (!ct.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`${method} ${path} expected JSON, got: ${ct} ${text.slice(0, 120)}`);
+      }
+
+      const json = await res.json();
+
       if (!res.ok) {
-        let message = text;
-        if (contentType.includes('application/json')) {
-          try {
-            const json = JSON.parse(text || '{}');
-            message = JSON.stringify(json);
-          } catch (_) {}
-        }
-
-        throw new Error(
-          `${options.method || 'GET'} ${path} failed: ${res.status} ${message}`
-        );
+        throw new Error(`${method} ${path} failed: ${res.status} ${JSON.stringify(json)}`);
       }
 
-      // Если JSON
-      if (contentType.includes('application/json')) {
-        return JSON.parse(text || 'null');
-      }
-
-      // если не JSON — просто отдадим текст
-      return text;
+      return json;
     } catch (err) {
-      // последняя попытка — пробрасываем ошибку наружу
-      if (attempt === retries) {
-        console.error(`[fetchWithRetry] ${options.method || 'GET'} ${path} failed`, err);
-        throw err;
-      }
-      // небольшая пауза перед повтором (100ms)
-      await new Promise(r => setTimeout(r, 100));
+      lastError = err;
+      console.error(`Request ${method} ${path} attempt ${attempt} failed:`, err);
+
+      if (attempt === tries) break;
+
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
+
+  throw lastError || new Error(`Request ${method} ${path} failed`);
 }
 
-// ------ публичные функции ------
+// Публичные функции
 
-// Универсальный GET, как в оригинальном проекте
 export async function get(path) {
-  return fetchWithRetry(path, { method: 'GET' });
+  return fetchWithRetry('GET', path, null);
 }
 
-// Универсальный POST JSON
 export async function post(path, payload) {
-  return fetchWithRetry(
-    path,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload ?? {}),
-    }
-  );
-}
-
-// Доп. «говорящие» функции, если где-то захочешь использовать
-export function getInfo() {
-  return get('/info');
-}
-
-export function getCategories() {
-  return get('/categories');
-}
-
-export function getPopularMenu() {
-  return get('/menu/popular');
-}
-
-export function postOrder(payload) {
-  return post('/order', payload);
+  return fetchWithRetry('POST', path, payload);
 }
