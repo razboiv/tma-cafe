@@ -5,7 +5,7 @@ const API_BASE = "https://tma-cafe-backend.onrender.com".replace(/\/+$/, "");
 
 // Собираем полный URL.
 function url(path) {
-  return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
 // Базовый helper с автоповтором и проверкой JSON.
@@ -16,7 +16,6 @@ async function fetchWithRetry(path, options = {}, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(target, options);
-
       const ct = res.headers.get("content-type") || "";
       const isJson = ct.includes("application/json");
 
@@ -58,7 +57,7 @@ async function fetchWithRetry(path, options = {}, retries = 2) {
   throw lastError;
 }
 
-// ====== Публичные функции, которые импортирует фронт ======
+/* ===== Публичные функции, которые можно использовать напрямую ===== */
 
 // /info
 export function getInfo() {
@@ -80,7 +79,7 @@ export function getMenuCategory(categoryId) {
   return fetchWithRetry(`/menu/${encodeURIComponent(categoryId)}`);
 }
 
-// /menu/details/<itemId>  (burger-1, pizza-2, и т.п.)
+// /menu/details/<itemId>  (burger-1, pizza-2 и т.п.)
 export function getMenuItem(itemId) {
   return fetchWithRetry(`/menu/details/${encodeURIComponent(itemId)}`);
 }
@@ -88,6 +87,22 @@ export function getMenuItem(itemId) {
 // POST /order
 export function createOrder(payload) {
   return fetchWithRetry("/order", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
+/* ===== Совместимость со старым кодом (get/post) ===== */
+
+// Старый get(path) — просто обёртка над fetchWithRetry
+export function get(path) {
+  return fetchWithRetry(path);
+}
+
+// Старый post(path, payload) — POST с JSON-телом
+export function post(path, payload) {
+  return fetchWithRetry(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload ?? {}),
