@@ -57,7 +57,7 @@ async function fetchWithRetry(path, options = {}, retries = 2) {
   throw lastError;
 }
 
-/* ===== Публичные функции, которые можно использовать напрямую ===== */
+// ===== Публичные функции, которые импортирует фронт =====
 
 // /info
 export function getInfo() {
@@ -74,12 +74,12 @@ export function getPopularMenu() {
   return fetchWithRetry("/menu/popular");
 }
 
-// /menu/<categoryId>  (burgers, pizza, pasta, coffee, ice-cream)
+// /menu/<categoryId> (burgers, pizza, pasta, coffee, ice-cream)
 export function getMenuCategory(categoryId) {
   return fetchWithRetry(`/menu/${encodeURIComponent(categoryId)}`);
 }
 
-// /menu/details/<itemId>  (burger-1, pizza-2 и т.п.)
+// /menu/details/<itemId> (burger-1, pizza-2 и т.п.)
 export function getMenuItem(itemId) {
   return fetchWithRetry(`/menu/details/${encodeURIComponent(itemId)}`);
 }
@@ -87,22 +87,6 @@ export function getMenuItem(itemId) {
 // POST /order
 export function createOrder(payload) {
   return fetchWithRetry("/order", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload ?? {}),
-  });
-}
-
-/* ===== Совместимость со старым кодом (get/post) ===== */
-
-// Старый get(path) — просто обёртка над fetchWithRetry
-export function get(path) {
-  return fetchWithRetry(path);
-}
-
-// Старый post(path, payload) — POST с JSON-телом
-export function post(path, payload) {
-  return fetchWithRetry(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload ?? {}),
