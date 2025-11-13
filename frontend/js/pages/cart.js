@@ -9,6 +9,7 @@ import { loadImage } from "../utils/dom.js";
 export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
+  }
 
   load(params) {
     console.log("[CartPage] load", params);
@@ -40,18 +41,22 @@ export default class CartPage extends Route {
     this.#changeEmptyPlaceholderVisibility(cartItems.length === 0);
 
     const cartItemsContainer = $("#cart-items");
-    const cartItemsIds = cartItems.map((cartItem) => cartItem.getId());
+    const cartItemIds = cartItems.map((cartItem) => cartItem.getId());
 
     cartItemsContainer.children().each((index, element) => {
       const cartItemElement = $(element);
-      if (!cartItemsIds.includes(cartItemElement.attr("id"))) {
+      if (!cartItemIds.includes(cartItemElement.attr("id"))) {
         cartItemElement.remove();
       }
     });
 
     const cartItemTemplateHtml = $("#cart-item-template").html();
+
     cartItems.forEach((cartItem) => {
-      const cartItemElement = cartItemsContainer.find(`#${cartItem.getId()}`);
+      const cartItemElement = cartItemsContainer.find(
+        `#${cartItem.getId()}`
+      );
+
       if (cartItemElement.length > 0) {
         cartItemElement
           .find("#cart-item-cost")
@@ -61,6 +66,7 @@ export default class CartPage extends Route {
           .textBoop(cartItem.quantity);
       } else {
         const filledCartItemTemplate = $(cartItemTemplateHtml);
+
         filledCartItemTemplate.attr("id", cartItem.getId());
         loadImage(
           filledCartItemTemplate.find("#cart-item-image"),
@@ -112,6 +118,7 @@ export default class CartPage extends Route {
 
   #changeEmptyPlaceholderVisibility(isVisible) {
     const placeholder = $("#cart-empty-placeholder");
+
     if (isVisible) {
       this.emptyCartPlaceholderLottieAnimation.play();
       placeholder.fadeIn();
@@ -138,8 +145,11 @@ export default class CartPage extends Route {
         }
       })
       .catch((err) => {
+        console.error("[CartPage] createOrder failed", err);
+        showSnackbar("Something went wrong, please try again", "error");
+      })
+      .finally(() => {
         TelegramSDK.setMainButtonLoading(false);
-        showSnackbar(err.message || String(err), "error");
       });
   }
 
@@ -149,7 +159,10 @@ export default class CartPage extends Route {
       TelegramSDK.close();
     } else if (status === "failed") {
       TelegramSDK.setMainButtonLoading(false);
-      showSnackbar("Something went wrong, payment is unsuccessful :(", "error");
+      showSnackbar(
+        "Something went wrong, payment is unsuccessful :(",
+        "error"
+      );
     } else {
       TelegramSDK.setMainButtonLoading(false);
       showSnackbar("The order was cancelled.", "warning");
