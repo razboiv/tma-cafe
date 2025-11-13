@@ -5,7 +5,7 @@ import { TelegramSDK } from "../telegram/telegram.js";
  * it single for the target container. The class allow to show Snackbar without direct
  * definition in your HTML.
  */
-export class Snackbar {
+export default class Snackbar {
 
     /**
      * Map of pairs: Snackbar ID in format ('${parentId}-snackbar') 
