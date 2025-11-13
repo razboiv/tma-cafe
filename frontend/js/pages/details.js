@@ -5,7 +5,7 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-export class DetailsPage extends Route {
+export default class DetailsPage extends Route { ... }
   constructor() {
     super("details", "/pages/details.html");
   }
