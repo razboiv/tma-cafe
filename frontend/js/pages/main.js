@@ -9,7 +9,7 @@ import { Cart } from "../cart/cart.js";
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
  */
-export default class MainPage extends Route {
+export default class MainPage extends Route { ... }
   constructor() {
     super("root", "/pages/main.html");
   }
