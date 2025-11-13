@@ -6,10 +6,14 @@ import { showSnackbar } from "../routing/router.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
 
-export class CartPage extends Route {
+export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
   }
+
+  // дальше твой код без изменений
+}
+
 
   load(params) {
     console.log("[CartPage] load", params);
