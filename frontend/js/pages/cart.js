@@ -9,17 +9,14 @@ import { loadImage } from "../utils/dom.js";
 export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
-  }
-
-  // дальше твой код без изменений
-}
-
 
   load(params) {
     console.log("[CartPage] load", params);
     this.#loadLottie();
 
-    Cart.onItemsChangeListener = (cartItems) => this.#fillCartItems(cartItems);
+    Cart.onItemsChangeListener = (cartItems) =>
+      this.#fillCartItems(cartItems);
+
     this.#loadCartItems();
   }
 
