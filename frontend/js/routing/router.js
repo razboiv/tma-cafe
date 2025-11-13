@@ -1,6 +1,6 @@
 import { MainPage } from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
-import { DetailsPage } from "../pages/details.js";
+import DetailsPage from "../pages/details.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { CartPage } from "../pages/cart.js";
 import Snackbar from "../utils/snackbar.js";
