@@ -2,7 +2,7 @@
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getInfo, getCategories, getPopularMenu } from "../requests/requests.js";
-import { TelegramSDK } from "../telegram/telegram.js";
+import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
@@ -15,19 +15,18 @@ export class MainPage extends Route {
   }
 
   async load(params) {
-    // основная кнопка
+    console.log("[MainPage] load", params);
     const portionCount = Cart.getPortionCount();
 
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        `MY CART • ${this.#getDisplayPositionCount(portionCount)}`,
         () => navigateTo("cart")
       );
     } else {
       TelegramSDK.hideMainButton();
     }
 
-    // параллельно грузим все данные
     try {
       const [cafeInfo, categories, popularMenu] = await Promise.all([
         getInfo(),
@@ -39,12 +38,21 @@ export class MainPage extends Route {
       this.#fillCategories(categories);
       this.#fillPopularMenu(popularMenu);
     } catch (err) {
-      console.error("Failed to load main page data", err);
-      TelegramSDK.showAlert("Не получилось загрузить меню. Попробуй ещё раз.");
+      console.error("[MainPage] failed to load data", err);
     }
   }
 
-  // -------- заполнение блоков --------
+  #loadCafeInfo(cafeInfo) {
+    this.#fillCafeInfo(cafeInfo);
+  }
+
+  #loadCategories(categories) {
+    this.#fillCategories(categories);
+  }
+
+  #loadPopularMenu(popularMenu) {
+    this.#fillPopularMenu(popularMenu);
+  }
 
   #fillCafeInfo(cafeInfo) {
     loadImage($("#cafe-logo"), cafeInfo.logoImage);
@@ -58,7 +66,9 @@ export class MainPage extends Route {
       .find("#cafe-kitchen-categories")
       .text(cafeInfo.kitchenCategories);
     filledCafeInfoTemplate.find("#cafe-rating").text(cafeInfo.rating);
-    filledCafeInfoTemplate.find("#cafe-cooking-time").text(cafeInfo.cookingTime);
+    filledCafeInfoTemplate
+      .find("#cafe-cooking-time")
+      .text(cafeInfo.cookingTime);
     filledCafeInfoTemplate.find("#cafe-status").text(cafeInfo.status);
 
     $("#cafe-info").empty();
@@ -75,8 +85,13 @@ export class MainPage extends Route {
       (template, cafeCategory) => {
         template.attr("id", cafeCategory.id);
         template.css("background-color", cafeCategory.backgroundColor);
-        template.find("#cafe-category-icon").attr("src", cafeCategory.icon);
-        template.find("#cafe-category-name").text(cafeCategory.name);
+        template
+          .find("#cafe-category-icon")
+          .attr("src", cafeCategory.icon);
+        template
+          .find("#cafe-category-name")
+          .text(cafeCategory.name);
+
         template.on("click", () => {
           const params = JSON.stringify({ id: cafeCategory.id });
           navigateTo("category", params);
@@ -96,7 +111,10 @@ export class MainPage extends Route {
         template.attr("id", cafeItem.name);
         template.find("#cafe-item-image").attr("src", cafeItem.image);
         template.find("#cafe-item-name").text(cafeItem.name);
-        template.find("#cafe-item-description").text(cafeItem.description);
+        template
+          .find("#cafe-item-description")
+          .text(cafeItem.description);
+
         template.on("click", () => {
           const params = JSON.stringify({ id: cafeItem.id });
           navigateTo("details", params);
