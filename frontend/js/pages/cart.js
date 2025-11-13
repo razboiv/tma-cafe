@@ -148,3 +148,5 @@ export class CartPage extends Route {
         Cart.onItemsChangeListener = null;
     }
 }
+
+export { Cart };
