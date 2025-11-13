@@ -6,7 +6,7 @@ import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-export default class CategoryPage extends Route {
+export default class CategoryPage extends Route { ... }
   constructor() {
     super("category", "/pages/category.html");
   }
