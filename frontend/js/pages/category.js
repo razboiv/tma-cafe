@@ -1,66 +1,70 @@
+// frontend/js/pages/category.js
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import { get } from "../requests/requests.js";
-import { TelegramSDK } from "../telegram/telegram.js";
+import { getMenuCategory } from "../requests/requests.js";
+import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-/**
- * Page for displaying menu list for selected category.
- */
 export class CategoryPage extends Route {
-    constructor() {
-        super('category', '/pages/category.html')
+  constructor() {
+    super("category", "/pages/category.html");
+  }
+
+  async load(params) {
+    console.log("[CategoryPage] load", params);
+    TelegramSDK.expand();
+
+    const portionCount = Cart.getPortionCount();
+    if (portionCount > 0) {
+      TelegramSDK.showMainButton(
+        `MY CART • ${portionCount} POSITIONS`,
+        () => navigateTo("cart")
+      );
+    } else {
+      TelegramSDK.hideMainButton();
     }
 
-    load(params) {
-        TelegramSDK.expand();
-
-        const portionCount = Cart.getPortionCount()
-        if (portionCount > 0) {
-            TelegramSDK.showMainButton(
-                `MY CART • ${this.#getDisplayPositionCount(portionCount)}`,
-                () => navigateTo('cart')
-            )
-        } else {
-            TelegramSDK.hideMainButton();
-        }
-
-        if (params != null) {
-            const parsedParams = JSON.parse(params);
-            this.#loadMenu(parsedParams.id);
-        } else {
-            console.log('Params must not be null and must contain category ID.')
-        }
+    let categoryId = null;
+    try {
+      const parsed = JSON.parse(params || "{}");
+      categoryId = parsed.id;
+    } catch (e) {
+      console.error("[CategoryPage] failed to parse params", e);
     }
 
-    #loadMenu(categoryId) {
-        get('/menu/' + categoryId, (cafeItems) => {
-            this.#fillMenu(cafeItems);
+    if (!categoryId) {
+      console.error("[CategoryPage] no categoryId in params");
+      return;
+    }
+
+    try {
+      const items = await getMenuCategory(categoryId);
+      this.#fillMenu(items);
+    } catch (err) {
+      console.error("[CategoryPage] failed to load menu", err);
+    }
+  }
+
+  #fillMenu(items) {
+    replaceShimmerContent(
+      "#category-menu",
+      "#category-item-template",
+      "#category-item-image",
+      items,
+      (template, item) => {
+        template.attr("id", item.id);
+        template.find("#category-item-image").attr("src", item.image);
+        template.find("#category-item-name").text(item.name);
+        template
+          .find("#category-item-description")
+          .text(item.description);
+
+        template.on("click", () => {
+          const params = JSON.stringify({ id: item.id });
+          navigateTo("details", params);
         });
-    }
-
-    #fillMenu(cafeItems) {
-        replaceShimmerContent(
-            '#cafe-category',
-            '#cafe-item-template',
-            '#cafe-item-image',
-            cafeItems,
-            (template, cafeItem) => {
-                template.attr('id', cafeItem.name);
-                template.find('#cafe-item-image').attr('src', cafeItem.image);
-                template.find('#cafe-item-name').text(cafeItem.name);
-                template.find('#cafe-item-description').text(cafeItem.description);
-                template.on('click', () => {
-                    const params = JSON.stringify({'id': cafeItem.id});
-                    navigateTo('details', params);
-                });
-            }
-        )
-    }
-
-    #getDisplayPositionCount(positionCount) {
-        return positionCount == 1 ? `${positionCount} POSITION` : `${positionCount} POSITIONS`;
-    }
-
+      }
+    );
+  }
 }
