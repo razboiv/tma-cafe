@@ -4,8 +4,8 @@ import MainPage from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
 import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
-
 import TelegramSDK from "../telegram/telegram.js";
+import { Snackbar } from "../utils/snackbar.js";
 
 /**
  * List of available routes (pages).
@@ -155,6 +155,19 @@ function animatePageChange(reverse) {
         });
 }
 
+export function showSnackbar(text, style) {
+  const colorVariable =
+    style === "success" ? "--success-color"
+    : style === "warning" ? "--warning-color"
+    : style === "error"   ? "--error-color"
+    : "--accent-color";
+
+  Snackbar.showSnackbar("content", text, {
+    "background-color": var(${colorVariable}),
+  });
+
+  TelegramSDK.notificationOccured(style);
+}
 
 /**
  * Reset containers after animation
