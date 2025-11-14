@@ -6,7 +6,6 @@ import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
 
 import TelegramSDK from "../telegram/telegram.js";
-import { Snackbar } from "../utils/snackbar.js";
 
 /**
  * List of available routes (pages).
@@ -48,7 +47,6 @@ export function navigateTo(dest, params) {
  * Router engine — detects which page to load
  */
 export function handleLocation(reverse) {
-
     if (currentRoute != null) {
         currentRoute.onClose();
     }
