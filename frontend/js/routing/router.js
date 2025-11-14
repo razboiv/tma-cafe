@@ -18,7 +18,7 @@ const availableRoutes = [
 ];
 
 /**
- * In-memory HTML cache
+ * In-memory HTML cache.
  */
 const pageContentCache = {};
 
@@ -28,31 +28,35 @@ let pendingAnimations = false;
 let animationRunning = false;
 
 /**
- * Navigate to another page
+ * Navigate to another page.
  *
- * @param {string} dest  - destination route (one of Route.dest)
- * @param {*}      params - any serializable params (will be encoded in URL)
+ * @param {string} dest  destination route ("root", "category", "details", "cart")
+ * @param {*} params     params that will be encoded to URL
  */
 export function navigateTo(dest, params) {
   let url = `?dest=${dest}`;
 
   if (params != null) {
-    url += `&params=${encodeURIComponent(params)}`;
+    url += "&params=" + encodeURIComponent(params);
   }
 
-  // keep hash part (Telegram may put something there)
-  const { hash } = window.location;
-  window.history.pushState({}, "", url + hash);
+  // keep hash (Telegram can put something there)
+  window.history.pushState({}, "", url + window.location.hash);
 
   handleLocation(false);
 }
 
 /**
- * Router engine — detects which page to load
+ * Router engine – detects which page to load.
  *
- * @param {boolean} reverse - run animation in reverse (back navigation)
+ * @param {boolean} reverse  run animation in reverse (back navigation)
  */
 export function handleLocation(reverse) {
+  // close previous route if any
+  if (currentRoute != null) {
+    currentRoute.onClose();
+  }
+
   const search = window.location.search;
   const searchParams = new URLSearchParams(search);
 
@@ -69,22 +73,22 @@ export function handleLocation(reverse) {
     }
   }
 
-  // find route
   currentRoute = availableRoutes.find((r) => r.dest === dest);
-  if (!currentRoute) return;
+  if (!currentRoute) {
+    return;
+  }
 
   // cancel previous request if any
   if (pageContentLoadRequest != null) {
     pageContentLoadRequest.abort();
   }
 
-  // decide which container to load into
+  // decide which container will be "next"
   if ($("#page-current").contents().length > 0) {
     pageContentLoadRequest = loadPage("#page-next", currentRoute.contentPath, () => {
       pageContentLoadRequest = null;
       currentRoute.load(loadParams);
     });
-
     animatePageChange(reverse);
   } else {
     pageContentLoadRequest = loadPage("#page-current", currentRoute.contentPath, () => {
@@ -101,7 +105,7 @@ export function handleLocation(reverse) {
 }
 
 /**
- * Load page content (HTML). It can be loaded from server or cache.
+ * Load page content (HTML). Can be loaded from cache or from server.
  *
  * @param {string} pageContainerSelector
  * @param {string} pagePath
@@ -120,9 +124,9 @@ function loadPage(pageContainerSelector, pagePath, onSuccess) {
 
   return $.ajax({
     url: pagePath,
-    success: (html) => {
-      pageContentCache[pagePath] = html;
-      container.html(html);
+    success: (pageHtml) => {
+      pageContentCache[pagePath] = pageHtml;
+      container.html(pageHtml);
       onSuccess();
     },
   });
@@ -134,11 +138,6 @@ function loadPage(pageContainerSelector, pagePath, onSuccess) {
  * @param {boolean} reverse
  */
 function animatePageChange(reverse) {
-  if (animationRunning) {
-    pendingAnimations = true;
-    return;
-  }
-
   animationRunning = true;
 
   const currentPageZIndex = reverse ? "2" : "1";
@@ -162,6 +161,7 @@ function animatePageChange(reverse) {
     .transition({ x: "0px" }, 325, () => {
       animationRunning = false;
       restorePagesInitialState();
+
       if (pendingAnimations) {
         pendingAnimations = false;
         handleLocation(reverse);
@@ -196,8 +196,8 @@ function restorePagesInitialState() {
 /**
  * Show snackbar on top of the page content.
  *
- * @param {string} text  - Snackbar text.
- * @param {string} style - 'success' | 'warning' | 'error' | anything
+ * @param {string} text   Snackbar text
+ * @param {string} style  "success" | "warning" | "error" | anything
  */
 export function showSnackbar(text, style) {
   const colorVariable =
