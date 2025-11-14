@@ -11,10 +11,10 @@ import Snackbar from "../utils/snackbar.js";
  * List of available routes (pages).
  */
 const availableRoutes = [
-    new MainPage(),
-    new CategoryPage(),
-    new DetailsPage(),
-    new CartPage()
+  new MainPage(),
+  new CategoryPage(),
+  new DetailsPage(),
+  new CartPage(),
 ];
 
 /**
@@ -29,157 +29,194 @@ let animationRunning = false;
 
 /**
  * Navigate to another page
+ *
+ * @param {string} dest  - destination route (one of Route.dest)
+ * @param {*}      params - any serializable params (will be encoded in URL)
  */
 export function navigateTo(dest, params) {
-    let url = `?dest=${dest}`;
+  let url = `?dest=${dest}`;
 
-    if (params != null) {
-        url += `&params=` + encodeURIComponent(params);
-    }
+  if (params != null) {
+    url += `&params=${encodeURIComponent(params)}`;
+  }
 
-    window.history.pushState({}, "", url + location.hash);
-    handleLocation(false);
+  // keep hash part (Telegram may put something there)
+  const { hash } = window.location;
+  window.history.pushState({}, "", url + hash);
+
+  handleLocation(false);
 }
 
 /**
  * Router engine — detects which page to load
+ *
+ * @param {boolean} reverse - run animation in reverse (back navigation)
  */
-export async function handleLocation(reverse) {
-    if (currentRoute != null) {
-        currentRoute.onClose();
+export function handleLocation(reverse) {
+  const search = window.location.search;
+  const searchParams = new URLSearchParams(search);
+
+  const dest = searchParams.get("dest") || "root";
+  const encodedLoadParams = searchParams.get("params");
+
+  let loadParams = null;
+
+  if (encodedLoadParams != null) {
+    try {
+      loadParams = decodeURIComponent(encodedLoadParams);
+    } catch (e) {
+      console.error("Failed to decode params", e);
     }
+  }
 
-    const search = window.location.search;
-    const searchParams = new URLSearchParams(search);
+  // find route
+  currentRoute = availableRoutes.find((r) => r.dest === dest);
+  if (!currentRoute) return;
 
-    const dest = searchParams.get("dest") || "root";
-    const encodedLoadParams = searchParams.get("params");
+  // cancel previous request if any
+  if (pageContentLoadRequest != null) {
+    pageContentLoadRequest.abort();
+  }
 
-    let loadParams = null;
-
-    if (encodedLoadParams != null) {
-        try {
-            loadParams = decodeURIComponent(encodedLoadParams);
-        } catch (e) {
-            console.error("Failed to decode params", e);
-        }
-    }
-
-    currentRoute = availableRoutes.find(r => r.dest === dest);
-
-    if (!currentRoute) return;
-
-    if (pageContentLoadRequest != null) {
-        pageContentLoadRequest.abort();
-    }
-
-    if ($("#page-current").contents().length > 0) {
-        pageContentLoadRequest = loadPage("#page-next", currentRoute.contentPath, () => {
-            pageContentLoadRequest = null;
-            currentRoute.load(loadParams);
-        });
-        animatePageChange(reverse);
-    } else {
-        pageContentLoadRequest = loadPage("#page-current", currentRoute.contentPath, () => {
-            pageContentLoadRequest = null;
-            currentRoute.load(loadParams);
-        });
-    }
-}
-
-/**
- * Load HTML page
- */
-function loadPage(containerSelector, path, callback) {
-    const controller = new AbortController();
-
-    fetch(path, { signal: controller.signal })
-        .then(r => r.text())
-        .then(html => {
-            $(containerSelector).html(html);
-            callback();
-        })
-        .catch(err => {
-            if (err.name !== "AbortError") {
-                console.error("Load page error:", err);
-            }
-        });
-
-    return controller;
-}
-
-/**
- * Page switch animation
- */
-function animatePageChange(reverse) {
-    const currentPageZIndex = reverse ? "2" : "1";
-    const currentPageLeftTo = reverse ? "100vw" : "-25vw";
-
-    const nextPageZIndex = reverse ? "1" : "2";
-    const nextPageLeftFrom = reverse ? "-25vw" : "100vw";
-
-    $("#page-current")
-        .css({
-            transform: "",
-            "z-index": currentPageZIndex
-        })
-        .transition({ x: currentPageLeftTo }, 325);
-
-    $("#page-next")
-        .css({
-            display: "",
-            transform: `translate(${nextPageLeftFrom}, 0px)`,
-            "z-index": nextPageZIndex
-        })
-        .transition({ x: "0px" }, 325, () => {
-            animationRunning = false;
-            restorePagesInitialState();
-
-            if (pendingAnimations) {
-                pendingAnimations = false;
-                handleLocation(reverse);
-            }
-        });
-}
-
-/**
- * Reset containers after animation
- */
-function restorePagesInitialState() {
-    const currentPage = $("#page-current");
-    const nextPage = $("#page-next");
-
-    currentPage
-        .attr("id", "page-next")
-        .css({ display: "none", "z-index": "1" })
-        .empty();
-
-    nextPage
-        .attr("id", "page-current")
-        .css({ display: "", transform: "", "z-index": "2" });
-}
-
-/**
- * Show snackbar (EXPORTED!)
- */
-export function showSnackbar(text, style) {
-    const colorVariable =
-        style === "success"
-            ? "--success-color"
-            : style === "warning"
-            ? "--warning-color"
-            : style === "error"
-            ? "--error-color"
-            : "--accent-color";
-
-    Snackbar.showSnackbar("content", text, {
-        "background-color": `var(${colorVariable})`
+  // decide which container to load into
+  if ($("#page-current").contents().length > 0) {
+    pageContentLoadRequest = loadPage("#page-next", currentRoute.contentPath, () => {
+      pageContentLoadRequest = null;
+      currentRoute.load(loadParams);
     });
 
-    TelegramSDK.notificationOccured(style);
+    animatePageChange(reverse);
+  } else {
+    pageContentLoadRequest = loadPage("#page-current", currentRoute.contentPath, () => {
+      pageContentLoadRequest = null;
+      currentRoute.load(loadParams);
+    });
+  }
+
+  if (currentRoute.dest !== "root") {
+    TelegramSDK.showBackButton(() => history.back());
+  } else {
+    TelegramSDK.hideBackButton();
+  }
 }
 
 /**
- * Browser back button handler
+ * Load page content (HTML). It can be loaded from server or cache.
+ *
+ * @param {string} pageContainerSelector
+ * @param {string} pagePath
+ * @param {Function} onSuccess
+ * @returns {jqXHR|null}
+ */
+function loadPage(pageContainerSelector, pagePath, onSuccess) {
+  const container = $(pageContainerSelector);
+  const page = pageContentCache[pagePath];
+
+  if (page != null) {
+    container.html(page);
+    onSuccess();
+    return null;
+  }
+
+  return $.ajax({
+    url: pagePath,
+    success: (html) => {
+      pageContentCache[pagePath] = html;
+      container.html(html);
+      onSuccess();
+    },
+  });
+}
+
+/**
+ * Run navigation animations for outgoing and ingoing pages.
+ *
+ * @param {boolean} reverse
+ */
+function animatePageChange(reverse) {
+  if (animationRunning) {
+    pendingAnimations = true;
+    return;
+  }
+
+  animationRunning = true;
+
+  const currentPageZIndex = reverse ? "2" : "1";
+  const currentPageLeftTo = reverse ? "100vw" : "-25vw";
+  const nextPageZIndex = reverse ? "1" : "2";
+  const nextPageLeftFrom = reverse ? "-25vw" : "100vw";
+
+  $("#page-current")
+    .css({
+      transform: "",
+      "z-index": currentPageZIndex,
+    })
+    .transition({ x: currentPageLeftTo }, 325);
+
+  $("#page-next")
+    .css({
+      display: "",
+      transform: `translate(${nextPageLeftFrom}, 0px)`,
+      "z-index": nextPageZIndex,
+    })
+    .transition({ x: "0px" }, 325, () => {
+      animationRunning = false;
+      restorePagesInitialState();
+      if (pendingAnimations) {
+        pendingAnimations = false;
+        handleLocation(reverse);
+      }
+    });
+}
+
+/**
+ * Reset containers after animation.
+ */
+function restorePagesInitialState() {
+  const currentPage = $("#page-current");
+  const nextPage = $("#page-next");
+
+  currentPage
+    .attr("id", "page-next")
+    .css({
+      display: "none",
+      "z-index": "1",
+    })
+    .empty();
+
+  nextPage
+    .attr("id", "page-current")
+    .css({
+      display: "",
+      transform: "",
+      "z-index": "2",
+    });
+}
+
+/**
+ * Show snackbar on top of the page content.
+ *
+ * @param {string} text  - Snackbar text.
+ * @param {string} style - 'success' | 'warning' | 'error' | anything
+ */
+export function showSnackbar(text, style) {
+  const colorVariable =
+    style === "success"
+      ? "--success-color"
+      : style === "warning"
+      ? "--warning-color"
+      : style === "error"
+      ? "--error-color"
+      : "--accent-color";
+
+  Snackbar.showSnackbar("content", text, {
+    "background-color": `var(${colorVariable})`,
+  });
+
+  TelegramSDK.notificationOccured(style);
+}
+
+/**
+ * Handle browser back button.
  */
 window.onpopstate = () => handleLocation(true);
