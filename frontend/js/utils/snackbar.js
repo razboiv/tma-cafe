@@ -1,11 +1,11 @@
-import { TelegramSDK } from "../telegram/telegram.js";
+import TelegramSDK from "../telegram/telegram.js";
 
 /**
  * Util class for showing Snackbar. It's goal to handle Snackbar instance and keep
  * it single for the target container. The class allow to show Snackbar without direct
  * definition in your HTML.
  */
-export default class Snackbar {
+export class Snackbar {
 
     /**
      * Map of pairs: Snackbar ID in format ('${parentId}-snackbar') 
