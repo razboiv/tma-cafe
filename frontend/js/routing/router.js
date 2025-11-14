@@ -5,7 +5,8 @@ import CategoryPage from "../pages/category.js";
 import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
 import TelegramSDK from "../telegram/telegram.js";
-import { Snackbar } from "../utils/snackbar.js";
+import Snackbar from "../utils/snackbar.js";
+
 
 /**
  * List of available routes (pages).
