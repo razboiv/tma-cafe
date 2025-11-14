@@ -18,7 +18,7 @@ export default class CategoryPage extends Route {
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART • ${portionCount} POSITIONS`,
+        `MY CART · ${portionCount} POSITIONS`,
         () => navigateTo("cart")
       );
     } else {
@@ -39,26 +39,33 @@ export default class CategoryPage extends Route {
     }
 
     try {
-      const items = await getMenuCategory(categoryId);
-      this.#fillMenu(items);
+      const menu = await getMenuCategory(categoryId);
+      console.log("[CategoryPage] menu loaded", menu);
+      this.#fillMenu(menu);
     } catch (err) {
       console.error("[CategoryPage] failed to load menu", err);
     }
   }
 
-  #fillMenu(items) {
+  #fillMenu(menuItems) {
     replaceShimmerContent(
-      "#category-menu",
-      "#category-item-template",
-      "#category-item-image",
-      items,
+      "#cafe-category",
+      "#cafe-item-template",
+      ".cafe-item-image",
+      menuItems,
       (template, item) => {
-        template.attr("id", item.id);
-        template.find("#category-item-image").attr("src", item.image);
-        template.find("#category-item-name").text(item.name);
+        template.find(".cafe-item-name").text(item.name || "");
         template
-          .find("#category-item-description")
-          .text(item.description);
+          .find(".cafe-item-description")
+          .text(item.description || "");
+
+        const imageEl = template.find(".cafe-item-image");
+        if (item.imageUrl) {
+          imageEl.attr("src", item.imageUrl);
+          imageEl.removeClass("shimmer");
+        } else {
+          imageEl.attr("src", "icons/icon-transparent.svg");
+        }
 
         template.on("click", () => {
           const params = JSON.stringify({ id: item.id });
