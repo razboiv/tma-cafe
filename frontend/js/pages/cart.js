@@ -2,7 +2,7 @@
 import { Cart } from "../cart/cart.js";
 import { createOrder } from "../requests/requests.js";
 import { Route } from "../routing/route.js";
-import { showSnackbar } from "../utils/snackbar.js";
+import { showSnackbar } from "../routing/router.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
 
