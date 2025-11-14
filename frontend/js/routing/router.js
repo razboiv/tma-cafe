@@ -4,7 +4,6 @@ import MainPage from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
 import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
-
 import TelegramSDK from "../telegram/telegram.js";
 import Snackbar from "../utils/snackbar.js";
 
@@ -45,7 +44,7 @@ export function navigateTo(dest, params) {
 /**
  * Router engine — detects which page to load
  */
-export function handleLocation(reverse) {
+export async function handleLocation(reverse) {
     if (currentRoute != null) {
         currentRoute.onClose();
     }
@@ -67,6 +66,7 @@ export function handleLocation(reverse) {
     }
 
     currentRoute = availableRoutes.find(r => r.dest === dest);
+
     if (!currentRoute) return;
 
     if (pageContentLoadRequest != null) {
@@ -78,7 +78,6 @@ export function handleLocation(reverse) {
             pageContentLoadRequest = null;
             currentRoute.load(loadParams);
         });
-
         animatePageChange(reverse);
     } else {
         pageContentLoadRequest = loadPage("#page-current", currentRoute.contentPath, () => {
@@ -88,27 +87,34 @@ export function handleLocation(reverse) {
     }
 }
 
-function loadPage(container, url, onComplete) {
+/**
+ * Load HTML page
+ */
+function loadPage(containerSelector, path, callback) {
     const controller = new AbortController();
 
-    fetch(url, { signal: controller.signal })
+    fetch(path, { signal: controller.signal })
         .then(r => r.text())
         .then(html => {
-            $(container).html(html);
-            onComplete();
+            $(containerSelector).html(html);
+            callback();
         })
         .catch(err => {
             if (err.name !== "AbortError") {
-                console.error("Page load error:", err);
+                console.error("Load page error:", err);
             }
         });
 
     return controller;
 }
 
+/**
+ * Page switch animation
+ */
 function animatePageChange(reverse) {
     const currentPageZIndex = reverse ? "2" : "1";
     const currentPageLeftTo = reverse ? "100vw" : "-25vw";
+
     const nextPageZIndex = reverse ? "1" : "2";
     const nextPageLeftFrom = reverse ? "-25vw" : "100vw";
 
@@ -137,7 +143,24 @@ function animatePageChange(reverse) {
 }
 
 /**
- * Show snackbar on top of the page content.
+ * Reset containers after animation
+ */
+function restorePagesInitialState() {
+    const currentPage = $("#page-current");
+    const nextPage = $("#page-next");
+
+    currentPage
+        .attr("id", "page-next")
+        .css({ display: "none", "z-index": "1" })
+        .empty();
+
+    nextPage
+        .attr("id", "page-current")
+        .css({ display: "", transform: "", "z-index": "2" });
+}
+
+/**
+ * Show snackbar (EXPORTED!)
  */
 export function showSnackbar(text, style) {
     const colorVariable =
@@ -157,23 +180,6 @@ export function showSnackbar(text, style) {
 }
 
 /**
- * Reset containers after animation
- */
-function restorePagesInitialState() {
-    const currentPage = $("#page-current");
-    const nextPage = $("#page-next");
-
-    currentPage
-        .attr("id", "page-next")
-        .css({ display: "none", "z-index": "1" })
-        .empty();
-
-    nextPage
-        .attr("id", "page-current")
-        .css({ display: "", transform: "", "z-index": "2" });
-}
-
-/**
- * Handle browser back button
+ * Browser back button handler
  */
 window.onpopstate = () => handleLocation(true);
