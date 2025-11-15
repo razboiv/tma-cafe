@@ -5,13 +5,13 @@
  * This function was developed specifically for the lists with images.
  *
  * @param {string} containerSelector The selector of the parent container,
- * where items should be placed.
+ *   where items should be placed.
  * @param {string} templateSelector The selector of the item's <template>.
  * @param {string} loadableImageSelector The selector for the image
- * placed somewhere in template.
+ *   placed somewhere in template.
  * @param {Array}  data Array of items.
  * @param {*}      templateSetup Lambda for custom template filling,
- * e.g. setting CSS, text, etc.
+ *   e.g. setting CSS, text, etc.
  */
 export function replaceShimmerContent(
   containerSelector,
@@ -24,12 +24,15 @@ export function replaceShimmerContent(
   const filledTemplates = [];
 
   data.forEach((dataItem) => {
+    // создаём копию шаблона
     const template = $(templateHtml);
 
-    // Заполняем шаблон данными
-    templateSetup(template, dataItem);
+    // заполняем данными
+    if (typeof templateSetup === "function") {
+      templateSetup(template, dataItem);
+    }
 
-    // Как только картинка загрузится – убираем shimmer с неё
+    // как только картинка загрузится — убираем shimmer с неё
     const img = template.find(loadableImageSelector);
     if (img && img.length) {
       img.on("load", () => img.removeClass("shimmer"));
@@ -38,16 +41,15 @@ export function replaceShimmerContent(
     filledTemplates.push(template);
   });
 
-  // Главное – ПОДМЕНИТЬ содержимое контейнера
+  // главное — заменить содержимое контейнера готовыми элементами
   fillContainer(containerSelector, filledTemplates);
 }
 
 /**
  * Replace existing container elements with the new ones.
- *
  * @param {string} selector Parent container selector.
  * @param {*}      elements Instances of elements in any format,
- * supported by jQuery.append() method.
+ *   supported by jQuery.append() method.
  */
 export function fillContainer(selector, elements) {
   const container = $(selector);
@@ -57,23 +59,16 @@ export function fillContainer(selector, elements) {
 
 /**
  * Load image with shimmer effect while loading.
- *
  * @param {*} imageElement jQuery element of the image.
  * @param {*} imageUrl     Image URL to load.
  */
 export function loadImage(imageElement, imageUrl) {
-  if (!imageElement  !imageElement.length  !imageUrl) {
-    return;
-  }
+  if (imageElement == null) return;
 
-  // Пока грузится – пусть будет shimmer
   if (!imageElement.hasClass("shimmer")) {
     imageElement.addClass("shimmer");
   }
 
   imageElement.attr("src", imageUrl);
-
-  imageElement.on("load", () => {
-    imageElement.removeClass("shimmer");
-  });
+  imageElement.on("load", () => imageElement.removeClass("shimmer"));
 }
