@@ -5,7 +5,7 @@ import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
-import Cart from "../cart/cart.js";
+import { Cart } from "../cart/cart.js";
 
 /**
  * Страница категории: список блюд одной категории.
