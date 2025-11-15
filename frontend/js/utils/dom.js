@@ -1,56 +1,53 @@
 // frontend/js/utils/dom.js
 
 /**
- * Create items from the provided data and template and append them to container,
- * then replace shimmer-elements with real content.
+ * Create items from the provided data and template and append them to container.
+ * This function was developed specifically for the lists with images.
  *
- * @param {string} containerSelector  Parent container selector.
- * @param {string} templateSelector   Template selector.
- * @param {string} loadableImageSelector Selector for image inside template.
- * @param {Array}  data               Array of items.
- * @param {*}      templateSetup      Callback to fill template with data.
+ * @param {string} containerSelector The selector of the parent container,
+ * where items should be placed.
+ * @param {string} templateSelector The selector of the item's <template>.
+ * @param {string} loadableImageSelector The selector for the image
+ * placed somewhere in template.
+ * @param {Array}  data Array of items.
+ * @param {*}      templateSetup Lambda for custom template filling,
+ * e.g. setting CSS, text, etc.
  */
 export function replaceShimmerContent(
   containerSelector,
   templateSelector,
   loadableImageSelector,
   data,
-  templateSetup
+  templateSetup,
 ) {
   const templateHtml = $(templateSelector).html();
-  if (!templateHtml) {
-    console.error("[dom] template not found:", templateSelector);
-    return;
-  }
-
   const filledTemplates = [];
 
-  data.forEach((item) => {
+  data.forEach((dataItem) => {
     const template = $(templateHtml);
 
-    // Заполняем шаблон данными (текст, src и т.п.)
-    templateSetup(template, item);
+    // Заполняем шаблон данными
+    templateSetup(template, dataItem);
 
-    // Если в шаблоне есть изображение — грузим его с шиммером
-    const imageElement = template.find(loadableImageSelector);
-    if (imageElement.length > 0) {
-      const url = imageElement.attr("src");
-      if (url) {
-        loadImage(imageElement, url);
-      }
+    // Как только картинка загрузится – убираем shimmer с неё
+    const img = template.find(loadableImageSelector);
+    if (img && img.length) {
+      img.on("load", () => img.removeClass("shimmer"));
     }
 
     filledTemplates.push(template);
   });
 
+  // Главное – ПОДМЕНИТЬ содержимое контейнера
   fillContainer(containerSelector, filledTemplates);
 }
 
 /**
  * Replace existing container elements with the new ones.
  *
- * @param {string} selector  Parent container selector.
- * @param {*}      elements  Elements array, supported by jQuery.append.
+ * @param {string} selector Parent container selector.
+ * @param {*}      elements Instances of elements in any format,
+ * supported by jQuery.append() method.
  */
 export function fillContainer(selector, elements) {
   const container = $(selector);
@@ -62,17 +59,21 @@ export function fillContainer(selector, elements) {
  * Load image with shimmer effect while loading.
  *
  * @param {*} imageElement jQuery element of the image.
- * @param {string} imageUrl URL of the image.
+ * @param {*} imageUrl     Image URL to load.
  */
 export function loadImage(imageElement, imageUrl) {
-  if (imageElement == null) {
+  if (!imageElement  !imageElement.length  !imageUrl) {
     return;
   }
 
+  // Пока грузится – пусть будет shimmer
   if (!imageElement.hasClass("shimmer")) {
     imageElement.addClass("shimmer");
   }
 
   imageElement.attr("src", imageUrl);
-  imageElement.on("load", () => imageElement.removeClass("shimmer"));
+
+  imageElement.on("load", () => {
+    imageElement.removeClass("shimmer");
+  });
 }
