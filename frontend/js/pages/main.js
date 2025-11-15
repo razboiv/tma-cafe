@@ -26,8 +26,8 @@ export default class MainPage extends Route {
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${portionCount} POSITIONS`,
-        () => navigateTo("cart")
+        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        () => navigateTo("cart"),
       );
     } else {
       TelegramSDK.hideMainButton();
@@ -47,13 +47,23 @@ export default class MainPage extends Route {
       console.log("[MainPage] info", info);
 
       if (info?.title) {
-        $("#cafe-title").text(info.title);
+        $("#cafe-name").text(info.title);
       }
       if (info?.description) {
         $("#cafe-description").text(info.description);
       }
-      if (info?.imageUrl) {
-        loadImage($("#cafe-image"), info.imageUrl);
+      if (info?.coverImage) {
+        // если в бэке поле называется иначе — подправь здесь
+        loadImage($("#cafe-cover"), info.coverImage);
+      }
+      if (info?.kitchenCategories) {
+        $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      }
+      if (info?.cookingTime) {
+        $("#cafe-cooking-time").text(info.cookingTime);
+      }
+      if (info?.status) {
+        $("#cafe-status").text(info.status);
       }
     } catch (e) {
       console.error("[MainPage] failed to load info", e);
@@ -68,11 +78,12 @@ export default class MainPage extends Route {
       replaceShimmerContent(
         "#cafe-categories",
         "#cafe-category-template",
-        ".cafe-category-image",
+        "#cafe-category-icon",
         categories,
         (template, category) => {
-          template.find(".cafe-category-name").text(category.name || "");
-          const img = template.find(".cafe-category-image");
+          template.find("#cafe-category-name").text(category.name ?? "");
+
+          const img = template.find("#cafe-category-icon");
           if (category.imageUrl) {
             loadImage(img, category.imageUrl);
           }
@@ -81,7 +92,7 @@ export default class MainPage extends Route {
             const params = JSON.stringify({ id: category.id });
             navigateTo("category", params);
           });
-        }
+        },
       );
     } catch (e) {
       console.error("[MainPage] failed to load categories", e);
@@ -95,16 +106,16 @@ export default class MainPage extends Route {
 
       replaceShimmerContent(
         "#cafe-popular",
-        "#cafe-popular-template",
-        ".cafe-popular-image",
+        "#cafe-item-template",
+        "#cafe-item-image",
         items,
         (template, item) => {
-          template.find(".cafe-popular-name").text(item.name || "");
+          template.find("#cafe-item-name").text(item.name ?? "");
           template
-            .find(".cafe-popular-description")
-            .text(item.description || "");
+            .find("#cafe-item-description")
+            .text(item.description ?? "");
 
-          const img = template.find(".cafe-popular-image");
+          const img = template.find("#cafe-item-image");
           if (item.imageUrl) {
             loadImage(img, item.imageUrl);
           }
@@ -113,10 +124,14 @@ export default class MainPage extends Route {
             const params = JSON.stringify({ id: item.id });
             navigateTo("details", params);
           });
-        }
+        },
       );
     } catch (e) {
       console.error("[MainPage] failed to load popular menu", e);
     }
+  }
+
+  #getDisplayPositionCount(count) {
+    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
