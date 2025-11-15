@@ -2,10 +2,8 @@
 
 /**
  * Create items from the provided data and template and append them to container,
- * without waiting for all images to be loaded.
- *
- * Мы больше не держим скелетон, пока не загрузятся ВСЕ картинки.
- * Скелетон убираем сразу, а shimmer-класс с картинок снимаем по событию load.
+ * when all child images are loaded. This function was developed specifically
+ * for the lists with images.
  *
  * @param {string} containerSelector The selector of the parent container, where items should be placed.
  * @param {string} templateSelector The selector of the item's <template>.
@@ -21,38 +19,50 @@ export function replaceShimmerContent(
   templateSetup
 ) {
   const templateHtml = $(templateSelector).html();
+
   const filledTemplates = [];
+  const total = data.length;
+
+  // Если данных нет — просто очищаем контейнер и выходим
+  if (total === 0) {
+    fillContainer(containerSelector, filledTemplates);
+    return;
+  }
+
+  let handled = 0;
+
+  const markHandled = () => {
+    handled += 1;
+    if (handled === total) {
+      // Как только обработали все элементы (успешно или с ошибкой) —
+      // подменяем шиммеры реальными карточками.
+      fillContainer(containerSelector, filledTemplates);
+    }
+  };
 
   data.forEach((dataItem) => {
-    // создаём DOM из шаблона
-    const $template = $(templateHtml);
+    const template = $(templateHtml);
+    templateSetup(template, dataItem);
 
-    // наполняем данными (текст, src и т.п.)
-    templateSetup($template, dataItem);
+    const $img = template.find(loadableImageSelector);
 
-    // находим картинку и снимаем shimmer после загрузки
-    const $img = $template.find(loadableImageSelector);
-    if ($img.length > 0) {
-      // если в шаблоне по умолчанию есть класс shimmer — оставляем,
-      // и уберём его, когда картинка загрузится
-      $img.on("load", () => {
-        $img.removeClass("shimmer");
-      });
+    if ($img.length === 0) {
+      // В шаблоне нет картинки — считаем элемент готовым сразу
+      markHandled();
+    } else {
+      // Считаем элемент готовым как при успешной загрузке, так и при ошибке
+      $img.on("load", markHandled);
+      $img.on("error", markHandled);
     }
 
-    filledTemplates.push($template);
+    filledTemplates.push(template);
   });
-
-  // сразу заменяем скелетон реальными элементами
-  fillContainer(containerSelector, filledTemplates);
 }
 
 /**
  * Replace existing container elements with the new ones.
- *
  * @param {string} selector Parent container selector.
- * @param {*}      elements Instances of elements in any format,
- *                          supported by jQuery.append() method.
+ * @param {*}      elements Instances of elements in any format, supported by jQuery.append() method.
  */
 export function fillContainer(selector, elements) {
   const container = $(selector);
@@ -62,9 +72,8 @@ export function fillContainer(selector, elements) {
 
 /**
  * Load image with shimmer effect while loading.
- *
  * @param {*} imageElement jQuery element of the image.
- * @param {*} imageUrl     Image URL to load.
+ * @param {string} imageUrl Image URL to load.
  */
 export function loadImage(imageElement, imageUrl) {
   if (imageElement != null) {
