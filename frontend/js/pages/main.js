@@ -1,4 +1,5 @@
 // frontend/js/pages/main.js
+
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import {
@@ -26,7 +27,7 @@ export default class MainPage extends Route {
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        MY CART · ${this.#getDisplayPositionCount(portionCount)},
         () => navigateTo("cart"),
       );
     } else {
@@ -41,6 +42,7 @@ export default class MainPage extends Route {
     ]);
   }
 
+  // ===== инфо о кафе =====
   async #loadCafeInfo() {
     try {
       const info = await getInfo();
@@ -53,7 +55,7 @@ export default class MainPage extends Route {
         $("#cafe-description").text(info.description);
       }
       if (info?.coverImage) {
-        // если в бэке поле называется иначе — подправь здесь
+        // обложка
         loadImage($("#cafe-cover"), info.coverImage);
       }
       if (info?.kitchenCategories) {
@@ -70,22 +72,31 @@ export default class MainPage extends Route {
     }
   }
 
+  // ===== категории =====
   async #loadCategories() {
     try {
       const categories = await getCategories();
       console.log("[MainPage] categories", categories);
 
+      // убираем shimmer с заголовка
+      $("#cafe-section-categories-title").removeClass("shimmer");
+
       replaceShimmerContent(
-        "#cafe-categories",
-        "#cafe-category-template",
-        "#cafe-category-icon",
+        "#cafe-categories",       // контейнер
+        "#cafe-category-template",// <template>
+        "#cafe-category-icon",    // картинка внутри шаблона
         categories,
         (template, category) => {
+          // заполняем шаблон данными
+          template.attr("id", category.id);
+          template.css("background-color", category.backgroundColor);
+
           template.find("#cafe-category-name").text(category.name ?? "");
 
           const img = template.find("#cafe-category-icon");
-          if (category.imageUrl) {
-            loadImage(img, category.imageUrl);
+          // ВАЖНО: в категориях поле называется icon, а не imageUrl
+          if (category.icon) {
+            loadImage(img, category.icon);
           }
 
           template.on("click", () => {
@@ -99,15 +110,19 @@ export default class MainPage extends Route {
     }
   }
 
+  // ===== популярное меню =====
   async #loadPopularMenu() {
     try {
       const items = await getPopularMenu();
       console.log("[MainPage] popular", items);
 
+      // убираем shimmer с заголовка
+      $("#cafe-section-popular-title").removeClass("shimmer");
+
       replaceShimmerContent(
-        "#cafe-popular",
-        "#cafe-item-template",
-        "#cafe-item-image",
+        "#cafe-popular",       // контейнер
+        "#cafe-item-template", // <template>
+        "#cafe-item-image",    // картинка внутри шаблона
         items,
         (template, item) => {
           template.find("#cafe-item-name").text(item.name ?? "");
@@ -116,8 +131,9 @@ export default class MainPage extends Route {
             .text(item.description ?? "");
 
           const img = template.find("#cafe-item-image");
-          if (item.imageUrl) {
-            loadImage(img, item.imageUrl);
+          // ВАЖНО: у позиций поле называется image, а не imageUrl
+          if (item.image) {
+            loadImage(img, item.image);
           }
 
           template.on("click", () => {
@@ -132,6 +148,6 @@ export default class MainPage extends Route {
   }
 
   #getDisplayPositionCount(count) {
-    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
+    return count === 1 ? ${count} POSITION : ${count} POSITIONS;
   }
 }
