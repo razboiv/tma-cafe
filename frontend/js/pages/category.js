@@ -8,7 +8,7 @@ import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
 /**
- * Страница категории: список блюд одной категории.
+ * Страница категории: список блюд из выбранной категории.
  */
 export default class CategoryPage extends Route {
   constructor() {
@@ -23,14 +23,14 @@ export default class CategoryPage extends Route {
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
-        () => navigateTo("cart")
+        `MY CART · ${portionCount} POSITION${portionCount === 1 ? "" : "S"}`,
+        () => navigateTo("cart"),
       );
     } else {
       TelegramSDK.hideMainButton();
     }
 
-    // читаем id категории из params
+    // парсим id категории из params
     let categoryId = null;
     try {
       const parsed = JSON.parse(params || "{}");
@@ -44,7 +44,7 @@ export default class CategoryPage extends Route {
       return;
     }
 
-    // грузим меню для категории
+    // грузим меню категории
     try {
       const menu = await getMenuCategory(categoryId);
       console.log("[CategoryPage] menu loaded", menu);
@@ -61,16 +61,18 @@ export default class CategoryPage extends Route {
       ".cafe-item-image",
       menuItems,
       (template, item) => {
-        // название и описание
+        // текст
         template.find(".cafe-item-name").text(item.name || "");
         template
           .find(".cafe-item-description")
           .text(item.description || "");
 
-        // картинка
+        // КАРТИНКА
         const imageEl = template.find(".cafe-item-image");
-        if (item.imageUrl) {
-          imageEl.attr("src", item.imageUrl);
+        const imageUrl = item.imageUrl || item.image; // <-- ВАЖНАЯ СТРОКА
+
+        if (imageUrl) {
+          imageEl.attr("src", imageUrl);
           imageEl.removeClass("shimmer");
         } else {
           imageEl.attr("src", "icons/icon-transparent.svg");
@@ -81,11 +83,7 @@ export default class CategoryPage extends Route {
           const params = JSON.stringify({ id: item.id });
           navigateTo("details", params);
         });
-      }
+      },
     );
-  }
-
-  #getDisplayPositionCount(count) {
-    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
