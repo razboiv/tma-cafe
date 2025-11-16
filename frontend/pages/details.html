@@ -1,21 +1,13 @@
 <section>
-  <div id="details-container" class="cafe-item-details-container">
+  <div id="cafe-item-details-container" class="cafe-item-details-container">
     <div class="cafe-item-details-content">
-      <!-- картинка товара -->
       <img
         id="details-image"
-        class="contain shimmer"
+        class="cover shimmer"
         src="icons/icon-transparent.svg"
       />
-
-      <!-- название + вес выбранного варианта -->
       <div class="cafe-item-details-title-container">
-        <h1
-          id="details-name"
-          class="cafe-item-details-name shimmer"
-        >
-          x
-        </h1>
+        <h1 id="details-name" class="cafe-item-details-name shimmer">x</h1>
         <p
           id="details-selected-variant-weight"
           class="cafe-item-details-selected-variant-weight shimmer"
@@ -24,7 +16,6 @@
         </p>
       </div>
 
-      <!-- описание -->
       <p
         id="details-description"
         class="cafe-item-details-description shimmer"
@@ -32,7 +23,6 @@
         x
       </p>
 
-      <!-- блок цены и вариантов -->
       <h3
         id="details-section-title"
         class="cafe-item-details-section-title shimmer"
@@ -42,13 +32,10 @@
 
       <div
         id="details-variants"
-        class="cafe-item-details-variants"
-      >
-        <!-- сюда JS будет подставлять варианты -->
-      </div>
+        class="cafe-item-details-variants shimmer"
+      ></div>
     </div>
 
-    <!-- селектор количества -->
     <div class="cafe-item-details-quantity-selector-container">
       <button
         id="details-quantity-decrease-button"
@@ -56,14 +43,12 @@
       >
         remove
       </button>
-
       <h2
         id="details-quantity-value"
         class="cafe-item-details-quantity-selector-value"
       >
         1
       </h2>
-
       <button
         id="details-quantity-increase-button"
         class="material-symbols-rounded icon-button"
@@ -71,14 +56,13 @@
         add
       </button>
     </div>
-
-    <!-- шаблон одного варианта (размер/объём/и т.п.) -->
-    <template id="details-variant-template">
-      <button class="cafe-item-details-variant">
-        <span id="details-variant-name"></span>
-        <span id="details-variant-cost"></span>
-        <span id="details-variant-weight"></span>
-      </button>
-    </template>
   </div>
+
+  <template id="details-variant-template">
+    <button class="cafe-item-details-variant">
+      <span id="details-variant-name"></span>
+      <span id="details-variant-cost"></span>
+      <span id="details-variant-weight"></span>
+    </button>
+  </template>
 </section>
