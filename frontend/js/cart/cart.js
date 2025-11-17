@@ -1,10 +1,10 @@
-// frontend/js/cart/cart.js
+// js/cart/cart.js
 
 import { removeIf } from "../utils/array.js";
 import { toDisplayCost } from "../utils/currency.js";
 
 /**
- * Model for single Cart item
+ * CartItem model
  */
 class CartItem {
     constructor(cafeItem, variant, quantity) {
@@ -14,121 +14,103 @@ class CartItem {
     }
 
     static fromRaw(raw) {
-        return new CartItem(
-            raw.cafeItem,
-            raw.variant,
-            raw.quantity
-        );
+        return new CartItem(raw.cafeItem, raw.variant, raw.quantity);
     }
 
     getId() {
         return `${this.cafeItem.id}-${this.variant.id}`;
     }
 
-    getDisplayTotalCost() {
-        const total = this.variant.cost * this.quantity;
-        return toDisplayCost(total);
-    }
-
     toJSON() {
-        let cost = this.variant.cost;
-
-        if (typeof cost !== "number") {
-            cost = parseFloat(
-                String(cost ?? "")
-                    .replace(/[^\d.,]/g, "")
-                    .replace(",", ".")
-            ) || 0;
-        }
-
         return {
-            cafeteria: this.cafeItem,
-            variant: { ...this.variant, cost },
+            cafeItem: this.cafeItem,
+            variant: this.variant,
             quantity: this.quantity
         };
     }
 }
 
-export default class Cart {
+/**
+ * Main Cart controller
+ */
+export class Cart {
 
-    static cartItems = Cart.#loadItems();
+    static cartItems = [];
+    static listeners = [];
 
-    static getPortionCount() {
-        let portionCount = 0;
-        for (const it of this.cartItems) {
-            portionCount += it.quantity;
-        }
-        return portionCount;
-    }
-
-    // -------- STORAGE --------
-
-    static #storageKey = "laurel-cafe-cart";
-
-    static #saveItems() {
-        const raw = this.cartItems.map((it) => it.toJSON());
-        localStorage.setItem(this.#storageKey, JSON.stringify(raw));
-    }
-
-    static #loadItems() {
+    /** Load from localStorage */
+    static loadItems() {
         try {
-            const raw = JSON.parse(localStorage.getItem(this.#storageKey) || "[]");
-            return raw.map((r) => CartItem.fromRaw(r));
+            const raw = JSON.parse(localStorage.getItem("cart") || "[]");
+            this.cartItems = raw.map((i) => CartItem.fromRaw(i));
         } catch (e) {
-            console.error("[Cart] Failed to load items", e);
-            return [];
+            this.cartItems = [];
         }
     }
 
-    // -------- CART ACTIONS --------
-
-    static #findItem(id) {
-        return this.cartItems.find((it) => it.getId() === id) || null;
+    /** Save to localStorage */
+    static saveItems() {
+        localStorage.setItem("cart", JSON.stringify(this.cartItems));
     }
 
-    static #notifyAboutItemsChanged() {
-        document.dispatchEvent(new CustomEvent("cart-changed"));
+    /** Find item by id */
+    static findItem(id) {
+        return this.cartItems.find((i) => i.getId() === id) || null;
     }
 
+    /** Add new item or increase quantity */
     static add(cafeItem, variant, quantity = 1) {
         const adding = new CartItem(cafeItem, variant, quantity);
-        const existing = this.#findItem(adding.getId());
+        const existing = this.findItem(adding.getId());
 
-        if (existing !== null) {
+        if (existing) {
             existing.quantity += quantity;
         } else {
             this.cartItems.push(adding);
         }
 
-        this.#saveItems();
-        this.#notifyAboutItemsChanged();
+        this.saveItems();
+        this.notify();
     }
 
-    static increaseQuantity(cartItem, quantity = 1) {
-        const existing = this.#findItem(cartItem.getId());
-        if (existing !== null) {
+    /** Change quantity */
+    static increase(cartItem, quantity = 1) {
+        const existing = this.findItem(cartItem.getId());
+        if (existing) {
             existing.quantity += quantity;
-            this.#saveItems();
-            this.#notifyAboutItemsChanged();
+            this.saveItems();
+            this.notify();
         }
     }
 
-    static decreaseQuantity(cartItem, quantity = 1) {
-        const existing = this.#findItem(cartItem.getId());
-        if (existing !== null) {
-            if (existing.quantity > quantity) {
-                existing.quantity -= quantity;
-            } else {
-                removeIf(this.cartItems, it => it.getId() === existing.getId());
-            }
-            this.#saveItems();
-            this.#notifyAboutItemsChanged();
+    static decrease(cartItem, quantity = 1) {
+        const existing = this.findItem(cartItem.getId());
+        if (!existing) return;
+
+        if (existing.quantity > quantity) {
+            existing.quantity -= quantity;
+        } else {
+            removeIf(this.cartItems, (i) => i.getId() === existing.getId());
         }
+
+        this.saveItems();
+        this.notify();
     }
 
     static clear() {
         this.cartItems = [];
-        this.#saveItems();
-        this.#notifyAboutItemsChanged();
+        this.saveItems();
+        this.notify();
+    }
+
+    /** Subscribe UI */
+    static onChange(callback) {
+        this.listeners.push(callback);
+    }
+
+    static notify() {
+        this.listeners.forEach((cb) => cb(this.cartItems));
     }
 }
+
+Cart.loadItems();
