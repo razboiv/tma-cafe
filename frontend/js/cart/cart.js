@@ -3,170 +3,155 @@
 import { removeIf } from "../utils/array.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-/**
- * Model class representing Cart item:
- *  - Cafe (Menu) item
- *  - Selected variant
- *  - Quantity
- */
 class CartItem {
-    constructor(cafeItem, variant, quantity) {
-        this.cafeItem = cafeItem;
-        this.variant = variant;
-        this.quantity = quantity;
+  constructor(cafeItem, variant, quantity) {
+    this.cafeItem = cafeItem;
+    this.variant = variant;
+    this.quantity = quantity;
+  }
+
+  static fromRaw(rawCartItem) {
+    return new CartItem(
+      rawCartItem.cafeItem,
+      rawCartItem.variant,
+      rawCartItem.quantity
+    );
+  }
+
+  getId() {
+    return `${this.cafeItem.id}-${this.variant.id}`;
+  }
+
+  getDisplayTotalCost() {
+    const total = this.variant.cost * this.quantity;
+    return toDisplayCost(total);
+  }
+
+  toJSON() {
+    // нормализуем цену
+    let cost = this.variant.cost;
+    if (typeof cost !== "number") {
+      const parsed = parseFloat(
+        String(cost ?? "")
+          .replace(/[^\d.,]/g, "")
+          .replace(",", ".")
+      );
+      cost = parsed || 0;
     }
 
-    static fromRaw(rawCartItem) {
-        return new CartItem(
-            rawCartItem.cafeItem,
-            rawCartItem.variant,
-            rawCartItem.quantity
-        );
-    }
-
-    getId() {
-        return `${this.cafeItem.id}-${this.variant.id}`;
-    }
-
-    getDisplayTotalCost() {
-        const total = this.variant.cost * this.quantity;
-        return toDisplayCost(total);
-    }
-
-    /**
-     * Приводим к виду, который отправляется на backend
-     */
-    toJSON() {
-        let cost = this.variant.cost;
-
-        if (typeof cost !== "number") {
-            cost = parseFloat(
-                String(cost ?? "")
-                    .replace(/[^\d.,]/g, "")
-                    .replace(",", ".")
-            ) || 0;
-        }
-
-        return {
-            cafeItem: this.cafeItem,
-            variant: this.variant,
-            quantity: this.quantity,
-        };
-    }
+    return {
+      cafeItem: this.cafeItem,
+      variant: { ...this.variant, cost },
+      quantity: this.quantity,
+    };
+  }
 }
 
-export class Cart {
-    static cartItems = [];
+export default class Cart {
+  static #storageKey = "cart_items";
+  static #cartItems = Cart.#loadItems();
+  static #subscribers = [];
 
-    /**
-     * Сколько позиций в корзине
-     */
-    static getPortionCount() {
-        let portionCount = 0;
-        this.cartItems.forEach((it) => (portionCount += it.quantity));
-        return portionCount;
+  // ---------- internal helpers ----------
+
+  static #loadItems() {
+    try {
+      const raw = window.localStorage.getItem(Cart.#storageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(CartItem.fromRaw);
+    } catch (e) {
+      console.error("[Cart] Failed to load items from storage", e);
+      return [];
+    }
+  }
+
+  static #saveItems() {
+    try {
+      const raw = JSON.stringify(Cart.#cartItems);
+      window.localStorage.setItem(Cart.#storageKey, raw);
+    } catch (e) {
+      console.error("[Cart] Failed to save items to storage", e);
+    }
+  }
+
+  static #findItem(id) {
+    return Cart.#cartItems.find((it) => it.getId() === id) ?? null;
+  }
+
+  static #notifyAboutItemsChanged() {
+    const items = Cart.getItems();
+    Cart.#subscribers.forEach((cb) => {
+      try {
+        cb(items);
+      } catch (e) {
+        console.error("[Cart] subscriber error", e);
+      }
+    });
+  }
+
+  // ---------- public API ----------
+
+  static getItems() {
+    return [...Cart.#cartItems];
+  }
+
+  static getPortionCount() {
+    let portionCount = 0;
+    Cart.#cartItems.forEach((it) => {
+      portionCount += it.quantity;
+    });
+    return portionCount;
+  }
+
+  static add(cafeItem, variant, quantity = 1) {
+    const adding = new CartItem(cafeItem, variant, quantity);
+    const existing = Cart.#findItem(adding.getId());
+
+    if (existing !== null) {
+      existing.quantity += quantity;
+    } else {
+      Cart.#cartItems.push(adding);
     }
 
-    /**
-     * Добавить новый товар в корзину
-     */
-    static add(cafeItem, variant, quantity = 1) {
-        const newItem = new CartItem(cafeItem, variant, quantity);
-        const existing = this.findItem(newItem.getId());
+    Cart.#saveItems();
+    Cart.#notifyAboutItemsChanged();
+  }
 
-        if (existing != null) {
-            existing.quantity += quantity;
-        } else {
-            this.cartItems.push(newItem);
-        }
+  static increaseQuantity(cartItem, quantity = 1) {
+    const existing = Cart.#findItem(cartItem.getId());
+    if (existing !== null) {
+      existing.quantity += quantity;
+      Cart.#saveItems();
+      Cart.#notifyAboutItemsChanged();
+    }
+  }
 
-        this.saveItems();
-        this.notifyAboutItemsChanged();
+  static decreaseQuantity(cartItem, quantity = 1) {
+    const existing = Cart.#findItem(cartItem.getId());
+    if (existing === null) return;
+
+    if (existing.quantity > quantity) {
+      existing.quantity -= quantity;
+    } else {
+      removeIf(Cart.#cartItems, (it) => it.getId() === existing.getId());
     }
 
-    /**
-     * Увеличить количество
-     */
-    static increaseQuantity(cartItem, quantity = 1) {
-        const existing = this.findItem(cartItem.getId());
-        if (existing != null) {
-            existing.quantity += quantity;
-            this.saveItems();
-            this.notifyAboutItemsChanged();
-        }
-    }
+    Cart.#saveItems();
+    Cart.#notifyAboutItemsChanged();
+  }
 
-    /**
-     * Уменьшить количество
-     */
-    static decreaseQuantity(cartItem, quantity = 1) {
-        const existing = this.findItem(cartItem.getId());
-        if (existing != null) {
-            if (existing.quantity > quantity) {
-                existing.quantity -= quantity;
-            } else {
-                removeIf(
-                    this.cartItems,
-                    (it) => it.getId() === existing.getId()
-                );
-            }
-            this.saveItems();
-            this.notifyAboutItemsChanged();
-        }
-    }
+  static clear() {
+    Cart.#cartItems = [];
+    Cart.#saveItems();
+    Cart.#notifyAboutItemsChanged();
+  }
 
-    /**
-     * Найти товар по ID
-     */
-    static findItem(id) {
-        return this.cartItems.find((it) => it.getId() === id) ?? null;
-    }
-
-    /**
-     * Очистить корзину
-     */
-    static clear() {
-        this.cartItems = [];
-        this.saveItems();
-        this.notifyAboutItemsChanged();
-    }
-
-    /**
-     * Сохранить в localStorage
-     */
-    static saveItems() {
-        try {
-            const json = JSON.stringify(this.cartItems);
-            localStorage.setItem("cartItems", json);
-        } catch (e) {
-            console.error("[Cart] Failed to save", e);
-        }
-    }
-
-    /**
-     * Загрузить корзину из localStorage
-     */
-    static loadItems() {
-        try {
-            const json = localStorage.getItem("cartItems");
-            if (!json) return;
-
-            const arr = JSON.parse(json);
-            this.cartItems = arr.map((raw) => CartItem.fromRaw(raw));
-        } catch (e) {
-            console.error("[Cart] Failed to load", e);
-        }
-    }
-
-    /**
-     * Callback: обновление корзины
-     */
-    static notifyAboutItemsChanged() {
-        console.log("[Cart] items changed:", this.cartItems);
-    }
+  static subscribe(callback) {
+    Cart.#subscribers.push(callback);
+    return () => {
+      removeIf(Cart.#subscribers, (cb) => cb === callback);
+    };
+  }
 }
-
-// Загружаем корзину сразу
-Cart.loadItems();
-
-export { CartItem };
