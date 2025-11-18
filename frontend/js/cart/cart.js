@@ -1,11 +1,10 @@
 // frontend/js/cart/cart.js
-
 import { removeIf } from "../utils/array.js";
 import { toDisplayCost } from "../utils/currency.js";
 
 /**
- * Модель элемента корзины:
- *  - сам товар (из меню)
+ * Один пункт в корзине:
+ *  - объект блюда (из меню)
  *  - выбранный вариант
  *  - количество
  */
@@ -17,8 +16,15 @@ class CartItem {
   }
 
   static fromRaw(raw) {
-    if (!raw) return null;
-    return new CartItem(raw.cafeItem, raw.variant, raw.quantity);
+    if (!raw) {
+      return null;
+    }
+
+    return new CartItem(
+      raw.cafeItem,
+      raw.variant,
+      typeof raw.quantity === "number" ? raw.quantity : 1,
+    );
   }
 
   getId() {
@@ -26,200 +32,195 @@ class CartItem {
   }
 
   getDisplayTotalCost() {
-    const cost = this.#getNumericCost() * this.quantity;
-    return toDisplayCost(cost);
+    const total = (Number(this.variant.cost) || 0) * this.quantity;
+    return toDisplayCost(total);
   }
 
   /**
-   * Нормализуем цену варианта к числу (11.99) без валютных символов.
-   */
-  #getNumericCost() {
-    let cost = this.variant?.cost;
-
-    if (typeof cost === "number") {
-      return cost;
-    }
-
-    const parsed =
-      parseFloat(
-        String(cost ?? "")
-          .replace(/[^\d.,]/g, "") // убираем всё кроме цифр, точки и запятой
-          .replace(",", ".")
-      ) || 0;
-
-    return parsed;
-  }
-
-  /**
-   * Очень важно: при сериализации на бэкенд
-   * отправляем структуру { cafeteria, variant, quantity }.
+   * Этот JSON мы кладём в localStorage
+   * (для бэкенда при чекауте будет отдельный метод).
    */
   toJSON() {
     return {
-      cafeteria: this.cafeItem.id,
-      variant: {
-        ...this.variant,
-        cost: this.#getNumericCost(),
-      },
+      cafeItem: this.cafeItem,
+      variant: this.variant,
       quantity: this.quantity,
+    };
+  }
+
+  /**
+   * А этот JSON можно отправлять на бэкенд.
+   * Структура под комментарий в шаблоне:
+   * { cafeteria, variant, quantity }
+   */
+  toOrderJSON() {
+    let cost = this.variant.cost;
+
+    if (typeof cost !== "number") {
+      cost = parseFloat(String(cost ?? "")
+        .replace(/[^\d.,]/g, "")
+        .replace(",", "."),
+      ) || 0;
+    }
+
+    return {
+      cafeteria: this.cafeItem.id,
+      variant: this.variant.id,
+      quantity: this.quantity,
+      cost,
     };
   }
 }
 
-/**
- * Основной класс корзины.
- * ВАЖНО: все методы статические, используем Cart.* в коде.
- */
 export class Cart {
-  static #STORAGE_KEY = "cart_items";
-  static #items = null; // лениво загружаем
-  static #subscribers = new Set();
+  static #storageKey = "laurel_cafe_cart";
+  static #cartItems = [];
+  static #loaded = false;
+  static #listeners = new Set();
 
-  // ===== ВНУТРЕННЕЕ =====
+  // ====== служебные методы ======
 
-  static #ensureLoaded() {
-    if (Cart.#items !== null) return;
+  static #load() {
+    if (this.#loaded) return;
 
     try {
-      const raw = localStorage.getItem(Cart.#STORAGE_KEY);
-      if (!raw) {
-        Cart.#items = [];
-        return;
+      const rawJson = localStorage.getItem(this.#storageKey);
+      if (!rawJson) {
+        this.#cartItems = [];
+      } else {
+        const rawArray = JSON.parse(rawJson);
+        this.#cartItems = Array.isArray(rawArray)
+          ? rawArray
+              .map(CartItem.fromRaw)
+              .filter((it) => it !== null)
+          : [];
       }
-
-      const parsed = JSON.parse(raw);
-      Cart.#items = Array.isArray(parsed)
-        ? parsed
-            .map((x) => CartItem.fromRaw(x))
-            .filter((x) => x !== null)
-        : [];
     } catch (e) {
-      console.error("[Cart] failed to load from storage", e);
-      Cart.#items = [];
+      console.error("[Cart] failed to load from localStorage", e);
+      this.#cartItems = [];
     }
+
+    this.#loaded = true;
   }
 
   static #save() {
     try {
-      const raw = JSON.stringify(Cart.#items);
-      localStorage.setItem(Cart.#STORAGE_KEY, raw);
+      localStorage.setItem(
+        this.#storageKey,
+        JSON.stringify(this.#cartItems),
+      );
     } catch (e) {
-      console.error("[Cart] failed to save to storage", e);
+      console.error("[Cart] failed to save to localStorage", e);
     }
   }
 
   static #notify() {
-    for (const cb of Cart.#subscribers) {
+    for (const cb of this.#listeners) {
       try {
-        cb(Cart.getItems());
+        cb(this.getItems());
       } catch (e) {
-        console.error("[Cart] subscriber failed", e);
+        console.error("[Cart] listener failed", e);
       }
     }
   }
 
-  // ===== ПУБЛИЧНЫЙ API =====
+  // ====== публичные методы ======
 
-  /**
-   * Все элементы корзины (копия массива).
-   */
+  /** Все позиции корзины */
   static getItems() {
-    Cart.#ensureLoaded();
-    return [...Cart.#items];
+    this.#load();
+    return [...this.#cartItems];
   }
 
-  /**
-   * Количество позиций в корзине (для текста кнопки "MY CART · N POSITIONS").
-   */
+  /** Сколько всего порций (для кнопки MY CART · N POSITIONS) */
   static getPortionCount() {
-    Cart.#ensureLoaded();
-    return Cart.#items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    this.#load();
+    return this.#cartItems.reduce((sum, it) => sum + it.quantity, 0);
   }
 
-  /**
-   * Добавить товар (или увеличить количество, если такой вариант уже есть).
-   */
-  static addItem(cafeItem, variant, quantity = 1) {
-    Cart.#ensureLoaded();
+  /** Добавить позицию / увеличить количество, если такая уже есть */
+  static addItem(cafeItem, variant, quantity) {
+    this.#load();
 
-    const qty = quantity > 0 ? quantity : 1;
+    const qty = Math.max(1, Number(quantity) || 1);
     const adding = new CartItem(cafeItem, variant, qty);
-    const id = adding.getId();
 
-    const existing = Cart.#items.find((it) => it.getId() === id);
+    const existing = this.#cartItems.find(
+      (it) => it.getId() === adding.getId(),
+    );
+
     if (existing) {
       existing.quantity += qty;
     } else {
-      Cart.#items.push(adding);
+      this.#cartItems.push(adding);
     }
 
-    Cart.#save();
-    Cart.#notify();
+    this.#save();
+    this.#notify();
   }
 
-  /**
-   * Увеличить количество конкретного CartItem на quantity.
-   */
-  static increaseQuantity(cartItem, quantity = 1) {
-    Cart.#ensureLoaded();
+  /** Установить точное количество для позиции */
+  static setQuantity(cartItem, quantity) {
+    this.#load();
 
-    const id = cartItem?.getId?.() ?? cartItem?.id;
-    if (!id) return;
-
-    const existing = Cart.#items.find((it) => it.getId() === id);
+    const existing = this.#cartItems.find(
+      (it) => it.getId() === cartItem.getId(),
+    );
     if (!existing) return;
 
-    existing.quantity += quantity;
-    if (existing.quantity < 1) existing.quantity = 1;
+    const qty = Math.max(1, Number(quantity) || 1);
+    existing.quantity = qty;
 
-    Cart.#save();
-    Cart.#notify();
+    this.#save();
+    this.#notify();
   }
 
-  /**
-   * Уменьшить количество; если стало 0 — удалить позицию.
-   */
-  static decreaseQuantity(cartItem, quantity = 1) {
-    Cart.#ensureLoaded();
+  /** Увеличить количество на 1 */
+  static increaseQuantity(cartItem) {
+    this.setQuantity(cartItem, cartItem.quantity + 1);
+  }
 
-    const id = cartItem?.getId?.() ?? cartItem?.id;
-    if (!id) return;
+  /** Уменьшить количество на 1, при нуле — удалить */
+  static decreaseQuantity(cartItem) {
+    this.#load();
 
-    const existing = Cart.#items.find((it) => it.getId() === id);
+    const existing = this.#cartItems.find(
+      (it) => it.getId() === cartItem.getId(),
+    );
     if (!existing) return;
 
-    if (existing.quantity > quantity) {
-      existing.quantity -= quantity;
+    if (existing.quantity > 1) {
+      existing.quantity -= 1;
     } else {
-      removeIf(Cart.#items, (it) => it.getId() === id);
+      removeIf(this.#cartItems, (it) => it.getId() === existing.getId());
     }
 
-    Cart.#save();
-    Cart.#notify();
+    this.#save();
+    this.#notify();
   }
 
-  /**
-   * Полностью очистить корзину.
-   */
+  /** Очистить корзину */
   static clear() {
-    Cart.#ensureLoaded();
-    Cart.#items = [];
-    Cart.#save();
-    Cart.#notify();
+    this.#cartItems = [];
+    this.#save();
+    this.#notify();
   }
 
-  /**
-   * Подписаться на изменения корзины.
-   * callback(items) будет вызван при каждом изменении.
-   */
-  static onItemsChanged(callback) {
-    if (typeof callback !== "function") return () => {};
-    Cart.#subscribers.add(callback);
-    // вернём функцию отписки
-    return () => {
-      Cart.#subscribers.delete(callback);
-    };
+  /** JSON для чекаута на бэкенд */
+  static toOrderJSON() {
+    this.#load();
+    return this.#cartItems.map((it) => it.toOrderJSON());
+  }
+
+  /** Подписка на изменения (для main.js и cart.js) */
+  static subscribe(listener) {
+    this.#listeners.add(listener);
+    // сразу один раз дернём с текущим состоянием
+    try {
+      listener(this.getItems());
+    } catch (e) {
+      console.error("[Cart] listener failed", e);
+    }
+    return () => this.#listeners.delete(listener);
   }
 }
-
-export default Cart;
