@@ -1,24 +1,38 @@
-<section>
-    <div id="cart-items" class="cart-items-container"></div>
-    <div id="cart-empty-placeholder" class="cart-empty-placeholder">
-        <div id="cart-empty-placeholder-icon"></div>
-        <h3>Your cart is empty</h3>
-        <p>It's time to order something delicious!</p>
-    </div>
+<section class="cart-section">
+  <!-- пустая корзина -->
+  <div id="cart-empty" class="cart-empty">
+    <img src="icons/icon-bag.svg" class="cart-empty-icon" />
+    <h2 class="cart-empty-title">Your cart is empty</h2>
+    <p class="cart-empty-subtitle">
+      It's time to order something delicious!
+    </p>
+  </div>
 
-    <template id="cart-item-template">
-        <div class="cart-item-container">
-            <img id="cart-item-image" class="cart-item-image"/>
-            <div class="cart-item-info-container">
-                <h6 id="cart-item-name" class="cart-item-name"></h6>
-                <p id="cart-item-description" class="small cart-item-description">Small</p>
-                <div id="cart-item-cost" class="cart-item-cost">$2.00</div>
-            </div>
-            <div class="cart-item-quantity-container">
-                <button id="cart-item-quantity-decrement" class="material-symbols-rounded icon-button small">remove</button>
-                <div id="cart-item-quantity" class="cart-item-quantity">1</div>
-                <button id="cart-item-quantity-increment" class="material-symbols-rounded icon-button small">add</button>
-            </div>
-        </div>
-    </template>
+  <!-- список позиций -->
+  <div id="cart-items" class="cart-items"></div>
+
+  <!-- итоговая сумма -->
+  <div class="cart-total-container">
+    <span class="cart-total-label">Total:</span>
+    <span id="cart-total" class="cart-total-value">0</span>
+  </div>
+
+  <!-- шаблон одной позиции -->
+  <template id="cart-item-template">
+    <div class="cart-item">
+      <div class="cart-item-info">
+        <div class="cart-item-name"></div>
+        <div class="cart-item-variant"></div>
+        <div class="cart-item-weight"></div>
+      </div>
+
+      <div class="cart-item-controls">
+        <button type="button" class="cart-item-dec">−</button>
+        <div class="cart-item-qty">1</div>
+        <button type="button" class="cart-item-inc">+</button>
+      </div>
+
+      <div class="cart-item-cost"></div>
+    </div>
+  </template>
 </section>
