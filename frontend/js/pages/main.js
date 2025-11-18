@@ -3,111 +3,152 @@
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import {
-    getInfo,
-    getCategories,
-    getPopularMenu,
+  getInfo,
+  getCategories,
+  getPopularMenu,
 } from "../requests/requests.js";
-
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
+/**
+ * Главная страница: инфо о кафе, категории, популярное меню.
+ */
 export default class MainPage extends Route {
-    constructor() {
-        super("root", "/pages/main.html");
+  constructor() {
+    super("root", "/pages/main.html");
+  }
+
+  async load(params) {
+    console.log("[MainPage] load", params);
+    TelegramSDK.expand();
+
+    // ===== основная кнопка =====
+    const portionCount = Cart.getPortionCount();
+    if (portionCount > 0) {
+      TelegramSDK.showMainButton(
+        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        () => navigateTo("cart"),
+      );
+    } else {
+      TelegramSDK.hideMainButton();
     }
 
-    async load(params) {
-        console.log("[MainPage] load", params);
-        TelegramSDK.expand();
+    // параллельно грузим всё с бэка
+    await Promise.allSettled([
+      this.#loadCafeInfo(),
+      this.#loadCategories(),
+      this.#loadPopularMenu(),
+    ]);
+  }
 
-        // основная кнопка
-        const portionCount = Cart.getPortionCount();
-        if (portionCount > 0) {
-            TelegramSDK.showMainButton(
-                `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
-                () => navigateTo("cart")
-            );
-        } else {
-            TelegramSDK.hideMainButton();
-        }
+  // ===== инфо о кафе =====
+  async #loadCafeInfo() {
+    try {
+      const info = await getInfo();
+      console.log("[MainPage] info", info);
 
-        // грузим с бэка
-        await Promise.allSettled([
-            this.#loadCafeInfo(),
-            this.#loadCategories(),
-            this.#loadPopularMenu(),
-        ]);
+      $("#cafe-name").text(info?.title ?? "");
+      $("#cafe-description").text(info?.description ?? "");
+      $("#cafe-kitchen-categories").text(info?.kitchenCategories ?? "");
+
+      if (info?.coverImage) {
+        loadImage($("#cafe-cover"), info.coverImage);
+      }
+
+      if (info?.rating) {
+        $("#cafe-rating").text(info.rating);
+      }
+
+      if (info?.cookingTime) {
+        $("#cafe-cooking-time").text(info.cookingTime);
+      }
+
+      if (info?.status) {
+        $("#cafe-status").text(info.status);
+      }
+
+      // убираем shimmer
+      $("#cafe-cover").removeClass("shimmer");
+      $("#cafe-name").removeClass("shimmer");
+      $("#cafe-kitchen-categories").removeClass("shimmer");
+      $("#cafe-parameters-container").removeClass("shimmer");
+    } catch (e) {
+      console.error("[MainPage] failed to load info", e);
     }
+  }
 
-    async #loadCafeInfo() {
-        try {
-            const info = await getInfo();
+  // ===== категории =====
+  async #loadCategories() {
+    try {
+      const categories = await getCategories();
+      console.log("[MainPage] categories", categories);
 
-            if (info.title) $("#cafe-name").text(info.title);
-            if (info.description) $("#cafe-description").text(info.description);
-            if (info.coverImage) loadImage($("#cafe-cover"), info.coverImage);
+      // убираем shimmer с заголовка
+      $("#cafe-section-categories-title").removeClass("shimmer");
 
-            $("#cafe-info").removeClass("shimmer");
+      replaceShimmerContent(
+        "#cafe-categories",        // контейнер
+        "#cafe-category-template", // <template>
+        "#cafe-category-icon",     // картинка внутри шаблона
+        categories,
+        (template, category) => {
+          template.attr("id", category.id);
+          template.find("#cafe-category-name").text(category.name ?? "");
 
-        } catch (e) {
-            console.error("[MainPage] failed to load info", e);
-        }
+          const img = template.find("#cafe-category-icon");
+          if (category.icon) {
+            loadImage(img, category.icon);
+          }
+
+          template.on("click", () => {
+            const params = JSON.stringify({ id: category.id });
+            navigateTo("category", params);
+          });
+        },
+      );
+    } catch (e) {
+      console.error("[MainPage] failed to load categories", e);
     }
+  }
 
-    async #loadCategories() {
-        try {
-            const categories = await getCategories();
-            $("#cafe-section-categories-title").removeClass("shimmer");
+  // ===== популярное меню =====
+  async #loadPopularMenu() {
+    try {
+      const items = await getPopularMenu();
+      console.log("[MainPage] popular", items);
 
-            replaceShimmerContent(
-                "#cafe-categories",
-                "#cafe-category-template",
-                "#cafe-category-icon",
-                categories,
-                (template, category) => {
-                    template.attr("id", category.id);
-                    template.find("#cafe-category-name").text(category.name);
-                    loadImage(template.find("#cafe-category-icon"), category.icon);
+      $("#cafe-section-popular-title").removeClass("shimmer");
 
-                    template.on("click", () => {
-                        navigateTo("category", JSON.stringify({ id: category.id }));
-                    });
-                }
-            );
+      replaceShimmerContent(
+        "#cafe-popular",        // контейнер
+        "#cafe-item-template",  // <template>
+        "#cafe-item-image",     // картинка внутри шаблона
+        items,
+        (template, item) => {
+          template.attr("id", item.id);
+          template.find("#cafe-item-name").text(item.name ?? "");
+          template
+            .find("#cafe-item-description")
+            .text(item.description ?? "");
 
-        } catch (e) {
-            console.error("[MainPage] failed to load categories", e);
-        }
+          const img = template.find("#cafe-item-image");
+          if (item.image) {
+            loadImage(img, item.image);
+          }
+
+          template.on("click", () => {
+            const params = JSON.stringify({ id: item.id });
+            navigateTo("details", params);
+          });
+        },
+      );
+    } catch (e) {
+      console.error("[MainPage] failed to load popular menu", e);
     }
+  }
 
-    async #loadPopularMenu() {
-        try {
-            const items = await getPopularMenu();
-            $("#cafe-section-popular-title").removeClass("shimmer");
-
-            replaceShimmerContent(
-                "#cafe-popular",
-                "#cafe-item-template",
-                "#cafe-item-image",
-                items,
-                (template, item) => {
-                    template.find("#cafe-item-name").text(item.name);
-                    template.find("#cafe-item-description").text(item.description);
-                    loadImage(template.find("#cafe-item-image"), item.image);
-
-                    template.on("click", () => {
-                        navigateTo("details", JSON.stringify({ id: item.id }));
-                    });
-                }
-            );
-
-        } catch (e) {
-            console.error("[MainPage] failed to load popular menu", e);
-        }
-    }
-
-    #getDisplayPositionCount(count) {
-        return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
-    }
+  #getDisplayPositionCount(count) {
+    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
+  }
 }
