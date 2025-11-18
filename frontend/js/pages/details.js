@@ -4,7 +4,7 @@ import { Route } from "../routing/route.js";
 import { getMenuItem } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
-import Cart from "../cart/cart.js";
+import { Cart } from "../cart/cart.js";
 
 export default class DetailsPage extends Route {
   constructor() {
