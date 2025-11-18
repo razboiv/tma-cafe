@@ -1,176 +1,105 @@
 // frontend/js/pages/cart.js
-import { Cart } from "../cart/cart.js";
-import { createOrder } from "../requests/requests.js";
 import { Route } from "../routing/route.js";
-import { showSnackbar } from "../routing/router.js";
+import { navigateTo } from "../routing/router.js";
 import TelegramSDK from "../telegram/telegram.js";
-import { loadImage } from "../utils/dom.js";
+import { Cart } from "../cart/cart.js";
+import { toDisplayCost } from "../utils/currency.js";
 
-
+/**
+ * Страница корзины
+ */
 export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
   }
 
-  load(params) {
+  async load(params) {
     console.log("[CartPage] load", params);
-    this.#loadLottie();
 
-    Cart.onItemsChangeListener = (cartItems) =>
-      this.#fillCartItems(cartItems);
+    TelegramSDK.expand();
+    TelegramSDK.showMainButton("CHECKOUT", () => this.#checkout());
 
-    this.#loadCartItems();
+    this.#render();
+
+    // Подпишемся на изменения корзины, чтобы пересобирать список
+    if (!this._unsubscribe) {
+      this._unsubscribe = Cart.subscribe(() => this.#render());
+    }
   }
 
-  #loadLottie() {
-    this.emptyCartPlaceholderLottieAnimation = lottie.loadAnimation({
-      container: $("#cart-empty-placeholder-icon")[0],
-      renderer: "svg",
-      loop: true,
-      autoplay: false,
-      path: "lottie/empty-cart.json",
-    });
+  unload() {
+    // спрячем main-button, когда уходим со страницы
+    TelegramSDK.hideMainButton();
+    if (this._unsubscribe) {
+      this._unsubscribe();
+      this._unsubscribe = null;
+    }
   }
 
-  #loadCartItems() {
-    const cartItems = Cart.getItems();
-    this.#fillCartItems(cartItems);
-  }
+  #render() {
+    const items = Cart.getItems();
 
-  #fillCartItems(cartItems) {
-    this.#updateMainButton(cartItems);
-    this.#changeEmptyPlaceholderVisibility(cartItems.length === 0);
+    const emptyBlock = $("#cart-empty");
+    const listBlock = $("#cart-items");
+    const totalCostEl = $("#cart-total");
 
-    const cartItemsContainer = $("#cart-items");
-    const cartItemIds = cartItems.map((cartItem) => cartItem.getId());
+    listBlock.empty();
 
-    cartItemsContainer.children().each((index, element) => {
-      const cartItemElement = $(element);
-      if (!cartItemIds.includes(cartItemElement.attr("id"))) {
-        cartItemElement.remove();
-      }
-    });
+    if (!items.length) {
+      emptyBlock.show();
+      totalCostEl.text(toDisplayCost(0));
+      return;
+    }
 
-    const cartItemTemplateHtml = $("#cart-item-template").html();
+    emptyBlock.hide();
 
-    cartItems.forEach((cartItem) => {
-      const cartItemElement = cartItemsContainer.find(
-        `#${cartItem.getId()}`
-      );
+    const templateHtml = $("#cart-item-template").html();
 
-      if (cartItemElement.length > 0) {
-        cartItemElement
-          .find("#cart-item-cost")
-          .textBoop(cartItem.getDisplayTotalCost());
-        cartItemElement
-          .find("#cart-item-quantity")
-          .textBoop(cartItem.quantity);
-      } else {
-        const filledCartItemTemplate = $(cartItemTemplateHtml);
+    let total = 0;
 
-        filledCartItemTemplate.attr("id", cartItem.getId());
-        loadImage(
-          filledCartItemTemplate.find("#cart-item-image"),
-          cartItem.cafeItem.image
-        );
-        filledCartItemTemplate
-          .find("#cart-item-name")
-          .text(cartItem.cafeItem.name);
-        filledCartItemTemplate
-          .find("#cart-item-description")
-          .text(cartItem.variant.name);
-        filledCartItemTemplate
-          .find("#cart-item-cost")
-          .text(cartItem.getDisplayTotalCost());
-        filledCartItemTemplate
-          .find("#cart-item-quantity")
-          .text(cartItem.quantity);
+    items.forEach((cartItem) => {
+      const el = $(templateHtml);
+      const { cafeItem, variant, quantity } = cartItem;
 
-        filledCartItemTemplate
-          .find("#cart-item-quantity-increment")
-          .clickWithRipple(() => {
-            Cart.increaseQuantity(cartItem, 1);
-            TelegramSDK.impactOccured("light");
-          });
+      const positionCost = (Number(variant.cost) || 0) * quantity;
+      total += positionCost;
 
-        filledCartItemTemplate
-          .find("#cart-item-quantity-decrement")
-          .clickWithRipple(() => {
-            Cart.decreaseQuantity(cartItem, 1);
-            TelegramSDK.impactOccured("light");
-          });
+      el.attr("id", cartItem.getId());
 
-        cartItemsContainer.append(filledCartItemTemplate);
-      }
-    });
-  }
+      el.find(".cart-item-name").text(cafeItem.name ?? "");
+      el.find(".cart-item-variant").text(variant.name ?? "");
+      el.find(".cart-item-weight").text(variant.weight ?? "");
+      el.find(".cart-item-cost").text(toDisplayCost(positionCost));
+      el.find(".cart-item-qty").text(quantity);
 
-  #updateMainButton(cartItems) {
-    if (cartItems.length > 0) {
-      TelegramSDK.showMainButton("CHECKOUT", () => {
-        TelegramSDK.setMainButtonLoading(true);
-        this.#createOrder(cartItems);
+      // кнопки +/-
+      el.find(".cart-item-inc").on("click", () => {
+        Cart.increaseQuantity(cartItem);
       });
-    } else {
-      TelegramSDK.setMainButtonLoading(false);
-      TelegramSDK.hideMainButton();
-    }
-  }
 
-  #changeEmptyPlaceholderVisibility(isVisible) {
-    const placeholder = $("#cart-empty-placeholder");
-
-    if (isVisible) {
-      this.emptyCartPlaceholderLottieAnimation.play();
-      placeholder.fadeIn();
-    } else {
-      this.emptyCartPlaceholderLottieAnimation.stop();
-      placeholder.hide();
-    }
-  }
-
-  #createOrder(cartItems) {
-    const data = {
-      _auth: TelegramSDK.getInitData(),
-      cartItems: cartItems,
-    };
-
-    createOrder(data)
-      .then((result) => {
-        if (result.ok) {
-          TelegramSDK.openInvoice(result.data.invoiceUrl, (status) => {
-            this.#handleInvoiceStatus(status);
-          });
-        } else {
-          showSnackbar(result.error, "error");
-        }
-      })
-      .catch((err) => {
-        console.error("[CartPage] createOrder failed", err);
-        showSnackbar("Something went wrong, please try again", "error");
-      })
-      .finally(() => {
-        TelegramSDK.setMainButtonLoading(false);
+      el.find(".cart-item-dec").on("click", () => {
+        Cart.decreaseQuantity(cartItem);
       });
+
+      listBlock.append(el);
+    });
+
+    totalCostEl.text(toDisplayCost(total));
   }
 
-  #handleInvoiceStatus(status) {
-    if (status === "paid") {
-      Cart.clear();
-      TelegramSDK.close();
-    } else if (status === "failed") {
-      TelegramSDK.setMainButtonLoading(false);
-      showSnackbar(
-        "Something went wrong, payment is unsuccessful :(",
-        "error"
-      );
-    } else {
-      TelegramSDK.setMainButtonLoading(false);
-      showSnackbar("The order was cancelled.", "warning");
+  #checkout() {
+    const order = Cart.toOrderJSON();
+    console.log("[CartPage] checkout payload", order);
+
+    if (!order.length) {
+      // пустую корзину не отправляем
+      return;
     }
-  }
 
-  onClose() {
-    Cart.onItemsChangeListener = null;
+    // В реальном проекте здесь XHR/fetch на ваш бэкенд,
+    // сейчас просто показываем alert и очищаем корзину.
+    TelegramSDK.showAlert("Заказ отправлен (демо).");
+    Cart.clear();
+    navigateTo("root");
   }
 }
