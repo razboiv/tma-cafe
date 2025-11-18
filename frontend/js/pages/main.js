@@ -23,7 +23,7 @@ export default class MainPage extends Route {
     console.log("[MainPage] load", params);
     TelegramSDK.expand();
 
-    // ===== основная кнопка =====
+    // ===== основная кнопка (MY CART ...) =====
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
@@ -34,7 +34,7 @@ export default class MainPage extends Route {
       TelegramSDK.hideMainButton();
     }
 
-    // параллельно грузим всё с бэка
+    // ===== параллельно грузим всё с бэкенда =====
     await Promise.allSettled([
       this.#loadCafeInfo(),
       this.#loadCategories(),
@@ -48,27 +48,30 @@ export default class MainPage extends Route {
       const info = await getInfo();
       console.log("[MainPage] info", info);
 
-      $("#cafe-name").text(info?.title ?? "");
-      $("#cafe-description").text(info?.description ?? "");
-      $("#cafe-kitchen-categories").text(info?.kitchenCategories ?? "");
-
+      if (info?.title) {
+        $("#cafe-name").text(info.title);
+      }
+      if (info?.kitchenCategories) {
+        $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      }
+      if (info?.description) {
+        $("#cafe-description").text(info.description);
+      }
+      if (info?.rating) {
+        $("#cafe-rating").text(info.rating);
+      }
+      if (info?.cookingTime) {
+        $("#cafe-cooking-time").text(info.cookingTime);
+      }
+      if (info?.status) {
+        $("#cafe-status").text(info.status);
+      }
       if (info?.coverImage) {
         loadImage($("#cafe-cover"), info.coverImage);
       }
 
-      if (info?.rating) {
-        $("#cafe-rating").text(info.rating);
-      }
-
-      if (info?.cookingTime) {
-        $("#cafe-cooking-time").text(info.cookingTime);
-      }
-
-      if (info?.status) {
-        $("#cafe-status").text(info.status);
-      }
-
-      // убираем shimmer
+      // убираем скелет-анимацию блока с инфой
+      $("#cafe-info").removeClass("shimmer");
       $("#cafe-cover").removeClass("shimmer");
       $("#cafe-name").removeClass("shimmer");
       $("#cafe-kitchen-categories").removeClass("shimmer");
@@ -84,17 +87,18 @@ export default class MainPage extends Route {
       const categories = await getCategories();
       console.log("[MainPage] categories", categories);
 
-      // убираем shimmer с заголовка
+      // снимаем shimmer с заголовка
       $("#cafe-section-categories-title").removeClass("shimmer");
 
       replaceShimmerContent(
-        "#cafe-categories",        // контейнер
+        "#cafe-categories",      // контейнер
         "#cafe-category-template", // <template>
-        "#cafe-category-icon",     // картинка внутри шаблона
+        "#cafe-category-icon",   // картинка внутри шаблона
         categories,
         (template, category) => {
           template.attr("id", category.id);
-          template.find("#cafe-category-name").text(category.name ?? "");
+          template.css("background-color", category.backgroundColor || "");
+          template.find("#cafe-category-name").text(category.name || "");
 
           const img = template.find("#cafe-category-icon");
           if (category.icon) {
@@ -118,6 +122,7 @@ export default class MainPage extends Route {
       const items = await getPopularMenu();
       console.log("[MainPage] popular", items);
 
+      // снимаем shimmer с заголовка
       $("#cafe-section-popular-title").removeClass("shimmer");
 
       replaceShimmerContent(
@@ -126,7 +131,6 @@ export default class MainPage extends Route {
         "#cafe-item-image",     // картинка внутри шаблона
         items,
         (template, item) => {
-          template.attr("id", item.id);
           template.find("#cafe-item-name").text(item.name ?? "");
           template
             .find("#cafe-item-description")
@@ -149,6 +153,7 @@ export default class MainPage extends Route {
   }
 
   #getDisplayPositionCount(count) {
+    // просто "1 POSITION" / "N POSITIONS"
     return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
