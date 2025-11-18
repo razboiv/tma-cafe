@@ -66,7 +66,11 @@ class CartItem {
   }
 }
 
-class CartInternal {
+/**
+ * Основной класс корзины.
+ * ВАЖНО: все методы статические, используем Cart.* в коде.
+ */
+export class Cart {
   static #STORAGE_KEY = "cart_items";
   static #items = null; // лениво загружаем
   static #subscribers = new Set();
@@ -74,40 +78,40 @@ class CartInternal {
   // ===== ВНУТРЕННЕЕ =====
 
   static #ensureLoaded() {
-    if (this.#items !== null) return;
+    if (Cart.#items !== null) return;
 
     try {
-      const raw = localStorage.getItem(this.#STORAGE_KEY);
+      const raw = localStorage.getItem(Cart.#STORAGE_KEY);
       if (!raw) {
-        this.#items = [];
+        Cart.#items = [];
         return;
       }
 
       const parsed = JSON.parse(raw);
-      this.#items = Array.isArray(parsed)
+      Cart.#items = Array.isArray(parsed)
         ? parsed
             .map((x) => CartItem.fromRaw(x))
             .filter((x) => x !== null)
         : [];
     } catch (e) {
       console.error("[Cart] failed to load from storage", e);
-      this.#items = [];
+      Cart.#items = [];
     }
   }
 
   static #save() {
     try {
-      const raw = JSON.stringify(this.#items);
-      localStorage.setItem(this.#STORAGE_KEY, raw);
+      const raw = JSON.stringify(Cart.#items);
+      localStorage.setItem(Cart.#STORAGE_KEY, raw);
     } catch (e) {
       console.error("[Cart] failed to save to storage", e);
     }
   }
 
   static #notify() {
-    for (const cb of this.#subscribers) {
+    for (const cb of Cart.#subscribers) {
       try {
-        cb(this.getItems());
+        cb(Cart.getItems());
       } catch (e) {
         console.error("[Cart] subscriber failed", e);
       }
@@ -120,88 +124,88 @@ class CartInternal {
    * Все элементы корзины (копия массива).
    */
   static getItems() {
-    this.#ensureLoaded();
-    return [...this.#items];
+    Cart.#ensureLoaded();
+    return [...Cart.#items];
   }
 
   /**
    * Количество позиций в корзине (для текста кнопки "MY CART · N POSITIONS").
    */
   static getPortionCount() {
-    this.#ensureLoaded();
-    return this.#items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    Cart.#ensureLoaded();
+    return Cart.#items.reduce((sum, item) => sum + (item.quantity || 0), 0);
   }
 
   /**
    * Добавить товар (или увеличить количество, если такой вариант уже есть).
    */
   static addItem(cafeItem, variant, quantity = 1) {
-    this.#ensureLoaded();
+    Cart.#ensureLoaded();
 
     const qty = quantity > 0 ? quantity : 1;
     const adding = new CartItem(cafeItem, variant, qty);
     const id = adding.getId();
 
-    const existing = this.#items.find((it) => it.getId() === id);
+    const existing = Cart.#items.find((it) => it.getId() === id);
     if (existing) {
       existing.quantity += qty;
     } else {
-      this.#items.push(adding);
+      Cart.#items.push(adding);
     }
 
-    this.#save();
-    this.#notify();
+    Cart.#save();
+    Cart.#notify();
   }
 
   /**
    * Увеличить количество конкретного CartItem на quantity.
    */
   static increaseQuantity(cartItem, quantity = 1) {
-    this.#ensureLoaded();
+    Cart.#ensureLoaded();
 
     const id = cartItem?.getId?.() ?? cartItem?.id;
     if (!id) return;
 
-    const existing = this.#items.find((it) => it.getId() === id);
+    const existing = Cart.#items.find((it) => it.getId() === id);
     if (!existing) return;
 
     existing.quantity += quantity;
     if (existing.quantity < 1) existing.quantity = 1;
 
-    this.#save();
-    this.#notify();
+    Cart.#save();
+    Cart.#notify();
   }
 
   /**
    * Уменьшить количество; если стало 0 — удалить позицию.
    */
   static decreaseQuantity(cartItem, quantity = 1) {
-    this.#ensureLoaded();
+    Cart.#ensureLoaded();
 
     const id = cartItem?.getId?.() ?? cartItem?.id;
     if (!id) return;
 
-    const existing = this.#items.find((it) => it.getId() === id);
+    const existing = Cart.#items.find((it) => it.getId() === id);
     if (!existing) return;
 
     if (existing.quantity > quantity) {
       existing.quantity -= quantity;
     } else {
-      removeIf(this.#items, (it) => it.getId() === id);
+      removeIf(Cart.#items, (it) => it.getId() === id);
     }
 
-    this.#save();
-    this.#notify();
+    Cart.#save();
+    Cart.#notify();
   }
 
   /**
    * Полностью очистить корзину.
    */
   static clear() {
-    this.#ensureLoaded();
-    this.#items = [];
-    this.#save();
-    this.#notify();
+    Cart.#ensureLoaded();
+    Cart.#items = [];
+    Cart.#save();
+    Cart.#notify();
   }
 
   /**
@@ -210,19 +214,12 @@ class CartInternal {
    */
   static onItemsChanged(callback) {
     if (typeof callback !== "function") return () => {};
-    this.#subscribers.add(callback);
+    Cart.#subscribers.add(callback);
     // вернём функцию отписки
     return () => {
-      this.#subscribers.delete(callback);
+      Cart.#subscribers.delete(callback);
     };
   }
 }
 
-/**
- * Внешний класс Cart — просто проксируем к CartInternal.
- * Так удобнее одновременно экспортировать именованный и default.
- */
-class Cart extends CartInternal {}
-
-export { Cart, CartItem };
 export default Cart;
