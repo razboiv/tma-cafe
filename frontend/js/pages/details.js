@@ -60,10 +60,10 @@ export default class DetailsPage extends Route {
     $("#details-section-title").removeClass("shimmer");
     $("#details-variants").removeClass("shimmer");
 
-    // --- варианты блюда ---
     const variantsContainer = $("#details-variants");
     variantsContainer.empty();
 
+    // количество
     let quantity = 1;
     const updateQty = () => {
       $("#details-quantity-value").text(quantity);
@@ -76,13 +76,14 @@ export default class DetailsPage extends Route {
       const el = $(templateHtml);
 
       el.attr("id", variant.id);
-      el.find(".details-variant-name").text(variant.name || "");
-      el.find(".details-variant-cost").text(variant.cost || "");
-      el.find(".details-variant-weight").text(variant.weight || "");
+      el.find("#details-variant-name").text(variant.name || "");
+      el.find("#details-variant-cost").text(variant.cost || "");
+      el.find("#details-variant-weight").text(variant.weight || "");
 
-      // выбранный вариант — показываем вес сверху
+      // показываем вес выбранного варианта вверху
       el.on("click", () => {
         $("#details-selected-variant-weight").text(variant.weight || "");
+        // Добавление в корзину
         Cart.addItem(item, variant, quantity);
       });
 
