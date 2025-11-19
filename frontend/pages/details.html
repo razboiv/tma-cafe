@@ -5,6 +5,7 @@
         id="details-image"
         class="cover shimmer"
         src="icons/icon-transparent.svg"
+        alt=""
       />
 
       <div class="cafe-item-details-title-container">
@@ -12,7 +13,7 @@
           id="details-name"
           class="cafe-item-details-name shimmer"
         >
-          xx
+          x
         </h1>
 
         <p
@@ -43,37 +44,35 @@
       >
         x
       </div>
+
+      <div class="cafe-item-details-quantity-selector-container">
+        <button
+          id="details-quantity-decrease-button"
+          class="material-symbols-rounded icon-button"
+        >
+          remove
+        </button>
+        <h2
+          id="details-quantity-value"
+          class="cafe-item-details-quantity-selector-value"
+        >
+          1
+        </h2>
+        <button
+          id="details-quantity-increase-button"
+          class="material-symbols-rounded icon-button"
+        >
+          add
+        </button>
+      </div>
     </div>
 
-    <div class="cafe-item-details-quantity-selector-container">
-      <button
-        id="details-quantity-decrease-button"
-        class="material-symbols-rounded icon-button"
-      >
-        remove
+    <template id="details-variant-template">
+      <button class="cafe-item-details-variant">
+        <span id="details-variant-name">x</span>
+        <span id="details-variant-cost">x</span>
+        <span id="details-variant-weight">x</span>
       </button>
-
-      <h2
-        id="details-quantity-value"
-        class="cafe-item-details-quantity-selector-value"
-      >
-        1
-      </h2>
-
-      <button
-        id="details-quantity-increase-button"
-        class="material-symbols-rounded icon-button"
-      >
-        add
-      </button>
-    </div>
+    </template>
   </div>
-
-  <template id="details-variant-template">
-    <button class="cafe-item-details-variant">
-      <span id="details-variant-name">x</span>
-      <span id="details-variant-cost">x</span>
-      <span id="details-variant-weight">x</span>
-    </button>
-  </template>
 </section>
