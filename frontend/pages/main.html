@@ -1,5 +1,4 @@
 <section>
-  <!-- блок с логотипом/картинкой и инфой -->
   <div class="cafe-logo-container">
     <img id="cafe-logo" class="cafe-logo shimmer" src="icons/icon-transparent.svg" />
   </div>
@@ -10,26 +9,24 @@
     src="icons/icon-transparent.svg"
   />
 
-  <div id="cafe-info" class="cafe-info-container shimmer">
+  <div id="cafe-info" class="cafe-info-container">
     <h1 id="cafe-name" class="shimmer">x</h1>
-    <p id="cafe-kitchen-categories" class="cafe-kitchen-categories shimmer">x</p>
+    <p id="cafe-description" class="shimmer">x</p>
 
-    <div id="cafe-parameters-container" class="cafe-parameters-container shimmer">
+    <div class="cafe-parameters-container shimmer">
       <div class="cafe-parameter-container">
         <img src="icons/icon-star.svg" class="cafe-parameter-icon" />
         <div id="cafe-rating" class="cafe-parameter-value">x</div>
       </div>
-
       <div class="cafe-parameter-container">
         <img src="icons/icon-time.svg" class="cafe-parameter-icon" />
         <div id="cafe-cooking-time" class="cafe-parameter-value">x</div>
       </div>
-
-      <div id="cafe-status" class="cafe-status">x</div>
+      <button id="cafe-status" class="cafe-status">Open</button>
     </div>
   </div>
 
-  <!-- ===== Категории ===== -->
+  <!-- ===== CATEGORIES ===== -->
   <div class="cafe-section-container">
     <h3
       id="cafe-section-categories-title"
@@ -38,29 +35,23 @@
       Categories
     </h3>
 
-    <div
-      id="cafe-categories"
-      class="cafe-section-horizontal shimmer"
-    >
-      <div class="cafe-category-container shimmer"></div>
-      <div class="cafe-category-container shimmer"></div>
-      <div class="cafe-category-container shimmer"></div>
-      <div class="cafe-category-container shimmer"></div>
-      <div class="cafe-category-container shimmer"></div>
+    <div id="cafe-categories" class="cafe-section-horizontal">
+      <div class="cafe-category-container shimmer">x</div>
+      <div class="cafe-category-container shimmer">x</div>
+      <div class="cafe-category-container shimmer">x</div>
+      <div class="cafe-category-container shimmer">x</div>
+      <div class="cafe-category-container shimmer">x</div>
     </div>
   </div>
 
-  <!-- ===== Popular ===== -->
+  <!-- ===== POPULAR ===== -->
   <div class="cafe-section-container">
-    <h3
-      id="cafe-section-popular-title"
-      class="cafe-section-title shimmer"
-    >
+    <h3 id="cafe-section-popular-title" class="cafe-section-title shimmer">
       Popular
     </h3>
 
-    <div id="cafe-popular" class="cafe-section-horizontal shimmer">
-      <div class="cafe-item-container">
+    <div id="cafe-section-popular" class="cafe-section-horizontal">
+      <div class="cafe-item-container shimmer">
         <img
           id="cafe-item-image"
           class="cafe-item-image shimmer"
@@ -89,31 +80,15 @@
           x
         </p>
       </div>
+
       <div class="cafe-item-container shimmer"></div>
       <div class="cafe-item-container shimmer"></div>
     </div>
   </div>
 
-  <!-- ===== templates ===== -->
+  <!-- ====== TEMPLATES ====== -->
 
-  <template id="cafe-info-template">
-    <div>
-      <h1 id="cafe-name">x</h1>
-      <p id="cafe-kitchen-categories" class="cafe-kitchen-categories">x</p>
-      <div id="cafe-parameters-container" class="cafe-parameters-container">
-        <div class="cafe-parameter-container">
-          <img src="icons/icon-star.svg" class="cafe-parameter-icon" />
-          <div id="cafe-rating" class="cafe-parameter-value">x</div>
-        </div>
-        <div class="cafe-parameter-container">
-          <img src="icons/icon-time.svg" class="cafe-parameter-icon" />
-          <div id="cafe-cooking-time" class="cafe-parameter-value">x</div>
-        </div>
-        <div id="cafe-status" class="cafe-status">x</div>
-      </div>
-    </div>
-  </template>
-
+  <!-- категория -->
   <template id="cafe-category-template">
     <div class="cafe-category-container">
       <img id="cafe-category-icon" class="cafe-category-icon" />
@@ -121,6 +96,7 @@
     </div>
   </template>
 
+  <!-- популярный айтем -->
   <template id="cafe-item-template">
     <div class="cafe-item-container">
       <img id="cafe-item-image" class="cafe-item-image" />
