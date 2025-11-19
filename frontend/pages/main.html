@@ -1,7 +1,12 @@
 <section>
-  <!-- Логотип / аватар кафе -->
+  <!-- Логотип -->
   <div class="cafe-logo-container">
-    <img id="cafe-logo" class="cafe-logo shimmer" src="icons/icon-transparent.svg" />
+    <img
+      id="cafe-logo"
+      class="cafe-logo shimmer"
+      src="icons/icon-transparent.svg"
+      alt=""
+    />
   </div>
 
   <!-- Обложка -->
@@ -9,21 +14,27 @@
     id="cafe-cover"
     class="cover shimmer"
     src="icons/icon-transparent.svg"
+    alt=""
   />
 
   <!-- Информация о кафе -->
-  <div id="cafe-info" class="cafe-info-container">
+  <div id="cafe-info" class="cafe-info-container shimmer">
     <h1 id="cafe-name" class="shimmer">x</h1>
-    <p id="cafe-description" class="cafe-description shimmer">x</p>
+    <p
+      id="cafe-kitchen-categories"
+      class="cafe-kitchen-categories shimmer"
+    >
+      x
+    </p>
 
-    <div id="cafe-parameters-container" class="cafe-parameters-container shimmer">
+    <div class="cafe-parameters-container shimmer">
       <div class="cafe-parameter-container">
-        <img src="icons/icon-star.svg" class="cafe-parameter-icon" />
+        <img src="icons/icon-star.svg" class="cafe-parameter-icon" alt="" />
         <div id="cafe-rating" class="cafe-parameter-value">x</div>
       </div>
 
       <div class="cafe-parameter-container">
-        <img src="icons/icon-time.svg" class="cafe-parameter-icon" />
+        <img src="icons/icon-time.svg" class="cafe-parameter-icon" alt="" />
         <div id="cafe-cooking-time" class="cafe-parameter-value">x</div>
       </div>
 
@@ -31,7 +42,7 @@
     </div>
   </div>
 
-  <!-- ===== Categories ===== -->
+  <!-- Блок с категориями -->
   <div class="cafe-section-container">
     <h3
       id="cafe-section-categories-title"
@@ -41,16 +52,16 @@
     </h3>
 
     <div id="cafe-categories" class="cafe-section-horizontal">
-      <!-- скелет-заглушки -->
-      <div class="cafe-category-container shimmer">x</div>
-      <div class="cafe-category-container shimmer">x</div>
-      <div class="cafe-category-container shimmer">x</div>
-      <div class="cafe-category-container shimmer">x</div>
-      <div class="cafe-category-container shimmer">x</div>
+      <!-- 5 скелетных категорий -->
+      <div class="cafe-category-container shimmer"></div>
+      <div class="cafe-category-container shimmer"></div>
+      <div class="cafe-category-container shimmer"></div>
+      <div class="cafe-category-container shimmer"></div>
+      <div class="cafe-category-container shimmer"></div>
     </div>
   </div>
 
-  <!-- ===== Popular ===== -->
+  <!-- Блок с популярным меню -->
   <div class="cafe-section-container">
     <h3
       id="cafe-section-popular-title"
@@ -60,49 +71,27 @@
     </h3>
 
     <div id="cafe-popular" class="cafe-section-horizontal">
-      <!-- скелет-заглушки -->
-      <div class="cafe-item-container shimmer">
-        <img
-          class="cafe-item-image shimmer"
-          src="icons/icon-transparent.svg"
-        />
-        <h6 class="cafe-item-name shimmer">x</h6>
-        <p class="small cafe-item-description shimmer">x</p>
-      </div>
-
-      <div class="cafe-item-container shimmer">
-        <img
-          class="cafe-item-image shimmer"
-          src="icons/icon-transparent.svg"
-        />
-        <h6 class="cafe-item-name shimmer">x</h6>
-        <p class="small cafe-item-description shimmer">x</p>
-      </div>
-
-      <div class="cafe-item-container shimmer">
-        <img
-          class="cafe-item-image shimmer"
-          src="icons/icon-transparent.svg"
-        />
-        <h6 class="cafe-item-name shimmer">x</h6>
-        <p class="small cafe-item-description shimmer">x</p>
-      </div>
+      <!-- 3 скелетных карточки -->
+      <div class="cafe-item-container shimmer"></div>
+      <div class="cafe-item-container shimmer"></div>
+      <div class="cafe-item-container shimmer"></div>
     </div>
   </div>
 
-  <!-- ===== Шаблон инфо о кафе (для будущих доработок) ===== -->
+  <!-- Шаблон инфо о кафе (если понадобится рендерить через template) -->
   <template id="cafe-info-template">
-    <div>
+    <div class="cafe-info-container">
       <h1 id="cafe-name"></h1>
-      <p id="cafe-description" class="cafe-description"></p>
+      <p id="cafe-kitchen-categories" class="cafe-kitchen-categories"></p>
+
       <div class="cafe-parameters-container">
         <div class="cafe-parameter-container">
-          <img src="icons/icon-star.svg" class="cafe-parameter-icon" />
+          <img src="icons/icon-star.svg" class="cafe-parameter-icon" alt="" />
           <div id="cafe-rating" class="cafe-parameter-value"></div>
         </div>
 
         <div class="cafe-parameter-container">
-          <img src="icons/icon-time.svg" class="cafe-parameter-icon" />
+          <img src="icons/icon-time.svg" class="cafe-parameter-icon" alt="" />
           <div id="cafe-cooking-time" class="cafe-parameter-value"></div>
         </div>
 
@@ -114,15 +103,15 @@
   <!-- Шаблон категории -->
   <template id="cafe-category-template">
     <div class="cafe-category-container">
-      <img id="cafe-category-icon" class="cafe-category-icon" />
+      <img id="cafe-category-icon" class="cafe-category-icon" alt="" />
       <div id="cafe-category-name" class="cafe-category-name"></div>
     </div>
   </template>
 
-  <!-- Шаблон элемента популярного меню -->
+  <!-- Шаблон позиции (Popular) -->
   <template id="cafe-item-template">
     <div class="cafe-item-container">
-      <img id="cafe-item-image" class="cafe-item-image" />
+      <img id="cafe-item-image" class="cafe-item-image" alt="" />
       <h6 id="cafe-item-name" class="cafe-item-name"></h6>
       <p id="cafe-item-description" class="small cafe-item-description"></p>
     </div>
