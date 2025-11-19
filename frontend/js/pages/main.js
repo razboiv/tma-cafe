@@ -9,7 +9,7 @@ import {
 } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
-import Cart from "../cart/cart.js";
+import { Cart } from "../cart/cart.js";
 
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
