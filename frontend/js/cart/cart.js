@@ -72,7 +72,7 @@ class CartItem {
   }
 }
 
-export default class Cart {
+export class Cart {
   static #storageKey = "laurel_cafe_cart";
   static #cartItems = [];
   static #loaded = false;
