@@ -8,7 +8,8 @@ import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
 /**
- * Страница деталей блюда: большая фотка, описание, варианты и количество.
+ * Страница деталей блюда: большая фотка, описание,
+ * варианты и количество.
  */
 export default class DetailsPage extends Route {
   constructor() {
@@ -60,10 +61,10 @@ export default class DetailsPage extends Route {
     $("#details-section-title").removeClass("shimmer");
     $("#details-variants").removeClass("shimmer");
 
+    // --- варианты блюда ---
     const variantsContainer = $("#details-variants");
     variantsContainer.empty();
 
-    // количество
     let quantity = 1;
     const updateQty = () => {
       $("#details-quantity-value").text(quantity);
@@ -80,10 +81,11 @@ export default class DetailsPage extends Route {
       el.find("#details-variant-cost").text(variant.cost || "");
       el.find("#details-variant-weight").text(variant.weight || "");
 
-      // показываем вес выбранного варианта вверху
+      // выбранный по умолчанию вес
+      $("#details-selected-variant-weight").text(variant.weight || "");
+
+      // добавление в корзину
       el.on("click", () => {
-        $("#details-selected-variant-weight").text(variant.weight || "");
-        // Добавление в корзину
         Cart.addItem(item, variant, quantity);
       });
 
