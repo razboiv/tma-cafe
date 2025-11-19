@@ -9,7 +9,7 @@ import {
 } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
-import { Cart } from "../cart/cart.js";
+import Cart from "../cart/cart.js";
 
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
@@ -23,7 +23,7 @@ export default class MainPage extends Route {
     console.log("[MainPage] load", params);
     TelegramSDK.expand();
 
-    // ===== основная кнопка (MY CART ...) =====
+    // ===== основная кнопка (MY CART …) =====
     const portionCount = Cart.getPortionCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
@@ -34,7 +34,7 @@ export default class MainPage extends Route {
       TelegramSDK.hideMainButton();
     }
 
-    // Параллельно грузим всё с бэка
+    // параллельно грузим всё с бэка
     await Promise.allSettled([
       this.#loadCafeInfo(),
       this.#loadCategories(),
@@ -48,37 +48,47 @@ export default class MainPage extends Route {
       const info = await getInfo();
       console.log("[MainPage] info", info);
 
-      if (info?.title) {
-        $("#cafe-name").text(info.title).removeClass("shimmer");
-      }
-
-      if (info?.description) {
-        $("#cafe-description").text(info.description).removeClass("shimmer");
-      }
-
+      // картинка-обложка
       if (info?.coverImage) {
         loadImage($("#cafe-cover"), info.coverImage);
         $("#cafe-cover").removeClass("shimmer");
       }
 
+      // логотип (круглый значок справа)
       if (info?.logoImage) {
         loadImage($("#cafe-logo"), info.logoImage);
         $("#cafe-logo").removeClass("shimmer");
       }
 
+      // название
+      if (info?.name) {
+        $("#cafe-name").text(info.name);
+      }
+
+      // подпись под названием – берём kitchenCategories
+      if (info?.kitchenCategories) {
+        $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      }
+
+      // рейтинг
       if (info?.rating) {
         $("#cafe-rating").text(info.rating);
       }
 
+      // время доставки
       if (info?.cookingTime) {
         $("#cafe-cooking-time").text(info.cookingTime);
       }
 
+      // статус (Open / Closed)
       if (info?.status) {
         $("#cafe-status").text(info.status);
       }
 
-      $("#cafe-parameters-container").removeClass("shimmer");
+      // убираем скелет-анимацию у блока инфы
+      $("#cafe-name").removeClass("shimmer");
+      $("#cafe-kitchen-categories").removeClass("shimmer");
+      $(".cafe-parameters-container").removeClass("shimmer");
     } catch (e) {
       console.error("[MainPage] failed to load info", e);
     }
@@ -90,20 +100,18 @@ export default class MainPage extends Route {
       const categories = await getCategories();
       console.log("[MainPage] categories", categories);
 
-      // убираем shimmer с заголовка
+      // снимаем shimmer с заголовка
       $("#cafe-section-categories-title").removeClass("shimmer");
 
       replaceShimmerContent(
         "#cafe-categories",       // контейнер
-        "#cafe-category-template", // <template>
-        "#cafe-category-icon",     // картинка внутри шаблона
+        "#cafe-category-template",// <template>
+        "#cafe-category-icon",    // картинка внутри шаблона
         categories,
         (template, category) => {
           template.attr("id", category.id);
           template.css("background-color", category.backgroundColor || "");
-          template
-            .find("#cafe-category-name")
-            .text(category.name || "");
+          template.find("#cafe-category-name").text(category.name ?? "");
 
           const img = template.find("#cafe-category-icon");
           if (category.icon) {
@@ -127,18 +135,16 @@ export default class MainPage extends Route {
       const items = await getPopularMenu();
       console.log("[MainPage] popular", items);
 
-      // убираем shimmer с заголовка
+      // снимаем shimmer с заголовка
       $("#cafe-section-popular-title").removeClass("shimmer");
 
       replaceShimmerContent(
-        "#cafe-popular",       // контейнер
-        "#cafe-item-template", // <template>
-        "#cafe-item-image",    // картинка внутри шаблона
+        "#cafe-popular",      // контейнер
+        "#cafe-item-template",// <template>
+        "#cafe-item-image",   // картинка внутри шаблона
         items,
         (template, item) => {
-          template
-            .find("#cafe-item-name")
-            .text(item.name ?? "");
+          template.find("#cafe-item-name").text(item.name ?? "");
           template
             .find("#cafe-item-description")
             .text(item.description ?? "");
