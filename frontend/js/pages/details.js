@@ -5,11 +5,10 @@ import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
-import { Cart } from "../cart/cart.js";
+import Cart from "../cart/cart.js";
 
 /**
- * Страница деталей блюда: большая фотка, описание,
- * варианты и количество.
+ * Страница деталей блюда: большая фотка, описание, варианты и количество.
  */
 export default class DetailsPage extends Route {
   constructor() {
@@ -66,10 +65,21 @@ export default class DetailsPage extends Route {
     variantsContainer.empty();
 
     let quantity = 1;
+    let selectedVariant = (item.variants || [])[0] ?? null;
+
     const updateQty = () => {
       $("#details-quantity-value").text(quantity);
     };
+
+    const updateSelected = () => {
+      if (!selectedVariant) return;
+      $("#details-selected-variant-weight").text(
+        selectedVariant.weight || "",
+      );
+    };
+
     updateQty();
+    updateSelected();
 
     const templateHtml = $("#details-variant-template").html();
 
@@ -81,18 +91,30 @@ export default class DetailsPage extends Route {
       el.find("#details-variant-cost").text(variant.cost || "");
       el.find("#details-variant-weight").text(variant.weight || "");
 
-      // выбранный по умолчанию вес
-      $("#details-selected-variant-weight").text(variant.weight || "");
-
-      // добавление в корзину
       el.on("click", () => {
+        selectedVariant = variant;
+        updateSelected();
+
+        // визуально выделяем активный вариант
+        $("#details-variants .cafe-item-details-variant").removeClass(
+          "active",
+        );
+        el.addClass("active");
+
+        // добавляем в корзину
         Cart.addItem(item, variant, quantity);
       });
 
       variantsContainer.append(el);
     });
 
-    // --- кнопки +/- для количества ---
+    // по умолчанию выделяем первый вариант, если есть
+    const firstBtn = $("#details-variants .cafe-item-details-variant").first();
+    if (firstBtn.length) {
+      firstBtn.addClass("active");
+    }
+
+    // --- Кнопки +/- для количества ---
     $("#details-quantity-increase-button")
       .off("click")
       .on("click", () => {
