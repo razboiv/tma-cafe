@@ -16,9 +16,7 @@ class CartItem {
   }
 
   static fromRaw(raw) {
-    if (!raw) {
-      return null;
-    }
+    if (!raw) return null;
 
     return new CartItem(
       raw.cafeItem,
@@ -51,16 +49,18 @@ class CartItem {
   /**
    * А этот JSON можно отправлять на бэкенд.
    * Структура под комментарий в шаблоне:
-   * { cafeteria, variant, quantity }
+   * { cafeteria, variant, quantity, cost }
    */
   toOrderJSON() {
     let cost = this.variant.cost;
 
     if (typeof cost !== "number") {
-      cost = parseFloat(String(cost ?? "")
-        .replace(/[^\d.,]/g, "")
-        .replace(",", "."),
-      ) || 0;
+      cost =
+        parseFloat(
+          String(cost ?? "")
+            .replace(/[^\d.,]/g, "")
+            .replace(",", "."),
+        ) || 0;
     }
 
     return {
@@ -72,13 +72,13 @@ class CartItem {
   }
 }
 
-export class Cart {
+export default class Cart {
   static #storageKey = "laurel_cafe_cart";
   static #cartItems = [];
   static #loaded = false;
   static #listeners = new Set();
 
-  // ====== служебные методы ======
+  // ===== служебные методы =====
 
   static #load() {
     if (this.#loaded) return;
@@ -90,9 +90,7 @@ export class Cart {
       } else {
         const rawArray = JSON.parse(rawJson);
         this.#cartItems = Array.isArray(rawArray)
-          ? rawArray
-              .map(CartItem.fromRaw)
-              .filter((it) => it !== null)
+          ? rawArray.map(CartItem.fromRaw).filter((it) => it !== null)
           : [];
       }
     } catch (e) {
@@ -105,10 +103,7 @@ export class Cart {
 
   static #save() {
     try {
-      localStorage.setItem(
-        this.#storageKey,
-        JSON.stringify(this.#cartItems),
-      );
+      localStorage.setItem(this.#storageKey, JSON.stringify(this.#cartItems));
     } catch (e) {
       console.error("[Cart] failed to save to localStorage", e);
     }
@@ -124,7 +119,7 @@ export class Cart {
     }
   }
 
-  // ====== публичные методы ======
+  // ===== публичные методы =====
 
   /** Все позиции корзины */
   static getItems() {
@@ -145,9 +140,7 @@ export class Cart {
     const qty = Math.max(1, Number(quantity) || 1);
     const adding = new CartItem(cafeItem, variant, qty);
 
-    const existing = this.#cartItems.find(
-      (it) => it.getId() === adding.getId(),
-    );
+    const existing = this.#cartItems.find((it) => it.getId() === adding.getId());
 
     if (existing) {
       existing.quantity += qty;
@@ -163,9 +156,7 @@ export class Cart {
   static setQuantity(cartItem, quantity) {
     this.#load();
 
-    const existing = this.#cartItems.find(
-      (it) => it.getId() === cartItem.getId(),
-    );
+    const existing = this.#cartItems.find((it) => it.getId() === cartItem.getId());
     if (!existing) return;
 
     const qty = Math.max(1, Number(quantity) || 1);
@@ -184,9 +175,7 @@ export class Cart {
   static decreaseQuantity(cartItem) {
     this.#load();
 
-    const existing = this.#cartItems.find(
-      (it) => it.getId() === cartItem.getId(),
-    );
+    const existing = this.#cartItems.find((it) => it.getId() === cartItem.getId());
     if (!existing) return;
 
     if (existing.quantity > 1) {
@@ -212,15 +201,17 @@ export class Cart {
     return this.#cartItems.map((it) => it.toOrderJSON());
   }
 
-  /** Подписка на изменения (для main.js и cart.js) */
+  /** Подписка на изменения (для main.js и cart.js страницы) */
   static subscribe(listener) {
     this.#listeners.add(listener);
+
     // сразу один раз дернём с текущим состоянием
     try {
       listener(this.getItems());
     } catch (e) {
       console.error("[Cart] listener failed", e);
     }
+
     return () => this.#listeners.delete(listener);
   }
 }
