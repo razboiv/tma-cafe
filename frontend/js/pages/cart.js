@@ -8,7 +8,7 @@ import { toDisplayCost } from "../utils/currency.js";
 /**
  * Страница корзины
  */
-export class CartPage extends Route {
+export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
   }
