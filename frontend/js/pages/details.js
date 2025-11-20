@@ -5,7 +5,7 @@ import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
-import Cart from "../cart/cart.js";
+import { Cart } from "../cart/cart.js";
 
 /**
  * Страница деталей блюда: большая фотка, описание, варианты и количество.
