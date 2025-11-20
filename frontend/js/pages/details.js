@@ -34,6 +34,7 @@ export default class DetailsPage extends Route {
       return;
     }
 
+    // грузим товар
     try {
       const item = await getMenuItem(itemId);
       if (!item) {
@@ -62,6 +63,7 @@ export default class DetailsPage extends Route {
     $("#details-variants").removeClass("shimmer");
     $("#details-price-value").removeClass("shimmer");
 
+    // --- варианты блюда ---
     const variantsContainer = $("#details-variants");
     variantsContainer.empty();
 
@@ -73,12 +75,14 @@ export default class DetailsPage extends Route {
     };
 
     const updateSelected = () => {
-      if (!selectedVariant) return;
+      if (!selectedVariant) {
+        $("#details-selected-variant-weight").text("");
+        $("#details-price-value").text("");
+        return;
+      }
 
       // вес выбранного варианта под названием
-      $("#details-selected-variant-weight").text(
-        selectedVariant.weight || ""
-      );
+      $("#details-selected-variant-weight").text(selectedVariant.weight || "");
 
       // цена выбранного варианта справа от Price
       $("#details-price-value").text(
@@ -97,9 +101,9 @@ export default class DetailsPage extends Route {
       // наполняем текстом
       el.attr("data-id", variant.id);
       el.find(".details-variant-name").text(variant.name || "");
-      el
-        .find(".details-variant-cost")
-        .text(toDisplayCost(Number(variant.cost) || 0));
+      el.find(".details-variant-cost").text(
+        toDisplayCost(Number(variant.cost) || 0)
+      );
       el.find(".details-variant-weight").text(variant.weight || "");
 
       // обработчик выбора варианта
@@ -107,19 +111,18 @@ export default class DetailsPage extends Route {
         selectedVariant = variant;
         updateSelected();
 
-        // визуально подсветить active
+        // визуально подсветить active, как тумблер
         $("#details-variants .cafe-item-details-variant").removeClass("active");
         el.addClass("active");
       });
 
       variantsContainer.append(el);
-    });
 
-    // по умолчанию выделяем первый вариант, если есть
-    const firstBtn = $("#details-variants .cafe-item-details-variant").first();
-    if (firstBtn.length) {
-      firstBtn.addClass("active");
-    }
+      // если это первый выбранный вариант — сразу подсветим
+      if (selectedVariant && selectedVariant.id === variant.id) {
+        el.addClass("active");
+      }
+    });
 
     // --- Кнопки +/- для количества ---
     $("#details-quantity-increase-button")
@@ -138,11 +141,12 @@ export default class DetailsPage extends Route {
         }
       });
 
-    // Добавление в корзину при нажатии main-button (CHECKOUT делается на странице корзины)
+    // Добавление в корзину при нажатии main-button
     TelegramSDK.showMainButton("ADD TO CART", () => {
       if (!selectedVariant) return;
+
       Cart.addItem(item, selectedVariant, quantity);
-      // после добавления можно вернуться назад к категории
+      // после добавления вернёмся к категории
       navigateTo("category");
     });
   }
