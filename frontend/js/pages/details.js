@@ -5,7 +5,8 @@ import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
-import { Cart } from "../cart/cart.js";
+import { Cart } from "../cart/cart.js";      // <= если Cart экспортируется default,
+                                             // сделай:  import Cart from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
 /**
@@ -62,7 +63,6 @@ export default class DetailsPage extends Route {
     $("#details-variants").removeClass("shimmer");
     $("#details-price-value").removeClass("shimmer");
 
-    // --- варианты блюда ---
     const variantsContainer = $("#details-variants");
     variantsContainer.empty();
 
@@ -76,10 +76,10 @@ export default class DetailsPage extends Route {
     const updateSelected = () => {
       if (!selectedVariant) return;
 
-      // вес выбранного варианта под названием
+      // вес под названием
       $("#details-selected-variant-weight").text(selectedVariant.weight || "");
 
-      // цена выбранного варианта справа от Price
+      // цена справа от "Price"
       $("#details-price-value").text(
         toDisplayCost(Number(selectedVariant.cost) || 0)
       );
@@ -106,7 +106,7 @@ export default class DetailsPage extends Route {
         selectedVariant = variant;
         updateSelected();
 
-        // визуально подсветить active как тумблер
+        // визуально подсветить active
         $("#details-variants .cafe-item-details-variant").removeClass("active");
         el.addClass("active");
       });
@@ -114,7 +114,7 @@ export default class DetailsPage extends Route {
       variantsContainer.append(el);
     });
 
-    // по умолчанию выделяем первый вариант, если есть
+    // по умолчанию выделяем первый вариант
     const firstBtn = $("#details-variants .cafe-item-details-variant").first();
     if (firstBtn.length) {
       firstBtn.addClass("active");
@@ -137,13 +137,10 @@ export default class DetailsPage extends Route {
         }
       });
 
-    // Добавление в корзину при нажатии main-button
+    // Добавление в корзину по main-button
     TelegramSDK.showMainButton("ADD TO CART", () => {
       if (!selectedVariant) return;
-
       Cart.addItem(item, selectedVariant, quantity);
-
-      // после добавления возвращаемся в категорию
       navigateTo("category");
     });
   }
