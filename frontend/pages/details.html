@@ -1,78 +1,88 @@
-<section>
-  <div id="cafe-item-details-container" class="cafe-item-details-container">
-    <div class="cafe-item-details-content">
-      <img
-        id="details-image"
-        class="cover shimmer"
-        src="icons/icon-transparent.svg"
-        alt=""
-      />
+<section class="cafe-item-details">
 
-      <div class="cafe-item-details-title-container">
-        <h1
-          id="details-name"
-          class="cafe-item-details-name shimmer"
-        >
-          x
-        </h1>
+  <!-- Большая фотка -->
+  <img
+    id="details-image"
+    class="cafe-item-details-image shimmer"
+    src="icons/icon-transparent.svg"
+    alt=""
+  />
 
-        <p
-          id="details-selected-variant-weight"
-          class="cafe-item-details-selected-variant-weight shimmer"
-        >
-          500g
-        </p>
-      </div>
+  <!-- Блок с названием и весом -->
+  <div class="cafe-item-details-main">
+    <div class="cafe-item-details-header">
+      <h1 id="details-name" class="cafe-item-details-name shimmer">x</h1>
+      <span
+        id="details-selected-variant-weight"
+        class="cafe-item-details-weight shimmer"
+      >x</span>
+    </div>
 
-      <p
-        id="details-description"
-        class="cafe-item-details-description shimmer"
-      >
-        x
-      </p>
+    <p id="details-description" class="cafe-item-details-description shimmer">
+      x
+    </p>
+  </div>
 
-      <h3
-        id="details-section-title"
-        class="cafe-item-details-section-title shimmer"
-      >
-        Price
-      </h3>
+  <!-- Price -->
+  <section class="cafe-item-details-section">
+    <h2
+      id="details-section-title"
+      class="cafe-item-details-section-title shimmer"
+    >
+      Price
+    </h2>
 
+    <div class="cafe-item-details-price-row">
+      <!-- сюда рендерятся варианты (Small / Large ...) -->
       <div
         id="details-variants"
         class="cafe-item-details-variants shimmer"
+      ></div>
+
+      <!-- итоговая цена выбранного варианта -->
+      <div
+        id="details-price-value"
+        class="cafe-item-details-price shimmer"
       >
         x
       </div>
-
-      <div class="cafe-item-details-quantity-selector-container">
-        <button
-          id="details-quantity-decrease-button"
-          class="material-symbols-rounded icon-button"
-        >
-          remove
-        </button>
-        <h2
-          id="details-quantity-value"
-          class="cafe-item-details-quantity-selector-value"
-        >
-          1
-        </h2>
-        <button
-          id="details-quantity-increase-button"
-          class="material-symbols-rounded icon-button"
-        >
-          add
-        </button>
-      </div>
     </div>
+  </section>
 
-    <template id="details-variant-template">
-      <button class="cafe-item-details-variant">
-        <span id="details-variant-name">x</span>
-        <span id="details-variant-cost">x</span>
-        <span id="details-variant-weight">x</span>
+  <!-- Количество -->
+  <section class="cafe-item-details-section cafe-item-details-qty-section">
+    <div class="cafe-item-details-qty-selector">
+      <button
+        id="details-quantity-decrease-button"
+        class="icon-button"
+        type="button"
+      >
+        –
       </button>
-    </template>
-  </div>
+
+      <h2
+        id="details-quantity-value"
+        class="cafe-item-details-quantity-selector-value"
+      >
+        1
+      </h2>
+
+      <button
+        id="details-quantity-increase-button"
+        class="icon-button"
+        type="button"
+      >
+        +
+      </button>
+    </div>
+  </section>
+
+  <!-- Шаблон кнопки варианта -->
+  <template id="details-variant-template">
+    <button class="cafe-item-details-variant" type="button">
+      <span class="details-variant-name">x</span>
+      <span class="details-variant-cost">x</span>
+      <span class="details-variant-weight">x</span>
+    </button>
+  </template>
 </section>
