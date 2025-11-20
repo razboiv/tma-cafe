@@ -86,6 +86,7 @@ export default class MainPage extends Route {
       }
 
       // убираем скелет-анимацию у блока инфы
+      $("#cafe-info").removeClass("shimmer");
       $("#cafe-name").removeClass("shimmer");
       $("#cafe-kitchen-categories").removeClass("shimmer");
       $(".cafe-parameters-container").removeClass("shimmer");
