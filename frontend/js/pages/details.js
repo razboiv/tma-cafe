@@ -19,7 +19,7 @@ export default class DetailsPage extends Route {
     console.log("[DetailsPage] load", params);
     TelegramSDK.expand();
 
-    // достаём id товара из params
+    // ----- достаём id товара из params -----
     let itemId = null;
     try {
       const parsed = JSON.parse(params || "{}");
@@ -33,7 +33,7 @@ export default class DetailsPage extends Route {
       return;
     }
 
-    // грузим товар
+    // ----- грузим товар -----
     try {
       const item = await getMenuItem(itemId);
       if (!item) {
@@ -48,7 +48,7 @@ export default class DetailsPage extends Route {
   }
 
   #fillItem(item) {
-    // --- основная информация ---
+    // ----- основная информация -----
     loadImage($("#details-image"), item.image);
     $("#details-name").text(item.name || "");
     $("#details-description").text(item.description || "");
@@ -75,12 +75,12 @@ export default class DetailsPage extends Route {
     const updateSelected = () => {
       if (!selectedVariant) return;
 
-      // вес выбранного варианта под названием
+      // вес под названием
       $("#details-selected-variant-weight").text(
         selectedVariant.weight || ""
       );
 
-      // цена выбранного варианта справа от Price
+      // цена справа от Price
       $("#details-price-value").text(
         toDisplayCost(Number(selectedVariant.cost) || 0)
       );
@@ -89,41 +89,38 @@ export default class DetailsPage extends Route {
     updateQty();
     updateSelected();
 
+    // ----- варианты Small / Large -----
     const templateHtml = $("#details-variant-template").html();
 
     (item.variants || []).forEach((variant) => {
       const el = $(templateHtml);
 
-      // наполняем текстом
       el.attr("data-id", variant.id);
-      el.find("#details-variant-name").text(variant.name || "");
-      el.find("#details-variant-cost").text(
+      el.find(".details-variant-name").text(variant.name || "");
+      el.find(".details-variant-cost").text(
         toDisplayCost(Number(variant.cost) || 0)
       );
-      el.find("#details-variant-weight").text(variant.weight || "");
+      el.find(".details-variant-weight").text(variant.weight || "");
 
-      // обработчик выбора варианта
       el.on("click", () => {
         selectedVariant = variant;
         updateSelected();
 
-        // визуально подсветить active
-        $("#details-variants .cafe-item-details-variant").removeClass(
-          "active"
-        );
+        // подсветка active
+        $("#details-variants .cafe-item-details-variant").removeClass("active");
         el.addClass("active");
       });
 
       variantsContainer.append(el);
     });
 
-    // по умолчанию выделяем первый вариант, если есть
+    // по умолчанию делаем активным первый вариант
     const firstBtn = $("#details-variants .cafe-item-details-variant").first();
     if (firstBtn.length) {
       firstBtn.addClass("active");
     }
 
-    // --- Кнопки +/- для количества ---
+    // ----- Кнопки +/- для количества -----
     $("#details-quantity-increase-button")
       .off("click")
       .on("click", () => {
@@ -140,10 +137,12 @@ export default class DetailsPage extends Route {
         }
       });
 
-    // Добавление в корзину при нажатии main-button
+    // ----- main button: ADD TO CART -----
     TelegramSDK.showMainButton("ADD TO CART", () => {
       if (!selectedVariant) return;
+
       Cart.addItem(item, selectedVariant, quantity);
+      // после добавления возвращаемся к категории
       navigateTo("category");
     });
   }
