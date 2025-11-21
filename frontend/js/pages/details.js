@@ -1,3 +1,5 @@
+// frontend/js/pages/details.js
+
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
@@ -6,123 +8,144 @@ import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
+/**
+ * Страница деталей блюда: большая фотка, описание, варианты и количество.
+ */
 export default class DetailsPage extends Route {
-    constructor() {
-        super("details", "/pages/details.html");
+  constructor() {
+    super("details", "/pages/details.html");
+  }
+
+  async load(params) {
+    console.log("[DetailsPage] load", params);
+    TelegramSDK.expand();
+
+    // достаём id товара из params
+    let itemId = null;
+    try {
+      const parsed = JSON.parse(params || "{}");
+      itemId = parsed.id;
+    } catch (e) {
+      console.error("[DetailsPage] failed to parse params", e);
     }
 
-    async load(params) {
-        TelegramSDK.expand();
-
-        let itemId = null;
-        try {
-            const parsed = JSON.parse(params || "{}");
-            itemId = parsed.id;
-        } catch (e) {
-            console.error("[DetailsPage] failed to parse params", e);
-        }
-
-        if (!itemId) {
-            console.error("[DetailsPage] no itemId");
-            return;
-        }
-
-        try {
-            const item = await getMenuItem(itemId);
-            if (!item) {
-                console.error("[DetailsPage] item not found", itemId);
-                return;
-            }
-            this.#fillItem(item);
-        } catch (err) {
-            console.error("[DetailsPage] failed to load item", err);
-        }
+    if (!itemId) {
+      console.error("[DetailsPage] no itemId");
+      return;
     }
 
-    #fillItem(item) {
-        // === Основная инфа ================================
-        loadImage($("#details-image"), item.image);
-        $("#details-name").text(item.name || "");
-        $("#details-description").text(item.description || "");
+    // грузим товар
+    try {
+      const item = await getMenuItem(itemId);
+      if (!item) {
+        console.error("[DetailsPage] item not found", itemId);
+        return;
+      }
 
-        $("#details-image").removeClass("shimmer");
-        $("#details-name").removeClass("shimmer");
-        $("#details-description").removeClass("shimmer");
-        $("#details-selected-variant-weight").removeClass("shimmer");
-        $("#details-section-title").removeClass("shimmer");
-        $("#details-variants").removeClass("shimmer");
-        $("#details-price-value").removeClass("shimmer");
+      this.#fillItem(item);
+    } catch (err) {
+      console.error("[DetailsPage] failed to load item", err);
+    }
+  }
 
-        const variantsContainer = $("#details-variants");
-        variantsContainer.empty();
+  #fillItem(item) {
+    // --- основная информация ---
+    loadImage($("#details-image"), item.image);
+    $("#details-name").text(item.name || "");
+    $("#details-description").text(item.description || "");
 
-        let quantity = 1;
-        let selectedVariant = (item.variants || [])[0] ?? null;
+    // убираем скелет-анимацию
+    $("#details-image").removeClass("shimmer");
+    $("#details-name").removeClass("shimmer");
+    $("#details-description").removeClass("shimmer");
+    $("#details-selected-variant-weight").removeClass("shimmer");
+    $("#details-section-title").removeClass("shimmer");
+    $("#details-variants").removeClass("shimmer");
+    $("#details-price-value").removeClass("shimmer");
 
-        const updateQty = () => {
-            $("#details-quantity-value").text(quantity);
-        };
+    const variantsContainer = $("#details-variants");
+    variantsContainer.empty();
 
-        const updateSelected = () => {
-            if (!selectedVariant) return;
+    // состояние
+    let quantity = 1;
+    let selectedVariant = (item.variants || [])[0] ?? null;
 
-            $("#details-selected-variant-weight").text(selectedVariant.weight || "");
-            $("#details-price-value").text(
-                toDisplayCost(Number(selectedVariant.cost) || 0)
-            );
-        };
+    const updateQty = () => {
+      $("#details-quantity-value").text(quantity);
+    };
 
-        updateQty();
+    const updateSelected = () => {
+      if (!selectedVariant) return;
+
+      // вес выбранного варианта под названием
+      $("#details-selected-variant-weight").text(
+        selectedVariant.weight || ""
+      );
+
+      // цена выбранного варианта справа от Price
+      $("#details-price-value").text(
+        toDisplayCost(Number(selectedVariant.cost) || 0)
+      );
+    };
+
+    updateQty();
+    updateSelected();
+
+    const templateHtml = $("#details-variant-template").html();
+
+    (item.variants || []).forEach((variant) => {
+      const el = $(templateHtml);
+
+      // наполняем текстом
+      el.attr("data-id", variant.id);
+      el.find(".details-variant-name").text(variant.name || "");
+      el.find(".details-variant-cost").text(
+        toDisplayCost(Number(variant.cost) || 0)
+      );
+      el.find(".details-variant-weight").text(variant.weight || "");
+
+      // обработчик выбора варианта
+      el.on("click", () => {
+        selectedVariant = variant;
         updateSelected();
 
-        // === Сборка кнопок вариантов ============================
-        const templateHtml = $("#details-variant-template").html();
+        // визуально подсветить active (тумблер)
+        $("#details-variants .cafe-item-details-variant").removeClass("active");
+        el.addClass("active");
+      });
 
-        (item.variants || []).forEach((variant) => {
-            const el = $(templateHtml);
+      variantsContainer.append(el);
+    });
 
-            el.attr("data-id", variant.id);
-            el.find(".details-variant-name").text(variant.name || "");
-            el.find(".details-variant-cost").text(toDisplayCost(Number(variant.cost) || 0));
-            el.find(".details-variant-weight").text(variant.weight || "");
-
-            el.on("click", () => {
-                selectedVariant = variant;
-
-                $("#details-variants .cafe-item-details-variant").removeClass("active");
-                el.addClass("active");
-
-                updateSelected();
-            });
-
-            variantsContainer.append(el);
-        });
-
-        // выделяем первый вариант
-        const firstBtn = $("#details-variants .cafe-item-details-variant").first();
-        if (firstBtn.length) firstBtn.addClass("active");
-
-        // === Кнопки количества ==================================
-        $("#details-quantity-increase-button")
-            .off("click")
-            .on("click", () => {
-                quantity += 1;
-                updateQty();
-            });
-
-        $("#details-quantity-decrease-button")
-            .off("click")
-            .on("click", () => {
-                if (quantity > 1) quantity -= 1;
-                updateQty();
-            });
-
-        // === Добавление в корзину ===============================
-        TelegramSDK.showMainButton("ADD TO CART", () => {
-            if (!selectedVariant) return;
-
-            Cart.addItem(item, selectedVariant, quantity);
-            navigateTo("category");
-        });
+    // по умолчанию выделяем первый вариант, если есть
+    const firstBtn = $("#details-variants .cafe-item-details-variant").first();
+    if (firstBtn.length) {
+      firstBtn.addClass("active");
     }
+
+    // --- Кнопки +/- для количества ---
+    $("#details-quantity-increase-button")
+      .off("click")
+      .on("click", () => {
+        quantity += 1;
+        updateQty();
+      });
+
+    $("#details-quantity-decrease-button")
+      .off("click")
+      .on("click", () => {
+        if (quantity > 1) {
+          quantity -= 1;
+          updateQty();
+        }
+      });
+
+    // Добавление в корзину при нажатии main-button
+    TelegramSDK.showMainButton("ADD TO CART", () => {
+      if (!selectedVariant) return;
+      Cart.addItem(item, selectedVariant, quantity);
+      // после добавления возвращаемся к категории
+      navigateTo("category");
+    });
+  }
 }
