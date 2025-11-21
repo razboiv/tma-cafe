@@ -310,6 +310,24 @@ p.small {
 
 /* Cafe item details */
 
+.cafe-item-details-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.cafe-item-details-name {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.cafe-item-details-weight {
+    font-size: 14px;
+    opacity: 0.7; /* чтобы выглядело чуть менее ярко, как в макете */
+}
+
 .cafe-item-details-container {
     height: 100vh;
 }
@@ -346,7 +364,8 @@ p.small {
 .cafe-item-details-description {
     min-width: calc(100% - 32px);
     min-height: 3em;
-    margin: 16px 16px 0 16px;
+    margin: 8px 16px 0 16px;
+    text-align: left;
 }
 
 .cafe-item-details-section-title {
@@ -584,8 +603,13 @@ p.small {
 
 /* Заголовок секции Price */
 .cafe-item-details-section-title {
-  padding: 0 16px 8px;
+  margin: 24px 16px 8px 16px; /* чуть ниже и ближе к описанию */
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
 }
+
 
 /* Ряд с кнопками вариантов и ценой/количеством */
 .cafe-item-details-price-row {
@@ -626,4 +650,12 @@ p.small {
   margin-left: auto;
   font-weight: 600;
   font-size: 15px;
+}
+
+.details-quantity-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    margin: 24px 0 32px 0; /* над кнопкой ADD TO CART */
 }
