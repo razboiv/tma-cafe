@@ -7,7 +7,7 @@
     alt=""
   />
 
-  <!-- Блок с названием и весом -->
+  <!-- Блок с названием, весом и описанием -->
   <div class="cafe-item-details-main">
     <div class="cafe-item-details-header">
       <h1
@@ -16,11 +16,12 @@
       >
         x
       </h1>
+
       <span
         id="details-selected-variant-weight"
         class="cafe-item-details-weight shimmer"
       >
-        xx
+        x
       </span>
     </div>
 
@@ -43,19 +44,21 @@
 
     <div class="cafe-item-details-price-row">
       <!-- сюда рендерятся варианты (Small / Large ...) -->
-      <div
-        id="details-variants"
-        class="cafe-item-details-variants shimmer"
-      >
-        x
+      <div>
+        <div
+          id="details-variants"
+          class="cafe-item-details-variants shimmer"
+        ></div>
       </div>
 
       <!-- итоговая цена выбранного варианта -->
-      <div
-        id="details-price-value"
-        class="cafe-item-details-price shimmer"
-      >
-        x
+      <div>
+        <div
+          id="details-price-value"
+          class="cafe-item-details-price shimmer"
+        >
+          x
+        </div>
       </div>
     </div>
   </section>
@@ -66,25 +69,25 @@
       Quantity
     </h2>
 
-    <div class="cafe-item-details-qty-row">
+    <div class="cafe-item-details-quantity">
       <button
         id="details-quantity-decrease-button"
-        class="cafe-item-details-qty-btn"
+        class="cafe-item-details-quantity-button"
         type="button"
       >
-        −
+        –
       </button>
 
       <div
         id="details-quantity-value"
-        class="cafe-item-details-qty-value"
+        class="cafe-item-details-quantity-value"
       >
         1
       </div>
 
       <button
         id="details-quantity-increase-button"
-        class="cafe-item-details-qty-btn"
+        class="cafe-item-details-quantity-button"
         type="button"
       >
         +
@@ -92,7 +95,7 @@
     </div>
   </section>
 
-  <!-- Шаблон варианта (кнопки Small / Large) -->
+  <!-- Шаблон одной кнопки варианта (Small / Large) -->
   <template id="details-variant-template">
     <button
       type="button"
