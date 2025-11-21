@@ -409,6 +409,7 @@ p.small {
 .cafe-item-details-selected-variant-price {
     min-width: 3em;
     min-height: 1em;
+    text-align: right;
 }
 
 .cafe-item-details-quantity-selector-container {
