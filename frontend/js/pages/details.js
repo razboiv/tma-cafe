@@ -99,11 +99,8 @@ export default class DetailsPage extends Route {
       // наполняем текстом
       el.attr("data-id", variant.id);
       el.find(".details-variant-name").text(variant.name || "");
-      el.find(".details-variant-cost").text(
-        toDisplayCost(Number(variant.cost) || 0)
-      );
-      el.find(".details-variant-weight").text(variant.weight || "");
 
+     
       // обработчик выбора варианта
       el.on("click", () => {
         selectedVariant = variant;
