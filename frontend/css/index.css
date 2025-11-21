@@ -1,18 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
+/* ====== ГЛОБАЛЬНЫЕ СТИЛИ ====== */
 
-:root {
-  --tg-theme-bg-color: #0a0a0a;
-  --tg-theme-text-color: #ffffff;
-  --tg-theme-hint-color: #7f7f7f;
-  --tg-theme-link-color: #91c9ff;
-  --tg-theme-button-color: #8774e1;
-  --tg-theme-button-text-color: #ffffff;
-  --tg-theme-secondary-bg-color: #151515;
-}
-
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
 }
 
@@ -20,158 +8,108 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--tg-theme-bg-color);
-  color: var(--tg-theme-text-color);
-  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  background: #000;
+  color: #fff;
 }
 
-body {
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-img {
-  max-width: 100%;
-  display: block;
-}
-
-button {
-  font-family: inherit;
-}
-
-/* ---------- Общий лейаут приложения ---------- */
-
+/* Контейнер всего приложения */
 .app {
   min-height: 100vh;
-  background-color: var(--tg-theme-bg-color);
-  color: var(--tg-theme-text-color);
+  background: #111;
+  color: #fff;
 }
 
-/* ---------- Скелетоны ---------- */
-
-.shimmer {
-  position: relative;
-  overflow: hidden;
-  background: #1a1a1a;
+/* Скролл в Telegram WebView */
+body {
+  overscroll-behavior: contain;
 }
 
-.shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background-image: linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.13) 20%,
-    rgba(255, 255, 255, 0.13) 60%,
-    rgba(255, 255, 255, 0)
-  );
-  animation: shimmer 1.4s infinite;
+/* ====== ГЛАВНАЯ СТРАНИЦА (main.html) ====== */
+
+.cafe-page {
+  padding: 16px;
 }
 
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-/* ---------- Главная страница ---------- */
-
-.cafe-root {
-  padding: 16px 16px 90px;
-}
-
-/* --- шапка с кафе --- */
-
+/* Область с картинкой кафе и логотипом */
 .cafe-logo-container {
   position: absolute;
   right: 24px;
-  top: 160px;
-  width: 64px;
-  height: 64px;
-  border-radius: 999px;
-  background-color: #151515;
+  bottom: 24px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: #4caf50;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .cafe-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  object-fit: cover;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
 }
 
-.cafe-cover {
+/* Обложка */
+#cafe-cover {
   width: 100%;
-  height: 220px;
-  border-radius: 24px;
+  border-radius: 16px 16px 24px 24px;
+  display: block;
   object-fit: cover;
-  object-position: center;
-  margin-bottom: 16px;
 }
 
-/* блок с названием и параметрами */
-
+/* Блок с инфой о кафе */
 .cafe-info-container {
-  margin-top: 8px;
-  margin-bottom: 24px;
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 24px;
+  background: #1b1b1b;
 }
 
-#cafe-name {
+.cafe-info-container h1 {
   margin: 0 0 4px;
   font-size: 22px;
   font-weight: 600;
 }
 
-#cafe-kitchen-categories {
-  margin: 0 0 12px;
-  color: var(--tg-theme-hint-color);
-  font-size: 13px;
+.cafe-kitchen-categories {
+  margin: 0;
+  font-size: 14px;
+  color: #cccccc;
 }
 
 .cafe-parameters-container {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-top: 12px;
   font-size: 13px;
+  color: #e0e0e0;
 }
 
 .cafe-parameter-container {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .cafe-parameter-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
-.cafe-parameter-value {
-  color: var(--tg-theme-text-color);
-}
-
-.cafe-status {
-  margin-left: auto;
-  font-weight: 500;
-  font-size: 13px;
-}
-
-/* --- блоки категорий и популярного меню --- */
+/* ====== СЕКЦИИ: Categories / Popular ====== */
 
 .cafe-section-container {
   margin-top: 24px;
 }
 
 .cafe-section-title {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .cafe-section-horizontal {
@@ -181,67 +119,53 @@ button {
   padding-bottom: 4px;
 }
 
-/* --- карточки категорий --- */
-
+/* Категории на главной */
 .cafe-category-container {
   min-width: 96px;
-  padding: 14px 12px;
-  border-radius: 16px;
-  background-color: #1a1a1a;
+  height: 96px;
+  border-radius: 22px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
+  justify-content: flex-end;
+  color: #fff;
 }
 
 .cafe-category-icon {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 12px;
 }
 
 .cafe-category-name {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-/* --- популярные позиции --- */
-
+/* Популярные блюда карточки */
 .cafe-item-container {
   min-width: 180px;
-  background-color: #151515;
-  border-radius: 18px;
+  border-radius: 24px;
   overflow: hidden;
-  flex-shrink: 0;
-  cursor: pointer;
+  background: #1b1b1b;
 }
 
 .cafe-item-image {
   width: 100%;
   height: 120px;
   object-fit: cover;
+  display: block;
 }
 
-.cafe-item-main {
+.cafe-item-info {
   padding: 10px 12px 12px;
+  font-size: 14px;
 }
 
-.cafe-item-name {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 500;
-}
+/* ====== СТРАНИЦА КАТЕГОРИИ (category.html) ====== */
 
-.cafe-item-description {
-  margin: 0;
-  font-size: 12px;
-  color: var(--tg-theme-hint-color);
-}
-
-/* ---------- Страница категории ---------- */
-
-.cafe-category-root {
-  padding: 12px 16px 90px;
+.cafe-category-page {
+  padding: 16px;
 }
 
 .cafe-category-list {
@@ -250,46 +174,164 @@ button {
   gap: 12px;
 }
 
-/* переиспользуем .cafe-item-container, но делаем его на всю ширину */
-
 .cafe-category-item {
   display: flex;
-  background-color: #151515;
-  border-radius: 18px;
-  overflow: hidden;
-}
-
-.cafe-category-item-image-wrapper {
-  width: 120px;
-  height: 100px;
-  flex-shrink: 0;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 20px;
+  background: #1b1b1b;
 }
 
 .cafe-category-item-image {
-  width: 100%;
-  height: 100%;
+  width: 96px;
+  height: 96px;
+  border-radius: 18px;
   object-fit: cover;
 }
 
-.cafe-category-item-main {
-  padding: 10px 12px;
-  flex: 1;
+/* ====== ДЕТАЛИ БЛЮДА (details.html) ====== */
+
+.cafe-item-details {
+  padding: 16px;
 }
 
-/* ---------- Страница корзины ---------- */
-
-.cart-root {
-  padding: 12px 16px 90px;
+/* Большая фотка */
+.cafe-item-details-image {
+  width: 100%;
+  height: 260px;
+  border-radius: 24px;
+  object-fit: cover;
+  display: block;
 }
 
-#cart-empty {
-  margin-top: 24px;
-  text-align: center;
-  color: var(--tg-theme-hint-color);
+/* Блок с названием, весом и описанием */
+.cafe-item-details-main {
+  margin-top: 16px;
+}
+
+.cafe-item-details-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.cafe-item-details-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cafe-item-details-weight {
   font-size: 14px;
+  color: #bdbdbd;
 }
 
-#cart-items {
+.cafe-item-details-description {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #cccccc;
+  line-height: 1.4;
+}
+
+/* Блок Price */
+.cafe-item-details-section {
+  margin-top: 24px;
+}
+
+.cafe-item-details-section-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Ряд с вариантами и ценой справа */
+.cafe-item-details-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Кнопки вариантов Small / Large */
+#details-variants {
+  display: flex;
+  gap: 8px;
+}
+
+.cafe-item-details-variant {
+  min-width: 96px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #444;
+  background: transparent;
+  font-size: 13px;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cafe-item-details-variant.active {
+  background: #ffffff;
+  color: #111111;
+  border-color: #ffffff;
+}
+
+/* Цена выбранного варианта (справа от Price) */
+#details-price-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* ====== Quantity блок ====== */
+
+.cafe-item-details-quantity-section {
+  margin-top: 24px;
+}
+
+.cafe-item-details-quantity-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Кнопки +/- */
+.details-qty-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: #2b2b2b;
+  color: #ffffff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#details-quantity-value {
+  min-width: 32px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* ====== Cart / My cart ====== */
+
+.cart-page {
+  padding: 16px;
+}
+
+.cart-empty {
+  text-align: center;
+  color: #bdbdbd;
+  margin-top: 40px;
+}
+
+.cart-items {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -297,164 +339,72 @@ button {
 
 .cart-item {
   display: flex;
-  background-color: #151515;
-  border-radius: 16px;
-  overflow: hidden;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 12px;
+  border-radius: 18px;
+  background: #1b1b1b;
 }
 
 .cart-item-main {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cart-item-image {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  object-fit: cover;
 }
 
 .cart-item-name {
-  margin: 0 0 4px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
 }
 
-.cart-item-variant {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--tg-theme-hint-color);
-}
-
+.cart-item-variant,
 .cart-item-weight {
   font-size: 12px;
-  color: var(--tg-theme-hint-color);
-}
-
-.cart-item-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.cart-item-cost {
-  font-weight: 500;
+  color: #bdbdbd;
 }
 
 .cart-item-qty {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.cart-item-qty-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  border: none;
-  background-color: #272727;
-  color: var(--tg-theme-text-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-/* блок итога */
-
-.cart-total {
-  margin-top: 18px;
-  text-align: right;
-  font-size: 15px;
-}
-
-.cart-total-label {
-  color: var(--tg-theme-hint-color);
-  margin-right: 6px;
-}
-
-/* ---------- Страница деталей блюда ---------- */
-
-.cafe-item-details {
-  padding: 12px 16px 90px;
-}
-
-/* === Fix details page layout (image, price block, toggle buttons) === */
-
-.cafe-item-details {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Большая фотка: держим высоту и обрезаем по краям */
-.cafe-item-details-image {
-  width: 100%;
-  height: 260px;
-  max-height: 260px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 24px 24px 0 0;
-}
-
-/* Основной блок с текстом под фото */
-.cafe-item-details-main {
-  padding: 16px 20px 24px;
-}
-
-/* Заголовок + описание уже стилизуются существующими классами */
-
-/* Блок "Price" */
-.cafe-item-details-section {
-  margin-top: 16px;
-}
-
-/* Строка с кнопками и ценой */
-.cafe-item-details-price-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Контейнер с кнопками Small / Large */
-.cafe-item-details-variants {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Кнопка Small / Large */
-.cafe-item-details-variant {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  font-size: 13px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-/* Активный выбранный вариант */
-.cafe-item-details-variant.active {
-  background-color: #ffffff;
-  color: #000000;
-}
-
-/* Цена справа от Price */
-.cafe-item-details-price-value {
+.cart-item-cost {
+  font-size: 14px;
   font-weight: 600;
-  font-size: 15px;
 }
 
-/* Строка количества */
-.cafe-item-details-quantity-row {
-  margin-top: 16px;
+/* ====== Вспомогательное ====== */
+
+/* Шиммер */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #222;
 }
 
-/* Кнопки +/- и значение количества могут использовать существующие стили */
-
-/* ---------- Утилиты ---------- */
-
-.text-muted {
-  color: var(--tg-theme-hint-color);
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 40%,
+    transparent 80%
+  );
+  animation: shimmer 1.4s infinite;
 }
 
-.text-right {
-  text-align: right;
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
