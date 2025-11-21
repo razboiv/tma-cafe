@@ -345,6 +345,7 @@ p.small {
 
 .cafe-item-details-title-container {
     margin: 16px 0 0 0;
+    padding: 0 16px;
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -365,11 +366,13 @@ p.small {
     min-width: calc(100% - 32px);
     min-height: 3em;
     margin: 8px 0 0 0;
+    padding: 0 16px;
     text-align: left;
 }
 
 .cafe-item-details-section-title {
     margin: 16px 16px 0 16px;
+    padding: 0 16px;
 }
 
 .cafe-item-details-section-price {
