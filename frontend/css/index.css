@@ -658,8 +658,15 @@ p.small {
 
 /* Увеличение масштаба всех элементов кроме картинки */
 .cafe-item-details-content {
-    transform: scale(1.3);
-    transform-origin: top center;
+    /* чтобы снизу было место под степпер */
+    padding-bottom: 128px;
+
+    /* масштабируем весь контент, кроме фотки */
+    transform: scale(1.15);          /* можно пробовать 1.1–1.2 */
+    transform-origin: top left;
+
+    /* чтобы после scale не появлялся горизонтальный скролл */
+    width: calc(100% / 1.15);
 }
 
 .cafe-item-details-container {
