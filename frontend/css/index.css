@@ -344,8 +344,8 @@ p.small {
 }
 
 .cafe-item-details-title-container {
-    margin: 16px 0 0 0;
-    padding: 0 16px;
+    margin: 16px 16px 0 16px;   /* одинаковый отступ слева, как у Price */
+    padding: 0;
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -365,8 +365,8 @@ p.small {
 .cafe-item-details-description {
     min-width: calc(100% - 32px);
     min-height: 3em;
-    margin: 8px 0 0 0;
-    padding: 0 16px;
+    margin: 8px 16px 0 16px;    /* тоже к левому краю, как заголовок */
+    padding: 0;
     text-align: left;
 }
 
