@@ -1,562 +1,460 @@
-:root,
-:root.light {
-    --bg-color: var(--tg-theme-bg-color, #FFFFFF);
-    --popover-bg-color: var(--tg-theme-bg-color, #FFFFFF);
-    --text-color: var(--tg-theme-text-color, #333333);
-    --accent-color: var(--tg-theme-button-color, #609F6D);
-    --on-accent-color: var(--tg-theme-button-text-color, #FFFFFF);
-    --divider-color: #80808025;
-    --ripple-color: #80808040;
-    --success-color: #609F6D;
-    --warning-color: #FFD775;
-    --error-color: #F45B55;
-    --shimmer-color-1: #555555;
-    --shimmer-color-2: #000000;
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
+
+:root {
+  --tg-theme-bg-color: #0a0a0a;
+  --tg-theme-text-color: #ffffff;
+  --tg-theme-hint-color: #7f7f7f;
+  --tg-theme-link-color: #91c9ff;
+  --tg-theme-button-color: #8774e1;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-secondary-bg-color: #151515;
 }
 
-:root.dark {
-    --bg-color: var(--tg-theme-secondary-bg-color, var(--tg-theme-bg-color, #121212));
-    --popover-bg-color: var(--tg-theme-bg-color, #242424);
-    --text-color: var(--tg-theme-text-color, #FFFFFF);
-    --divider-color: #FFFFFF15;
-    --ripple-color: #FFFFFF30;
-    --shimmer-color-1: #D0D0D0;
-    --shimmer-color-2: #FFFFFF;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
 }
 
 body {
-    margin: 0;
-    color-scheme: var(--tg-color-scheme);
-    color: var(--text-color);
-    background-color: var(--bg-color);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
-h1 {
-    width: fit-content;
-    min-width: 45%;
-    min-height: 1em;
-    margin: 0;
-    font-family: 'Rubik', sans-serif;
-    font-weight: 500;
-    font-size: 24px;
-    border-radius: 8px;
-    display: block;
-}
-
-h2 {
-    width: fit-content;
-    margin: 0;
-    font-family: 'Rubik', sans-serif;
-    font-size: 20px;
-    font-weight: 500;
-    border-radius: 8px;
-}
-
-h3 {
-    width: fit-content;
-    margin: 0;
-    font-family: 'Rubik', sans-serif;
-    font-size: 16px;
-    font-weight: 500;
-    border-radius: 8px;
-}
-
-h6 {
-    width: fit-content;
-    min-width: 45%;
-    min-height: 1em;
-    margin: 0;
-    font-family: 'Rubik', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    border-radius: 8px;
-}
-
-p {
-    width: fit-content;
-    min-width: 90%;
-    min-height: 1em;
-    margin: 0;
-    font-family: 'Rubik', sans-serif;
-    font-size: 14px;
-    white-space: wrap;
-    opacity: 0.36;
-    border-radius: 8px;
+img {
+  max-width: 100%;
+  display: block;
 }
 
 button {
-    color: var(--text-color);
+  font-family: inherit;
 }
 
-p.small {
-    font-size: 11px;
+/* ---------- Общий лейаут приложения ---------- */
+
+.app {
+  min-height: 100vh;
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
 }
 
-.cover {
-    width: 100%;
-    height: calc(100vw * 3 / 4);
-    object-fit: cover;
-    border-bottom-left-radius: 24px;
-    border-bottom-right-radius: 24px;
-}
-
-.page {
-    width: 100vw;
-    min-height: 100%;
-    position: absolute;
-    background-color: var(--bg-color);
-    box-shadow: 0 4px 8px 0 rgba(160, 160, 160, 0.1), 0 6px 20px 0 rgba(160, 160, 160, 0.1);
-}
-
-.icon-button {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    overflow: hidden;
-    background-color: inherit;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 24px;
-    outline: none;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-user-select: none; /* Safari */
-    -ms-user-select: none; /* IE 10 and IE 11 */
-    user-select: none;
-}
-
-.icon-button.small {
-    width: 32px;
-    height: 32px;
-    font-size: 20px;
-}
-
-
-
-/* Cafe info */
-
-.cafe-logo-container {
-    position: absolute;
-    width: 72px;
-    height: 72px;
-    right: 0;
-    margin-right: 40px;
-    margin-top: calc(100vw * 3 / 4 - 84px);
-    border-radius: 36px;
-    background-color: var(--popover-bg-color);
-    box-shadow: inset 
-        0 0.3px 0.4px hsla(230, 13%, 9%, 0.02),
-        0 0.9px 1.5px hsla(230, 13%, 9%, 0.045),
-        0 3.5px 6px hsla(230, 13%, 9%, 0.09);
-    z-index: 2;
-}
-
-.cafe-logo {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: inherit;
-}
-
-.cafe-info-container {
-    position: relative;
-    z-index: 1;
-    width: 100vw - 32px;
-    margin-left: 16px;
-    margin-top: -48px;
-    margin-right: 16px;
-    border-radius: 24px;
-    background-color: var(--popover-bg-color);
-    box-shadow: inset 
-        0 0.3px 0.4px hsla(230, 13%, 9%, 0.02),
-        0 0.9px 1.5px hsla(230, 13%, 9%, 0.045),
-        0 3.5px 6px hsla(230, 13%, 9%, 0.09);
-    padding: 24px;
-}
-
-.cafe-kitchen-categories {
-    min-height: 1em;
-    margin-top: 2px;
-}
-
-.cafe-parameters-container {
-    min-height: calc(1em + 4px);
-    display: flex;
-    margin-top: 12px;
-    font-size: 14px;
-    justify-content: space-between;
-    align-items: center;
-    border-radius: 8px;
-}
-
-.cafe-parameter-container {
-    display: flex;
-    align-items: center;
-}
-
-.cafe-parameter-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 4px;
-}
-
-.cafe-parameter-value {
-    font-family: 'Rubik', sans-serif;
-    font-size: 14px;
-    opacity: 0.72;
-}
-
-.cafe-status {
-    padding: 4px 16px;
-    background-color: var(--success-color);
-    border-radius: 6px;
-    font-family: 'Rubik', sans-serif;
-    font-size: 14px;
-    color: #FFFFFF;
-}
-
-
-
-/* Sections (e.g. categories or popular */
-
-.cafe-section-container {
-    margin-top: 24px;
-}
-
-.cafe-section-title {
-    margin-left: 16px;
-    margin-right: 16px;
-}
-
-.cafe-section-horizontal {
-    padding: 12px 16px;
-    overflow-x: scroll;
-    white-space: nowrap;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 16px;
-    -ms-overflow-style: none;
-    scrollbar-width: none; 
-}
-
-.cafe-section-horizontal::-webkit-scrollbar {
-    display: none;
-}
-
-.cafe-section-vertical {
-    padding: 16px;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 16px;
-}
-
-
-
-/* Category item */
-
-.cafe-category-container {
-    min-width: 56px;
-    height: 56px;
-    padding: 12px;
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.cafe-category-icon {
-    width: 32px;
-    height: 32px;
-    opacity: 0.36;
-}
-
-.cafe-category-name {
-    font-family: 'Rubik', sans-serif;
-    font-size: 12px;
-    color: #212427;
-    opacity: .72;
-}
-
-
-
-/* Cafe item*/
-
-.cafe-item-container {
-    max-width: 224px;
-    width: calc((100vw - 16px * 3) / 2);
-}
-
-.cafe-item-image {
-    max-width: 224px;
-    max-height: 168px;
-    width: calc((100vw - 16px * 3) / 2);
-    height: calc((100vw - 16px * 3) / 2 * 3 / 4);
-    object-fit: cover;
-    border-radius: 16px;
-}
-
-.cafe-item-name {
-    margin-top: 8px;
-    margin-bottom: 4px;
-}
-
-.cafe-item-description {
-    margin-top: 2px;
-}
-
-
-
-/* Cafe item details */
-
-.cafe-item-details-container {
-    height: 100vh;
-}
-
-.cafe-item-details-content {
-    /* Quantity selector container minmimum height x2 */
-    padding-bottom: 128px;
-}
-
-.cafe-item-details-quantity-selector-value {
-    padding: 8px 32px;
-    background-color: var(--divider-color);
-    border-radius: 16px;
-}
-
-.cafe-item-details-title-container {
-    margin: 16px 16px 0 16px;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-}
-
-.cafe-item-details-name {
-    margin-right: 16px;
-    flex-grow: 1;
-}
-
-.cafe-item-details-selected-variant-weight {
-    min-width: 2em;
-    opacity: .72;
-}
-
-.cafe-item-details-description {
-    min-width: calc(100% - 32px);
-    min-height: 3em;
-    margin: 16px 16px 0 16px;
-}
-
-.cafe-item-details-section-title {
-    margin: 16px 16px 0 16px;
-}
-
-.cafe-item-details-section-price {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    margin-top: 16px;
-    padding: 0 16px;
-}
-
-.cafe-item-details-variants {
-    display: flex;
-    flex-wrap: wrap;
-    flex-grow: 1;
-    gap: 8px;
-}
-
-.cafe-item-details-variant {
-    display: inline-block;
-    position: relative;
-    overflow: hidden;
-    padding: 8px 16px;
-    font-family: 'Rubik', sans-serif;
-    font-size: 14px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--divider-color);
-    border-radius: 20px;
-    transition: background-color 0.3s linear;
-}
-
-.cafe-item-details-variant.selected {
-    color: var(--on-accent-color);
-    background-color: var(--accent-color);
-    border: 1px solid var(--accent-color);
-}
-
-.cafe-item-details-selected-variant-price {
-    min-width: 3em;
-    min-height: 1em;
-}
-
-.cafe-item-details-quantity-selector-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    min-height: 64px;
-    background-color: var(--popover-bg-color);
-    box-shadow: inset 
-        0 0.3px 0.4px hsla(230, 13%, 9%, 0.02),
-        0 0.9px 1.5px hsla(230, 13%, 9%, 0.045),
-        0 3.5px 15px hsla(230, 13%, 9%, 0.09);
-    border-top-left-radius: 24px;
-    border-top-right-radius: 24px;
-    z-index: 2;
-    display: flex;
-    flex-wrap: nowrap;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-}
-
-
-
-/* Cart item */
-
-.cart-items-container {
-    height: 100vh;
-}
-
-.cart-item-container {
-    display: flex;
-    flex-wrap: nowrap;
-    padding: 8px 16px;
-}
-
-.cart-item-image {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    object-fit: cover;
-}
-
-.cart-item-info-container {
-    flex: 1;
-    padding: 0 16px;
-    white-space: wrap;
-}
-
-.cart-item-name {
-    margin-top: 4px;
-}
-
-.cart-item-description {
-    margin-top: 2px;
-}
-
-.cart-item-cost {
-    margin-top: 4px;
-    font-family: 'Rubik', sans-serif;
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--accent-color);
-}
-
-.cart-item-quantity-container {
-    height: 56px;
-    display: flex;
-    flex-wrap: nowrap;
-    flex-direction: row;
-    align-items: center;
-}
-
-.cart-item-quantity {
-    min-width: 28px;
-    height: 28px;
-    margin: 0 12px;
-    font-family: 'Rubik', sans-serif;
-    font-weight: 500;
-    font-size: 13px;
-    line-height: 28px;
-    color: var(--on-accent-color);
-    background-color: var(--accent-color);
-    border-radius: 14px;
-    text-align: center;
-}
-
-.cart-empty-placeholder {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: -88px;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.cart-empty-placeholder h3 {
-    margin-top: -88px;
-    text-align: center;
-}
-
-.cart-empty-placeholder p {
-    margin-top: 4px;
-    text-align: center;
-}
-
-
-
-/* Common (effect, animations, etc.) */
-
-.snackbar {
-    display: block;
-    position: fixed;
-    bottom: 16px;
-    left: 0;
-    right: 0;
-    margin: 0 16px;
-    font-family: 'Rubik', sans-serif;
-    font-size: 14px;
-    color: var(--on-accent-color);
-    background-color: var(--accent-color);
-    padding: 16px 24px;
-    border-radius: 16px;
-    z-index: 3;
-    opacity: 0;
-    transform: scale(0.24);
-}
-
-.ripple {
-    position: absolute;
-    border-radius: 50%;
-    background: var(--ripple-color);
-    transform: scale(0);
-}
+/* ---------- Скелетоны ---------- */
 
 .shimmer {
-    animation-duration: 2.2s;
-    animation-fill-mode: forwards;
-    animation-iteration-count: infinite;
-    animation-name: shimmer;
-    animation-timing-function: linear;
-    background: linear-gradient(to right, var(--shimmer-color-1) 8%, var(--shimmer-color-2) 18%, var(--shimmer-color-1) 33%);
-    background-size: 1200px 100%;
-    color: transparent;
-    opacity: .075;
+  position: relative;
+  overflow: hidden;
+  background: #1a1a1a;
 }
-  
-@-webkit-keyframes shimmer {
-    0% {
-        background-position: -100% 0;
-    }
-    100% {
-        background-position: 100% 0;
-    }
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.13) 20%,
+    rgba(255, 255, 255, 0.13) 60%,
+    rgba(255, 255, 255, 0)
+  );
+  animation: shimmer 1.4s infinite;
 }
 
 @keyframes shimmer {
-    0% {
-        background-position: -1200px 0;
-    }
-    100% {
-        background-position: 1200px 0;
-    }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ---------- Главная страница ---------- */
+
+.cafe-root {
+  padding: 16px 16px 90px;
+}
+
+/* --- шапка с кафе --- */
+
+.cafe-logo-container {
+  position: absolute;
+  right: 24px;
+  top: 160px;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background-color: #151515;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.cafe-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.cafe-cover {
+  width: 100%;
+  height: 220px;
+  border-radius: 24px;
+  object-fit: cover;
+  object-position: center;
+  margin-bottom: 16px;
+}
+
+/* блок с названием и параметрами */
+
+.cafe-info-container {
+  margin-top: 8px;
+  margin-bottom: 24px;
+}
+
+#cafe-name {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+#cafe-kitchen-categories {
+  margin: 0 0 12px;
+  color: var(--tg-theme-hint-color);
+  font-size: 13px;
+}
+
+.cafe-parameters-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.cafe-parameter-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cafe-parameter-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.cafe-parameter-value {
+  color: var(--tg-theme-text-color);
+}
+
+.cafe-status {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* --- блоки категорий и популярного меню --- */
+
+.cafe-section-container {
+  margin-top: 24px;
+}
+
+.cafe-section-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.cafe-section-horizontal {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* --- карточки категорий --- */
+
+.cafe-category-container {
+  min-width: 96px;
+  padding: 14px 12px;
+  border-radius: 16px;
+  background-color: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cafe-category-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.cafe-category-name {
+  font-size: 13px;
+}
+
+/* --- популярные позиции --- */
+
+.cafe-item-container {
+  min-width: 180px;
+  background-color: #151515;
+  border-radius: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cafe-item-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.cafe-item-main {
+  padding: 10px 12px 12px;
+}
+
+.cafe-item-name {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cafe-item-description {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color);
+}
+
+/* ---------- Страница категории ---------- */
+
+.cafe-category-root {
+  padding: 12px 16px 90px;
+}
+
+.cafe-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* переиспользуем .cafe-item-container, но делаем его на всю ширину */
+
+.cafe-category-item {
+  display: flex;
+  background-color: #151515;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.cafe-category-item-image-wrapper {
+  width: 120px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.cafe-category-item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cafe-category-item-main {
+  padding: 10px 12px;
+  flex: 1;
+}
+
+/* ---------- Страница корзины ---------- */
+
+.cart-root {
+  padding: 12px 16px 90px;
+}
+
+#cart-empty {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--tg-theme-hint-color);
+  font-size: 14px;
+}
+
+#cart-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cart-item {
+  display: flex;
+  background-color: #151515;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 10px 12px;
+}
+
+.cart-item-main {
+  flex: 1;
+}
+
+.cart-item-name {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cart-item-variant {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color);
+}
+
+.cart-item-weight {
+  font-size: 12px;
+  color: var(--tg-theme-hint-color);
+}
+
+.cart-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.cart-item-cost {
+  font-weight: 500;
+}
+
+.cart-item-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cart-item-qty-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background-color: #272727;
+  color: var(--tg-theme-text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* блок итога */
+
+.cart-total {
+  margin-top: 18px;
+  text-align: right;
+  font-size: 15px;
+}
+
+.cart-total-label {
+  color: var(--tg-theme-hint-color);
+  margin-right: 6px;
+}
+
+/* ---------- Страница деталей блюда ---------- */
+
+.cafe-item-details {
+  padding: 12px 16px 90px;
+}
+
+/* === Fix details page layout (image, price block, toggle buttons) === */
+
+.cafe-item-details {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Большая фотка: держим высоту и обрезаем по краям */
+.cafe-item-details-image {
+  width: 100%;
+  height: 260px;
+  max-height: 260px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 24px 24px 0 0;
+}
+
+/* Основной блок с текстом под фото */
+.cafe-item-details-main {
+  padding: 16px 20px 24px;
+}
+
+/* Заголовок + описание уже стилизуются существующими классами */
+
+/* Блок "Price" */
+.cafe-item-details-section {
+  margin-top: 16px;
+}
+
+/* Строка с кнопками и ценой */
+.cafe-item-details-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Контейнер с кнопками Small / Large */
+.cafe-item-details-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Кнопка Small / Large */
+.cafe-item-details-variant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* Активный выбранный вариант */
+.cafe-item-details-variant.active {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+/* Цена справа от Price */
+.cafe-item-details-price-value {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Строка количества */
+.cafe-item-details-quantity-row {
+  margin-top: 16px;
+}
+
+/* Кнопки +/- и значение количества могут использовать существующие стили */
+
+/* ---------- Утилиты ---------- */
+
+.text-muted {
+  color: var(--tg-theme-hint-color);
+}
+
+.text-right {
+  text-align: right;
 }
