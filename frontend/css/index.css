@@ -652,10 +652,3 @@ p.small {
   font-size: 15px;
 }
 
-.details-quantity-controls {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 24px;
-    margin: 24px 0 32px 0; /* над кнопкой ADD TO CART */
-}
