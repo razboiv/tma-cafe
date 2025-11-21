@@ -656,3 +656,12 @@ p.small {
   font-size: 15px;
 }
 
+/* Увеличение масштаба всех элементов кроме картинки */
+.cafe-item-details-content {
+    transform: scale(1.08);
+    transform-origin: top center;
+}
+
+.cafe-item-details-container {
+    padding-top: 12px;
+}
