@@ -1,5 +1,4 @@
 <section class="cafe-item-details">
-
   <!-- Большая фотка -->
   <img
     id="details-image"
@@ -15,9 +14,8 @@
       <span
         id="details-selected-variant-weight"
         class="cafe-item-details-weight shimmer"
+        >x</span
       >
-        x
-      </span>
     </div>
 
     <p
@@ -38,15 +36,12 @@
     </h2>
 
     <div class="cafe-item-details-price-row">
-      <!-- КНОПКИ ВАРИАНТОВ -->
-      <div
-        id="details-variants"
-        class="cafe-item-details-variants shimmer"
-      >
+      <!-- сюда рендерятся варианты (Small / Large ...) -->
+      <div id="details-variants" class="cafe-item-details-variants shimmer">
         x
       </div>
 
-      <!-- Цена выбранного варианта -->
+      <!-- Итоговая цена выбранного варианта -->
       <div
         id="details-price-value"
         class="cafe-item-details-price shimmer"
@@ -58,14 +53,12 @@
 
   <!-- Quantity -->
   <section class="cafe-item-details-section">
-    <h2 class="cafe-item-details-section-title">
-      Quantity
-    </h2>
+    <h2 class="cafe-item-details-section-title">Quantity</h2>
 
-    <div class="cafe-item-details-quantity-row">
+    <div class="cafe-item-details-qty-row">
       <button
         id="details-quantity-decrease-button"
-        class="cafe-item-details-quantity-button"
+        class="cafe-item-details-qty-button"
         type="button"
       >
         –
@@ -73,14 +66,14 @@
 
       <div
         id="details-quantity-value"
-        class="cafe-item-details-quantity-value"
+        class="cafe-item-details-qty-value"
       >
         1
       </div>
 
       <button
         id="details-quantity-increase-button"
-        class="cafe-item-details-quantity-button"
+        class="cafe-item-details-qty-button"
         type="button"
       >
         +
@@ -88,4 +81,15 @@
     </div>
   </section>
 
+  <!-- Шаблон одной кнопки варианта (Small / Large ...) -->
+  <template id="details-variant-template">
+    <button
+      class="cafe-item-details-variant"
+      type="button"
+    >
+      <span class="details-variant-name"></span>
+      <span class="details-variant-weight"></span>
+      <span class="details-variant-cost"></span>
+    </button>
+  </template>
 </section>
