@@ -166,18 +166,19 @@ TelegramSDK.showMainButton("ADD TO CART", () => {
     // добавляем в корзину
     Cart.addItem(item, selectedVariant, quantity);
 
-    // после добавления узнаём, сколько всего позиций в корзине
+    // считаем, сколько всего позиций в корзине
     const portionCount = Cart.getPortionCount();
+    const label =
+        portionCount === 1
+            ? "MY CART · 1 POSITION"
+            : `MY CART · ${portionCount} POSITIONS`;
 
-    if (portionCount > 0) {
-        // показываем счётчик
-        TelegramSDK.showMainButton(
-            `MY CART · ${portionCount} POSITION${portionCount === 1 ? "" : "S"}`
-        );
-    } else {
-        // на всякий случай, если корзина вдруг пустая
-        TelegramSDK.showMainButton("ADD TO CART");
-    }
+    // теперь главная кнопка -> открыть корзину
+    TelegramSDK.showMainButton(label, () => {
+        navigateTo("cart");
+    });
+});
+
 });
 
 
