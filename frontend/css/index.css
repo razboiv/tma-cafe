@@ -701,7 +701,7 @@ p.small {
 
 .cafe-item-details-variant {
   font-size: 15px !important;
-  border-radius: 20px;
+  border-radius: 24px;
   transition: background-color 0.25s ease,
               color o.25s ease,
               border-color o.25s ease,
