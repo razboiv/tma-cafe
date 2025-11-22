@@ -318,22 +318,27 @@ p.small {
     padding-right: 16px;
 }
 
+/* Название блюда */
 .cafe-item-details-name {
     font-size: 24px;
     font-weight: 700;
 }
 
+/* Вес справа от названия */
 .cafe-item-details-weight {
     font-size: 14px;
-    opacity: 0.7; /* чтобы выглядело чуть менее ярко, как в макете */
+    opacity: .72;
 }
 
 .cafe-item-details-container {
     height: 100vh;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
 }
 
 .cafe-item-details-content {
-    /* Quantity selector container minmimum height x2 */
+    /* минимум под селектор количества */
     padding-bottom: 128px;
 }
 
@@ -365,22 +370,23 @@ p.small {
 .cafe-item-details-description {
     min-width: calc(100% - 32px);
     min-height: 3em;
-    margin: 8px 16px 0 16px;    /* тоже к левому краю, как заголовок */
-    padding: 0;
+    margin: 8px 16px 0 16px;   /* ОДИН раз даём отступ 16px слева/справа */
+    padding: 0;                /* убираем дублирующий padding */
     text-align: left;
 }
 
 .cafe-item-details-section-title {
-    margin: 16px 16px 0 16px;
-    padding: 0 16px;
+    margin: 24px 16px 0 16px;  /* ровно как у описания */
+    padding: 0;                /* лишний padding не нужен */
 }
 
+/* Ряд с Price / Small / Large / $13.90 */
 .cafe-item-details-section-price {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
     margin-top: 16px;
-    padding: 0 16px;
+    padding: 0 16px;           /* по 16px слева/справа — как в макете */
 }
 
 .cafe-item-details-variants {
