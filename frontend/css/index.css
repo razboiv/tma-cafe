@@ -701,3 +701,29 @@ p.small {
 .cafe-item-details-selected-variant-price {
   font-size: 19px !important;
 }
+
+/* --- FIX LEFT ALIGN --- */
+.cafe-item-details-title-container,
+.cafe-item-details-description,
+.cafe-item-details-section-price {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* Название */
+.cafe-item-details-name {
+    margin-left: 0 !important;
+}
+
+/* Описание */
+.cafe-item-details-description {
+    margin-left: 0 !important;
+}
+
+/* Small / Large — выравнивание под Price */
+.cafe-item-details-variants {
+    margin-left: 0 !important;
+    padding-left: 16px !important;
+}
