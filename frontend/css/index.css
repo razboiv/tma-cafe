@@ -399,6 +399,11 @@ p.small {
   height: 44px;         /* было 32px */
   font-size: 24px;      /* увеличить “+” и “–” */
   border-radius: 22px;  /* чтобы были круглые */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .cafe-item-details-variants {
@@ -639,7 +644,6 @@ p.small {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px 16px;
-  gap: 12px;
 }
 
 /* Контейнер с вариантами (Small / Large) */
