@@ -320,7 +320,7 @@ p.small {
 
 /* Название блюда */
 .cafe-item-details-name {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 700;
 }
 
@@ -370,8 +370,10 @@ p.small {
 .cafe-item-details-description {
     min-width: calc(100% - 32px);
     min-height: 3em;
-    margin: 8px 16px 0 16px;   /* ОДИН раз даём отступ 16px слева/справа */
-    padding: 0;                /* убираем дублирующий padding */
+    margin: 16px 0 0 0;   /* ОДИН раз даём отступ 16px слева/справа */
+    padding: 0 16px;                /* убираем дублирующий padding */
+    font-size: 15px;
+    line-height: 1.4;
     text-align: left;
 }
 
@@ -725,5 +727,14 @@ p.small {
 /* Small / Large — выравнивание под Price */
 .cafe-item-details-variants {
     margin-left: 0 !important;
-    padding-left: 16px !important;
+    padding-left: 0 !important;
+}
+
+/* цифры: вес, цена, количество — шрифт ближе к макету */
+.cafe-item-details-weight,
+.cafe-item-details-selected-variant-price,
+.cafe-item-details-quantity-selector-value {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
