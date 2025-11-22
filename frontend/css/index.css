@@ -360,6 +360,9 @@ p.small {
 .cafe-item-details-name {
     margin-right: 16px;
     flex-grow: 1;
+
+    font-size: 22px;
+    font-weight: 700;
 }
 
 .cafe-item-details-selected-variant-weight {
@@ -370,7 +373,7 @@ p.small {
 .cafe-item-details-description {
     min-width: calc(100% - 32px);
     min-height: 3em;
-    margin: 16px 0 0 0;   /* ОДИН раз даём отступ 16px слева/справа */
+    margin: 14px 0 0 0;   /* ОДИН раз даём отступ 16px слева/справа */
     padding: 0 16px;                /* убираем дублирующий padding */
     font-size: 15px;
     line-height: 1.4;
