@@ -48,7 +48,7 @@ export default class CategoryPage extends Route {
         try {
             const menu = await getMenuCategory(categoryId);
             console.log("[CategoryPage] menu loaded", menu);
-            this.#fillMenu(menu.items, categoryId); // передаём categoryId
+            this.#fillMenu(menu, categoryId); // передаём categoryId
         } catch (err) {
             console.error("[CategoryPage] failed to load menu", err);
         }
