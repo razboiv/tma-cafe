@@ -153,14 +153,6 @@ TelegramSDK.showMainButton("ADD TO CART", () => {
   if (!selectedVariant) return;
   Cart.addItem(item, selectedVariant, quantity);
 
-  // после добавления возвращаемся к нужной категории
-  if (this.categoryId) {
-    const params = JSON.stringify({ id: this.categoryId });
-    navigateTo("main", params);
-  } else {
-    // на всякий случай, если вдруг categoryId не пришёл
-    navigateTo("main");
-  }
 });
 
   }
