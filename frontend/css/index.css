@@ -701,11 +701,6 @@ p.small {
 
 .cafe-item-details-variant {
   font-size: 15px !important;
-  border-radius: 26px;
-  transition: background-color 0.5s ease,
-              color o.5s ease,
-              border-color o.5s ease,
-              transform 0.35s ease;
 }
 
 .cafe-item-details-selected-variant-price {
@@ -736,6 +731,11 @@ p.small {
 .cafe-item-details-variants {
     margin-left: 0 !important;
     padding-left: 0 !important;
+    border-radius: 26px;
+    transition: background-color 0.5s ease,
+              color o.5s ease,
+              border-color o.5s ease,
+              transform 0.35s ease;
 }
 
 /* цифры: вес, цена, количество — шрифт ближе к макету */
