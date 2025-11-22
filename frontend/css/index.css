@@ -692,7 +692,7 @@ p.small {
 }
 
 .cafe-item-details-description {
-  font-size: 14px !important;
+  font-size: 13px !important;
 }
 
 .cafe-item-details-section-title {
@@ -700,11 +700,11 @@ p.small {
 }
 
 .cafe-item-details-variant {
-  font-size: 17px !important;
+  font-size: 15px !important;
 }
 
 .cafe-item-details-selected-variant-price {
-  font-size: 19px !important;
+  font-size: 22x !important;
 }
 
 /* --- FIX LEFT ALIGN --- */
