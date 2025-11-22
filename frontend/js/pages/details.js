@@ -20,22 +20,25 @@ async load(params) {
   console.log("[DetailsPage] load", params);
   TelegramSDK.expand();
 
-  // достаём id товара и категории из params
-  let itemId = null;
-  let categoryId = null;
+// достаём id товара и id категории из params
+let itemId = null;
+let categoryId = null;
 
-  try {
-    const parsed = JSON.parse(params || "{}");
-    itemId = parsed.id;
-    categoryId = parsed.categoryId || null;
-  } catch (e) {
-    console.error("[DetailsPage] failed to parse params", e);
-  }
+try {
+  const parsed = JSON.parse(params || "{}");
+  itemId = parsed.id;
+  categoryId = parsed.categoryId;
+} catch (e) {
+  console.error("[DetailsPage] failed to parse params", e);
+}
 
-  if (!itemId) {
-    console.error("[DetailsPage] no itemId");
-    return;
-  }
+if (!itemId) {
+  console.error("[DetailsPage] no itemId");
+  return;
+}
+
+// сохраняем categoryId в this, чтобы использовать при возврате
+this.categoryId = categoryId;
 
   // сохраним параметры категории, чтобы потом вернуться
   this.categoryParams = categoryId
@@ -150,11 +153,12 @@ TelegramSDK.showMainButton("ADD TO CART", () => {
   if (!selectedVariant) return;
   Cart.addItem(item, selectedVariant, quantity);
 
-  // после добавления возвращаемся к той же категории
-  if (this.categoryParams) {
-    navigateTo("category", this.categoryParams);
+  // после добавления возвращаемся к нужной категории
+  if (this.categoryId) {
+    const params = JSON.stringify({ id: this.categoryId });
+    navigateTo("category", params);
   } else {
-    // запасной вариант, если вдруг categoryId не пришёл
+    // на всякий случай, если вдруг categoryId не пришёл
     navigateTo("category");
   }
 });
