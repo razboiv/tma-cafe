@@ -394,6 +394,13 @@ p.small {
     padding: 0 16px;           /* по 16px слева/справа — как в макете */
 }
 
+.cafe-item-details-quantity-button {
+  width: 44px;          /* было 32px */
+  height: 44px;         /* было 32px */
+  font-size: 24px;      /* увеличить “+” и “–” */
+  border-radius: 22px;  /* чтобы были круглые */
+}
+
 .cafe-item-details-variants {
     display: flex;
     flex-wrap: wrap;
