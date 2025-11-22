@@ -179,8 +179,5 @@ TelegramSDK.showMainButton("ADD TO CART", () => {
     });
 });
 
-});
-
-
   }
 }
