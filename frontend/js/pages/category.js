@@ -1,6 +1,6 @@
 // frontend/js/pages/category.js
 
-import Route from "../routing/route.js";
+import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
