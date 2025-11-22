@@ -701,11 +701,11 @@ p.small {
 
 .cafe-item-details-variant {
   font-size: 15px !important;
-  border-radius: 24px;
-  transition: background-color 0.25s ease,
-              color o.25s ease,
-              border-color o.25s ease,
-              transform 0.15s ease;
+  border-radius: 26px;
+  transition: background-color 0.5s ease,
+              color o.5s ease,
+              border-color o.5s ease,
+              transform 0.35s ease;
 }
 
 .cafe-item-details-selected-variant-price {
