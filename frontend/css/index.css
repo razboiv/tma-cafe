@@ -314,8 +314,8 @@ p.small {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 /* Название блюда */
@@ -706,8 +706,8 @@ p.small {
 .cafe-item-details-title-container,
 .cafe-item-details-description,
 .cafe-item-details-section-price {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
 }
