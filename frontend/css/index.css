@@ -672,3 +672,26 @@ p.small {
 .cafe-item-details-container {
     padding-top: 12px;
 }
+
+/* === УВЕЛИЧЕНИЕ ШРИФТОВ НА СТРАНИЦЕ ДЕТАЛЕЙ === */
+
+.cafe-item-details-name {
+  font-size: 28px !important;
+  font-weight: 700;
+}
+
+.cafe-item-details-description {
+  font-size: 17px !important;
+}
+
+.cafe-item-details-section-title {
+  font-size: 18px !important;
+}
+
+.cafe-item-details-variant {
+  font-size: 17px !important;
+}
+
+.cafe-item-details-selected-variant-price {
+  font-size: 19px !important;
+}
