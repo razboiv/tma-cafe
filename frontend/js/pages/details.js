@@ -16,23 +16,31 @@ export default class DetailsPage extends Route {
     super("details", "/pages/details.html");
   }
 
-  async load(params) {
-    console.log("[DetailsPage] load", params);
-    TelegramSDK.expand();
+async load(params) {
+  console.log("[DetailsPage] load", params);
+  TelegramSDK.expand();
 
-    // достаём id товара из params
-    let itemId = null;
-    try {
-      const parsed = JSON.parse(params || "{}");
-      itemId = parsed.id;
-    } catch (e) {
-      console.error("[DetailsPage] failed to parse params", e);
-    }
+  // достаём id товара и категории из params
+  let itemId = null;
+  let categoryId = null;
 
-    if (!itemId) {
-      console.error("[DetailsPage] no itemId");
-      return;
-    }
+  try {
+    const parsed = JSON.parse(params || "{}");
+    itemId = parsed.id;
+    categoryId = parsed.categoryId || null;
+  } catch (e) {
+    console.error("[DetailsPage] failed to parse params", e);
+  }
+
+  if (!itemId) {
+    console.error("[DetailsPage] no itemId");
+    return;
+  }
+
+  // сохраним параметры категории, чтобы потом вернуться
+  this.categoryParams = categoryId
+    ? JSON.stringify({ id: categoryId })
+    : null;
 
     // грузим товар
     try {
@@ -138,11 +146,18 @@ export default class DetailsPage extends Route {
       });
 
     // Добавление в корзину при нажатии main-button
-    TelegramSDK.showMainButton("ADD TO CART", () => {
-      if (!selectedVariant) return;
-      Cart.addItem(item, selectedVariant, quantity);
-      // после добавления возвращаемся к категории
-      navigateTo("category");
-    });
+TelegramSDK.showMainButton("ADD TO CART", () => {
+  if (!selectedVariant) return;
+  Cart.addItem(item, selectedVariant, quantity);
+
+  // после добавления возвращаемся к той же категории
+  if (this.categoryParams) {
+    navigateTo("category", this.categoryParams);
+  } else {
+    // запасной вариант, если вдруг categoryId не пришёл
+    navigateTo("category");
+  }
+});
+
   }
 }
