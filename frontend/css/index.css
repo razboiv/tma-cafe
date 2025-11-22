@@ -700,13 +700,11 @@ p.small {
 }
 
 .cafe-item-details-variant {
-  font-size: 20px !important;
+  font-size: 15px !important;
   transition: background-color 0.25s ease,
               color o.25s ease,
               border-color o.25s ease,
               transform 0.15s ease;
-  margin-left: 0 !important;
-  padding-left: 0 !important;
 }
 
 .cafe-item-details-selected-variant-price {
