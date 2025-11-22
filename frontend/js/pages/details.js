@@ -17,10 +17,20 @@ export default class DetailsPage extends Route {
   }
 
 async load(params) {
-  console.log("[DetailsPage] load", params);
-  TelegramSDK.expand();
+    console.log("[DetailsPage] load", params);
+    TelegramSDK.expand();
 
-// достаём id товара и id категории из params
+    // обновляем текст основной кнопки в зависимости от корзины
+    const portionCount = Cart.getPortionCount();
+    if (portionCount > 0) {
+        TelegramSDK.showMainButton(
+            `MY CART · ${portionCount} POSITION${portionCount === 1 ? "" : "S"}`
+        );
+    } else {
+        TelegramSDK.showMainButton("ADD TO CART");
+    }
+
+    // достаём id товара из params
 let itemId = null;
 let categoryId = null;
 
@@ -149,11 +159,27 @@ this.categoryId = categoryId;
       });
 
     // Добавление в корзину при нажатии main-button
+// Добавление в корзину при нажатии main-button
 TelegramSDK.showMainButton("ADD TO CART", () => {
-  if (!selectedVariant) return;
-  Cart.addItem(item, selectedVariant, quantity);
+    if (!selectedVariant) return;
 
+    // добавляем в корзину
+    Cart.addItem(item, selectedVariant, quantity);
+
+    // после добавления узнаём, сколько всего позиций в корзине
+    const portionCount = Cart.getPortionCount();
+
+    if (portionCount > 0) {
+        // показываем счётчик
+        TelegramSDK.showMainButton(
+            `MY CART · ${portionCount} POSITION${portionCount === 1 ? "" : "S"}`
+        );
+    } else {
+        // на всякий случай, если корзина вдруг пустая
+        TelegramSDK.showMainButton("ADD TO CART");
+    }
 });
+
 
   }
 }
