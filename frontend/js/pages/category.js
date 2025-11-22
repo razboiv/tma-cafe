@@ -44,46 +44,33 @@ export default class CategoryPage extends Route {
       return;
     }
 
-    // грузим меню категории
-    try {
-      const menu = await getMenuCategory(categoryId);
-      console.log("[CategoryPage] menu loaded", menu);
-      this.#fillMenu(menu);
-    } catch (err) {
-      console.error("[CategoryPage] failed to load menu", err);
-    }
+  // грузим меню категории
+  try {
+    const menu = await getMenuCategory(categoryId);
+    console.log("[CategoryPage] menu loaded", menu);
+    this.#fillMenu(menu.items, categoryId); // ПЕРЕДАЁМ categoryId
+  } catch (err) {
+    console.error("[CategoryPage] failed to load menu", err);
   }
 
-  #fillMenu(menuItems) {
-    replaceShimmerContent(
-      "#cafe-category",
-      "#cafe-item-template",
-      ".cafe-item-image",
-      menuItems,
-      (template, item) => {
-        // текст
-        template.find(".cafe-item-name").text(item.name || "");
-        template
-          .find(".cafe-item-description")
-          .text(item.description || "");
+  }
 
-        // КАРТИНКА
-        const imageEl = template.find(".cafe-item-image");
-        const imageUrl = item.imageUrl || item.image; // <-- ВАЖНАЯ СТРОКА
-
-        if (imageUrl) {
-          imageEl.attr("src", imageUrl);
-          imageEl.removeClass("shimmer");
-        } else {
-          imageEl.attr("src", "icons/icon-transparent.svg");
-        }
-
-        // переход на details
-        template.on("click", () => {
-          const params = JSON.stringify({ id: item.id });
-          navigateTo("details", params);
+#fillMenu(menuItems, categoryId) {
+  replaceShimmerContent(
+    "#cafe-category",
+    "#cafe-item-template",
+    ".cafe-item-image",
+    menuItems,
+    (template, item) => {
+      ...
+      // переход на details
+      template.on("click", () => {
+        const params = JSON.stringify({
+          id: item.id,
+          categoryId: categoryId   // ДОБАВИЛИ
         });
-      },
-    );
-  }
+        navigateTo("details", params);
+      });
+    }
+  );
 }
