@@ -60,6 +60,7 @@ export default class CartPage extends Route {
     items.forEach((cartItem) => {
       const el = $(templateHtml);
       const { cafeItem, variant, quantity } = cartItem;
+      el.find(".cart-item-image").attr("src", cafeItem.image || "");
 
       const positionCost = (Number(variant.cost) || 0) * quantity;
       total += positionCost;
