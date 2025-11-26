@@ -37,6 +37,18 @@ export class TelegramSDK {
         Telegram.WebApp.MainButton.hide();
     }
 
+static sendData(data) {
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.sendData(data);
+  }
+}
+
+static close() {
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.close();
+  }
+}
+    
     static showBackButton(onClick) {
         Telegram.WebApp.BackButton
             .offClick(this.#backButtonClickCallback)
