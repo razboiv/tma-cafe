@@ -34,32 +34,33 @@
 
     <!-- Кнопки - / + и количество -->
 <template id="cart-item-template">
-    <div class="cart-item">
-
-        <div class="cart-item-image-container">
-            <img class="cart-item-image" src="icons/icon-transparent.svg" alt="" />
-        </div>
-
-        <div class="cart-item-info">
-            <div class="cart-item-name"></div>
-            <div class="cart-item-variant"></div>
-            <div class="cart-item-weight"></div>
-        </div>
-
-        <div class="cart-item-controls">
-
-            <button type="button" class="cart-item-dec">−</button>
-
-            <div class="cart-item-qty">
-                <span class="cart-item-qty-value">1</span>
-            </div>
-
-            <button type="button" class="cart-item-inc">+</button>
-
-        </div>
-
-        <div class="cart-item-cost"></div>
-
+  <div class="cart-item">
+    <!-- Картинка товара -->
+    <div class="cart-item-image-container">
+      <img class="cart-item-image" src="icons/icon-transparent.svg" alt="" />
     </div>
+
+    <!-- Текстовая информация -->
+    <div class="cart-item-info">
+      <div class="cart-item-name"></div>
+      <div class="cart-item-variant"></div>
+      <div class="cart-item-weight"></div>
+    </div>
+
+    <!-- Кнопки - / + и количество -->
+    <div class="cart-item-controls">
+      <button type="button" class="cart-item-btn cart-item-dec">−</button>
+
+      <div class="cart-item-qty-circle">
+        <span class="cart-item-qty">1</span>
+      </div>
+
+      <button type="button" class="cart-item-btn cart-item-inc">+</button>
+    </div>
+
+    <!-- Цена -->
+    <div class="cart-item-cost"></div>
+  </div>
 </template>
+
 
