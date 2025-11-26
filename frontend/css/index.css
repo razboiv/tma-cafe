@@ -851,3 +851,27 @@ p.small {
     font-weight: 600;
     letter-spacing: 0.02em;
 }
+
+/* Убираем кружок у кнопок + и - */
+.cart-btn {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Убираем размер круга */
+.cart-btn-inc,
+.cart-btn-dec {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
+}
+
+/* Чтобы + и - были крупнее и по центру */
+.cart-btn-inc,
+.cart-btn-dec {
+    font-size: 28px;
+    line-height: 28px;
+    color: white; /* или другой цвет */
+}
