@@ -531,7 +531,8 @@ p.small {
 
 .cart-qty-value {
   font-size: 14px;      /* как в макете */
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 20px;
   color: var(--on-accent-color); /* белый текст на синем */
 }
 
