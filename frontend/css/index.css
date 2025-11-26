@@ -498,31 +498,30 @@ p.small {
 
 /* Кнопки - и + */
 .cart-btn {
-  border: none;
-  background: transparent;  /* убираем серый круг */
-  padding: 0;
-  width: auto;
-  height: 32px;             /* большая зона клика */
-  border-radius: 0;
+  background: transparent;   /* без фона */
+  border: none;              /* без рамки */
+  width: auto;               /* не фиксируем размер */
+  height: auto;
+  padding: 0 8px;            /* чуть отступов по бокам (можно 0, если хочешь) */
+  border-radius: 0;          /* убираем округление */
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;          /* размер плюсика / минуса */
+  font-size: 20px;           /* размер плюсика/минуса */
   line-height: 1;
-  color: var(--on-bg-color); /* обычный белый/текстовый цвет */
-  cursor: pointer;
 }
-
 .cart-btn:active,
 .cart-btn:focus {
   background: transparent;
   outline: none;
 }
 
+
 /* Синий кружок с количеством */
 .cart-qty-circle {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   background-color: var(--accent-color); /* тот же синий, что и в деталях */
   display: flex;
@@ -531,7 +530,7 @@ p.small {
 }
 
 .cart-qty-value {
-  font-size: 17px;      /* как в макете */
+  font-size: 14px;      /* как в макете */
   font-weight: 600;
   color: var(--on-accent-color); /* белый текст на синем */
 }
