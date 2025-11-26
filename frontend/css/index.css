@@ -215,6 +215,11 @@ p.small {
     color: #FFFFFF;
 }
 
+.cart-total-container {
+  margin-top: 16px;
+  padding-left: 16px;   /* как отступы текста на остальных экранах */
+  font-size: 17px;
+}
 
 
 /* Sections (e.g. categories or popular */
@@ -486,44 +491,42 @@ p.small {
 
 /* Контейнер кнопок */
 .cart-item-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 16px;         /* расстояние между - [1] + */
 }
 
 /* Кнопки - и + */
 .cart-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    background: #d0ccd8;
-    color: #000;
-    font-size: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 0;
-    cursor: pointer;
-    user-select: none;
-    font-weight: 500;
+  border: none;
+  background: transparent;  /* убираем серый круг */
+  padding: 0;
+  width: 32px;
+  height: 32px;             /* большая зона клика */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;          /* размер плюсика / минуса */
+  line-height: 1;
+  color: var(--on-bg-color); /* обычный белый/текстовый цвет */
+  cursor: pointer;
 }
 
 /* Синий кружок с количеством */
 .cart-qty-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #2C95FF;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background-color: var(--accent-color); /* тот же синий, что и в деталях */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cart-qty-value {
-    color: white;
-    font-size: 18px;
-    font-weight: 600;
+  font-size: 17px;      /* как в макете */
+  font-weight: 600;
+  color: var(--on-accent-color); /* белый текст на синем */
 }
 
 
