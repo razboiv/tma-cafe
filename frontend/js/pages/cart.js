@@ -76,13 +76,15 @@ export default class CartPage extends Route {
       el.find(".cart-item-qty").text(quantity);
 
       // кнопки +/-
-      el.find(".cart-item-inc").on("click", () => {
-        Cart.increaseQuantity(cartItem);
-      });
+// --- КНОПКИ +/-
+el.find(".cart-btn-inc").on("click", () => {
+  Cart.increaseQuantity(cartItem);
+});
 
-      el.find(".cart-item-dec").on("click", () => {
-        Cart.decreaseQuantity(cartItem);
-      });
+el.find(".cart-btn-dec").on("click", () => {
+  Cart.decreaseQuantity(cartItem);
+});
+
 
       listBlock.append(el);
     });
