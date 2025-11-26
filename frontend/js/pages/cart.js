@@ -67,6 +67,7 @@ export default class CartPage extends Route {
 
       el.attr("id", cartItem.getId());
 
+      el.find(".cart-qty-value").text(quantity);
       el.find(".cart-item-name").text(cafeItem.name ?? "");
       el.find(".cart-item-variant").text(variant.name ?? "");
       el.find(".cart-item-weight").text(variant.weight ?? "");
