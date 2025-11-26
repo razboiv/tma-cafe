@@ -520,8 +520,8 @@ p.small {
 
 /* Синий кружок с количеством */
 .cart-qty-circle {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background-color: var(--accent-color); /* тот же синий, что и в деталях */
   display: flex;
