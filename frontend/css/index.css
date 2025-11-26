@@ -502,7 +502,7 @@ p.small {
   border: none;              /* без рамки */
   width: auto;               /* не фиксируем размер */
   height: auto;
-  padding: 0 8px;            /* чуть отступов по бокам (можно 0, если хочешь) */
+  padding: 0 12px;            /* чуть отступов по бокам (можно 0, если хочешь) */
   border-radius: 0;          /* убираем округление */
   box-shadow: none;
   display: inline-flex;
