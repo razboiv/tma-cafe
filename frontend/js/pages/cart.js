@@ -77,14 +77,14 @@ export default class CartPage extends Route {
 
       // кнопки +/-
 // --- КНОПКИ +/-
-el.find(".cart-btn-inc").on("click", () => {
-  Cart.increaseQuantity(cartItem);
-});
+    // --- КНОПКИ +/- ---
+    el.find(".cart-btn-inc").on("click", () => {
+      Cart.increaseQuantity(cartItem);
+    });
 
-el.find(".cart-btn-dec").on("click", () => {
-  Cart.decreaseQuantity(cartItem);
-});
-
+    el.find(".cart-btn-dec").on("click", () => {
+      Cart.decreaseQuantity(cartItem);
+    });
 
     listBlock.append(el);
   });
@@ -97,7 +97,7 @@ el.find(".cart-btn-dec").on("click", () => {
   const order = Cart.toOrderJSON();
   console.log("[CartPage] checkout payload", order);
 
-  // если корзина пустая — просто выходим
+  // если корзина пуста — просто выходим
   if (!order.length) {
     return;
   }
@@ -111,5 +111,5 @@ el.find(".cart-btn-dec").on("click", () => {
   // закрываем Mini App
   TelegramSDK.close();
 }
-
+}
 
