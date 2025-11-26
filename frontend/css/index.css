@@ -501,15 +501,22 @@ p.small {
   border: none;
   background: transparent;  /* убираем серый круг */
   padding: 0;
-  width: 32px;
+  width: auto;
   height: 32px;             /* большая зона клика */
-  display: flex;
+  border-radius: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;          /* размер плюсика / минуса */
   line-height: 1;
   color: var(--on-bg-color); /* обычный белый/текстовый цвет */
   cursor: pointer;
+}
+
+.cart-btn:active,
+.cart-btn:focus {
+  background: transparent;
+  outline: none;
 }
 
 /* Синий кружок с количеством */
