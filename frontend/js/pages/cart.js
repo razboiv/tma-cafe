@@ -86,12 +86,13 @@ el.find(".cart-btn-dec").on("click", () => {
 });
 
 
-      listBlock.append(el);
-    });
+    listBlock.append(el);
+  });
 
-    totalCostEl.text(toDisplayCost(total));
-  }
+  totalCostEl.text(toDisplayCost(total));
+}
 
+/** оформить заказ */
 #checkout() {
   const order = Cart.toOrderJSON();
   console.log("[CartPage] checkout payload", order);
@@ -101,10 +102,16 @@ el.find(".cart-btn-dec").on("click", () => {
     return;
   }
 
-  // здесь мог бы быть запрос на бэкенд
-
+  // показываем алерт в веб-аппе
   TelegramSDK.showAlert("Заказ отправлен (демо).");
+
+  // чистим корзину
   Cart.clear();
-  TelegramSDK.close();       // закрываем MiniApp и возвращаемся в чат
+
+  // закрываем мини-апп, чтобы увидеть сообщение бота
+  TelegramSDK.close();
+  // если такого метода нет, можно так:
+  // window.Telegram?.WebApp?.close();
+}
 }
 
