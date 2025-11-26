@@ -97,21 +97,19 @@ el.find(".cart-btn-dec").on("click", () => {
   const order = Cart.toOrderJSON();
   console.log("[CartPage] checkout payload", order);
 
+  // если корзина пустая — просто выходим
   if (!order.length) {
-    // пустую корзину не отправляем
     return;
   }
 
-  // показываем алерт в веб-аппе
-  TelegramSDK.showAlert("Заказ отправлен (демо).");
+  // отправляем данные боту
+  TelegramSDK.sendData(JSON.stringify(order));
 
-  // чистим корзину
+  // очищаем корзину у себя
   Cart.clear();
 
-  // закрываем мини-апп, чтобы увидеть сообщение бота
+  // закрываем Mini App
   TelegramSDK.close();
-  // если такого метода нет, можно так:
-  // window.Telegram?.WebApp?.close();
 }
-}
+
 
