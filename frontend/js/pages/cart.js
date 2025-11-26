@@ -92,19 +92,19 @@ el.find(".cart-btn-dec").on("click", () => {
     totalCostEl.text(toDisplayCost(total));
   }
 
-  #checkout() {
-    const order = Cart.toOrderJSON();
-    console.log("[CartPage] checkout payload", order);
+#checkout() {
+  const order = Cart.toOrderJSON();
+  console.log("[CartPage] checkout payload", order);
 
-    if (!order.length) {
-      // пустую корзину не отправляем
-      return;
-    }
-
-    // В реальном проекте здесь XHR/fetch на ваш бэкенд,
-    // сейчас просто показываем alert и очищаем корзину.
-    TelegramSDK.showAlert("Заказ отправлен (демо).");
-    Cart.clear();
-    navigateTo("root");
+  if (!order.length) {
+    // пустую корзину не отправляем
+    return;
   }
+
+  // здесь мог бы быть запрос на бэкенд
+
+  TelegramSDK.showAlert("Заказ отправлен (демо).");
+  Cart.clear();
+  TelegramSDK.close();       // закрываем MiniApp и возвращаемся в чат
 }
+
