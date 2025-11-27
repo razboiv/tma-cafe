@@ -115,6 +115,23 @@ def handle_start_command(message):
         text='*Welcome to Laurel Cafe!* 🌿\n\nIt is time to order something delicious 😋 Tap the button below to get started.'
     )
 
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message: Message):
+    """
+    Сюда прилетает payload из MiniApp после TelegramSDK.sendData(...)
+    """
+    data = message.web_app_data.data  # это строка, которую ты отправил из WebApp
+
+    # Лог в консоль/back-end логи
+    print("[BOT] got web_app_data:", data)
+
+    # Отправляем тебе это же в чат, чтобы ты видел, что всё дошло
+    bot.send_message(
+        chat_id=message.chat.id,
+        text=f"Я получил заказ из Mini App:\n<code>{data}</code>",
+        parse_mode="HTML",
+    )
+
 @bot.message_handler()
 def handle_all_messages(message):
     """Fallback message handler that is invoced if none of above aren't match. This is a good
