@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import telebot
+import json
 from telebot import TeleBot
 from telebot.types import Update, WebAppInfo, Message
 from telebot.util import quick_markup
@@ -11,52 +12,86 @@ PAYMENT_PROVIDER_TOKEN=os.getenv('PAYMENT_PROVIDER_TOKEN')
 WEBHOOK_URL=os.getenv('WEBHOOK_URL')
 WEBHOOK_PATH='/bot'
 APP_URL=os.getenv('APP_URL')
+OWNER_CHAT_ID = 623300087
 
 bot = TeleBot(BOT_TOKEN, parse_mode=None)
 
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message):
+    """
+    Обрабатывает sendData(order) из MiniApp.
+    Здесь приходит JSON с заказом.
+    После этого мы отправляем пользователю ссылку на оплату.
+    """
+
+    try:
+        order = json.loads(message.web_app_data.data)
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Ошибка данных: {e}")
+        return
+
+    # ---------- формируем красивый текст заказа ----------
+    items_text = ""
+    total = 0
+    for item in order:
+        name = item['cafeteria']['name']
+        variant = item['variant']['name']
+        qty = item['quantity']
+        price = item['cost']
+        total += price * qty
+        items_text += f"• {name} — {variant} × {qty} = {price * qty} ₽\n"
+
+    summary = f"Ваш заказ:\n\n{items_text}\nИтого: {total} ₽"
+
+    # ---------- создаём счёт (invoice link) ----------
+    invoice_link = bot.create_invoice_link(
+        title="Оплата заказа",
+        description="Оплата покупки в Laurel Cafe",
+        payload="order_payload",
+        provider_token=PAYMENT_PROVIDER_TOKEN,
+        currency="RUB",
+        prices=[{"label": "Заказ", "amount": total * 100}],
+        need_name=True,
+        need_phone_number=True
+    )
+
+    # ---------- отправляем ссылку клиенту ----------
+    bot.send_message(message.chat.id, summary)
+    bot.send_message(message.chat.id, "Перейдите к оплате:", reply_markup=None)
+
+    bot.send_message(
+        message.chat.id,
+        f"👉 <a href=\"{invoice_link}\">Оплатить заказ</a>",
+        parse_mode="HTML"
+    )
+
+    # ---------- уведомляем владельца бизнеса ----------
+    bot.send_message(
+        OWNER_CHAT_ID,
+        f"❗ Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}"
+    )
+
+
+# -------------------- успешная оплата --------------------
 @bot.message_handler(content_types=['successful_payment'])
 def handle_successful_payment(message):
-    """Message handler for messages containing 'successful_payment' field.
-      This message is sent when the payment is successful and the payment flow is done.
-      It's a good place to send the user a purchased item (if it is an electronic item, such as a key) 
-      or to send a message that an item is on its way.
-
-      The message param doesn't contain info about ordered good - they should be stored separately.
-      Find more info: https://core.telegram.org/bots/api#successfulpayment.
-
-      Example of Successful Payment message:
-        {
-            "update_id":12345,
-            "message":{
-                "message_id":12345,
-                "date":1441645532,
-                "chat":{
-                    "last_name":"Doe",
-                    "id":123456789,
-                    "first_name":"John",
-                    "username":"johndoe",
-                    "type": ""
-                },
-                "successful_payment": {
-                    "currency": "USD",
-                    "total_amount": 1000,
-                    "invoice_payload": "order_id",
-                    "telegram_payment_charge_id": "12345",
-                    "provider_payment_charge_id": "12345",
-                    "order_info": {
-                        "name": "John"
-                    }
-                }
-            }
-        }
     """
-    user_name = message.successful_payment.order_info.name
-    text = f'Thank you for your order, *{user_name}*! This is not a real cafe, so your card was not charged.\n\nHave a nice day 🙂'
+    Срабатывает автоматически после оплаты.
+    """
+
+    amount = message.successful_payment.total_amount // 100
     bot.send_message(
-        chat_id=message.chat.id,
-        text=text,
-        parse_mode='markdown'
+        message.chat.id,
+        f"✅ Оплата {amount} ₽ прошла успешно!\nСпасибо за покупку ❤️"
     )
+
+    # Сообщаем владельцу:
+    bot.send_message(
+        OWNER_CHAT_ID,
+        f"💰 Клиент @{message.from_user.username or 'user'} успешно оплатил заказ на {amount} ₽"
+    )
+
+@bot.message_handler(content_types=['successful_payment'])
 
 @bot.pre_checkout_query_handler(func=lambda _: True)
 def handle_pre_checkout_query(pre_checkout_query):
