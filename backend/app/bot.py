@@ -71,6 +71,39 @@ def handle_web_app_data(message):
         f"❗ Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}"
     )
 
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message: Message):
+    """
+    Сюда прилетает payload из MiniApp (Checkout -> sendData()).
+    Пока просто логируем и шлём тебе в чат, чтобы убедиться, что всё работает.
+    """
+    try:
+        raw = message.web_app_data.data
+        logging.info("Got web_app_data: %s", raw)
+
+        # Пытаемся распарсить JSON, который ты отправляешь из MiniApp
+        try:
+            order = json.loads(raw)
+        except Exception:
+            order = None
+
+        if order is None:
+            text = f"Пришли данные из MiniApp, но не получилось распарсить JSON:\n`{raw}`"
+        else:
+            text = "Пришёл заказ из MiniApp:\n" + json.dumps(order, ensure_ascii=False, indent=2)
+
+        bot.send_message(
+            chat_id=message.chat.id,
+            text=text,
+            parse_mode="Markdown"
+        )
+
+    except Exception as e:
+        logging.exception("Error in handle_web_app_data: %s", e)
+        bot.send_message(
+            chat_id=message.chat.id,
+            text=f"Ошибка при обработке web_app_data: {e}"
+        )
 
 # -------------------- успешная оплата --------------------
 @bot.message_handler(content_types=['successful_payment'])
