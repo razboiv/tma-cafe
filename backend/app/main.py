@@ -231,27 +231,29 @@ def create_order():
         }
     ), 200
 
-# ----------- Telegram webhook --------------
+# ------------ webhook от Telegram ------------
 
 @app.post("/bot")
 def telegram_webhook():
     """
-    Эндпоинт для Telegram webhook.
-    Сюда Telegram шлёт все апдейты (сообщения, successful_payment и т.п.).
+    Сюда Telegram шлёт апдейты (сообщения, web_app_data, оплаты и т.д.).
     """
-    update_json = request.get_json(silent=True)
+    update_json = request.get_json(silent=True, force=True)
+    app.logger.debug("[WEBHOOK] /bot payload: %s", update_json)
 
     if not update_json:
-        # На всякий случай логируем, если пришло что-то странное
-        app.logger.warning("Empty or invalid update from Telegram: %s", request.data)
         return jsonify({"ok": False}), 400
 
-    # Передаём апдейт в telebot (функция лежит в app.bot)
     process_update(update_json)
-
-    # По протоколу Telegram достаточно вернуть {"ok": true}
     return jsonify({"ok": True})
 
+
+@app.get("/bot")
+def webhook_debug():
+    """
+    Просто проверка, что эндпоинт жив.
+    """
+    return jsonify({"message": "webhook is alive"})
 
 # ------------ error handlers ------------
 
