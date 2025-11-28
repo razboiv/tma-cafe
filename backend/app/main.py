@@ -8,7 +8,6 @@ import secrets
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict, List
 
-from app.bot import process_update, refresh_webhook, enable_debug_logging
 from app.bot import process_update
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -20,9 +19,6 @@ DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
 
 app = Flask(__name__)
 CORS(app)
-
-# включаем подробные логи бота
-enable_debug_logging()
 
 # ------------ утилиты работы с JSON ------------
 
