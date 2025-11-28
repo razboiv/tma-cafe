@@ -8,6 +8,7 @@ import secrets
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict, List
 
+from app.bot import process_update
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -229,6 +230,27 @@ def create_order():
             "items": normalized,
         }
     ), 200
+
+# ----------- Telegram webhook --------------
+
+@app.post("/bot")
+def telegram_webhook():
+    """
+    Эндпоинт для Telegram webhook.
+    Сюда Telegram шлёт все апдейты (сообщения, successful_payment и т.п.).
+    """
+    update_json = request.get_json(silent=True)
+
+    if not update_json:
+        # На всякий случай логируем, если пришло что-то странное
+        app.logger.warning("Empty or invalid update from Telegram: %s", request.data)
+        return jsonify({"ok": False}), 400
+
+    # Передаём апдейт в telebot (функция лежит в app.bot)
+    process_update(update_json)
+
+    # По протоколу Telegram достаточно вернуть {"ok": true}
+    return jsonify({"ok": True})
 
 
 # ------------ error handlers ------------
