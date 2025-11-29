@@ -12,10 +12,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 
-# ---------- пути к данным ----------
+# ------------ пути к данным ------------
 
-BASE_DIR = Path(__file__).resolve().parent       # backend/app
-DATA_DIR = BASE_DIR.parent / "data"              # backend/data
+BASE_DIR = Path(__file__).resolve().parent          # backend/app
+DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
 
 app = Flask(__name__)
 CORS(app)
@@ -24,8 +24,7 @@ CORS(app)
 enable_debug_logging()
 
 
-# ---------- утилиты работы с JSON ----------
-
+# ------------ утилиты работы с JSON ------------
 
 def _safe_json_path(relpath: str) -> Path:
     """
@@ -33,7 +32,6 @@ def _safe_json_path(relpath: str) -> Path:
     Поддерживаем подпапки, например 'menu/burgers'.
     """
     rel = relpath.lstrip("/")
-
     candidate = (DATA_DIR / f"{rel}.json").resolve()
 
     # защита от выхода из каталога data
@@ -47,7 +45,6 @@ def _safe_json_path(relpath: str) -> Path:
 def load_json(relpath: str) -> Tuple[Optional[Any], Optional[str]]:
     """Безопасное чтение JSON по относительному пути внутри backend/data."""
     p = _safe_json_path(relpath)
-
     if not p.exists():
         return None, f"{p.name} not found"
 
@@ -64,8 +61,7 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ---------- health / root ----------
-
+# ------------ health / root ------------
 
 @app.get("/")
 def root():
@@ -87,8 +83,7 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-# ---------- публичные GET ----------
-
+# ------------ публичные GET ------------
 
 @app.get("/info")
 def get_info():
@@ -159,7 +154,7 @@ def get_menu_details(item_id: str):
     """
     /menu/details/burger-1 -> ищем burger-1 внутри menu/burgers.json
     """
-    prefix = item_id.split("-", 1)[0]  # 'burger-1' -> 'burger'
+    prefix = item_id.split("-", 1)[0]   # 'burger-1' -> 'burger'
     json_name = DETAILS_PREFIX_MAP.get(prefix)
     if not json_name:
         return json_error("Not found", 404)
@@ -178,8 +173,7 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ---------- создание заказа ----------
-
+# ------------ создание заказа ------------
 
 @app.post("/order")
 def create_order():
@@ -209,10 +203,10 @@ def create_order():
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
-        cost = it.get("cost")
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
+        cost = var.get("cost")
 
         if not caf_id or not var_id:
             return json_error(f"Bad cart item format at index {i}", 400)
@@ -237,8 +231,7 @@ def create_order():
     ), 200
 
 
-# ---------- webhook от Telegram ----------
-
+# ------------ webhook от Telegram ------------
 
 @app.post("/bot")
 def telegram_webhook():
@@ -257,19 +250,11 @@ def telegram_webhook():
 
 @app.get("/bot")
 def webhook_debug():
-    """Просто проверка, что эндпоинт жив."""
+    """просто проверка, что эндпоинт жив."""
     return jsonify({"message": "webhook is alive"})
 
 
-@app.get("/refresh_webhook")
-def refresh_webhook_route():
-    """Ручка, чтобы руками обновить webhook."""
-    refresh_webhook()
-    return jsonify({"status": "ok"})
-
-
-# ---------- error handlers ----------
-
+# ------------ error handlers ------------
 
 @app.errorhandler(404)
 def not_found(e):
@@ -282,7 +267,6 @@ def internal_error(e):
     return json_error("Internal server error", 500)
 
 
-# ---------- локальный запуск ----------
-
+# локальный запуск
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
