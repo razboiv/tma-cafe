@@ -1,68 +1,62 @@
-# backend/app/bot.py
-import os
 import logging
+import os
 import json
+import re
+
 import telebot
-from telebot.types import Message, WebAppInfo, Update
+from telebot import TeleBot
+from telebot.types import Update, WebAppInfo, Message
 from telebot.util import quick_markup
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/bot")
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH")
 APP_URL = os.getenv("APP_URL")
 OWNER_CHAT_ID = 62330887
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None)
-telebot.logger.setLevel(logging.DEBUG)
-
-# ---------------------------------------------------
-# REFRESH WEBHOOK
-# ---------------------------------------------------
-def refresh_webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=WEBHOOK_URL + "/" + WEBHOOK_PATH)
+bot = TeleBot(BOT_TOKEN, parse_mode=None)
 
 
-# ---------------------------------------------------
-# PROCESS UPDATE FROM FLASK
-# ---------------------------------------------------
-def process_update(update_json: dict):
-    update = Update.de_json(update_json)
-    bot.process_new_updates([update])
+def enable_debug_logging() -> None:
+    telebot.logger.setLevel(logging.DEBUG)
 
 
-# ---------------------------------------------------
-# HANDLER: WEB APP DATA
-# ---------------------------------------------------
 @bot.message_handler(content_types=["web_app_data"])
-def handle_web_app(message: Message):
+def handle_web_app_data(message: Message) -> None:
+    raw = message.web_app_data.data
+    logging.info(f"[BOT] got web_app_data: {raw}")
+
     try:
-        data = json.loads(message.web_app_data.data)
-    except:
-        bot.send_message(message.chat.id, "❌ Ошибка чтения JSON")
+        order = json.loads(raw)
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Ошибка разбора JSON: {e}")
         return
 
-    items = data if isinstance(data, list) else []
+    if not isinstance(order, list):
+        bot.send_message(message.chat.id, f"Неверный формат заказа: {order}")
+        return
+
+    items_text = ""
     total = 0
-    lines = []
+    for item in order:
+        caf = item.get("cafeteria", {})
+        var = item.get("variant", {})
+        qty = int(item.get("quantity") or 1)
+        price = int(item.get("cost") or 0)
 
-    for item in items:
-        name = item.get("cafeteria", {}).get("name", "Товар")
-        variant = item.get("variant", {}).get("name", "")
-        qty = int(item.get("quantity", 1))
-        price = int(item.get("cost", 0))
-
+        name = caf.get("name", "Товар")
+        variant = var.get("name", "")
         total += price * qty
-        lines.append(f"{name} {variant} × {qty} = {price * qty} ₽")
 
-    summary = "Ваш заказ:\n" + "\n".join(lines) + f"\n\nИтого: {total} ₽"
+        items_text += f"{name} — {variant} × {qty} = {price * qty} ₽\n"
 
-    # отправляем invoice
-    invoice = bot.create_invoice_link(
+    summary = f"Ваш заказ:\n\n{items_text}\nИтого: {total} ₽"
+
+    invoice_link = bot.create_invoice_link(
         title="Оплата заказа",
-        description="Оплата заказа в Mini App",
-        payload="order",
+        description="Покупка в Laurel Cafe",
+        payload="order_payload",
         provider_token=PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[{"label": "Заказ", "amount": total * 100}],
@@ -71,59 +65,56 @@ def handle_web_app(message: Message):
     )
 
     bot.send_message(message.chat.id, summary)
-    bot.send_message(message.chat.id,
-        f"<a href=\"{invoice}\">💳 Оплатить заказ</a>",
-        parse_mode="HTML"
+    bot.send_message(
+        message.chat.id,
+        '<a href="{0}">Оплатить заказ</a>'.format(invoice_link),
+        parse_mode="HTML",
     )
 
     bot.send_message(
         OWNER_CHAT_ID,
-        f"🆕 Новый заказ от @{message.from_user.username}\n" + summary
+        f"Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}",
     )
 
 
-# ---------------------------------------------------
-# PAYMENT SUCCESS
-# ---------------------------------------------------
-@bot.message_handler(content_types=['successful_payment'])
-def payment_success(message: Message):
+@bot.message_handler(content_types=["successful_payment"])
+def handle_successful_payment(message: Message) -> None:
     amount = message.successful_payment.total_amount // 100
 
-    bot.send_message(message.chat.id, f"✅ Оплата {amount} ₽ прошла успешно!")
-    bot.send_message(OWNER_CHAT_ID,
-        f"💰 Клиент @{message.from_user.username} оплатил {amount} ₽")
+    bot.send_message(message.chat.id, f"❤️ Оплата {amount} ₽ прошла успешно!")
+    bot.send_message(
+        OWNER_CHAT_ID,
+        f"💰 Клиент @{message.from_user.username or 'user'} оплатил {amount} ₽",
+    )
 
-# ---------------------------------------------------
-# PRE CHECKOUT
-# ---------------------------------------------------
+
 @bot.pre_checkout_query_handler(func=lambda q: True)
-def checkout(pre_checkout_query):
+def handle_pre_checkout(pre_checkout_query):
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
-# ---------------------------------------------------
-# START
-# ---------------------------------------------------
-@bot.message_handler(commands=['start'])
-def start(message: Message):
-    markup = quick_markup({
-        "Open menu": {"web_app": WebAppInfo(url=APP_URL)}
-    }, row_width=1)
 
-    bot.send_message(message.chat.id,
-        "Welcome! Tap the button to open the menu 👇",
-        reply_markup=markup
+@bot.message_handler(func=lambda m: re.match(r"^/start", m.text or "", re.I))
+def handle_start(message: Message) -> None:
+    send_actionable_message(message.chat.id, "Welcome to Laurel Cafe!")
+
+
+@bot.message_handler()
+def handle_all(message: Message) -> None:
+    send_actionable_message(message.chat.id, "Открой меню кнопкой ниже 👇")
+
+
+def send_actionable_message(chat_id: int, text: str) -> None:
+    markup = quick_markup(
+        {"Open menu": {"web_app": WebAppInfo(APP_URL)}}, row_width=1
     )
+    bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
 
-# ---------------------------------------------------
-# FALLBACK
-# ---------------------------------------------------
-@bot.message_handler(func=lambda m: True)
-def fallback(message: Message):
-    markup = quick_markup({
-        "Open menu": {"web_app": WebAppInfo(url=APP_URL)}
-    }, row_width=1)
 
-    bot.send_message(message.chat.id,
-        "Открой меню, чтобы сделать заказ 🙂",
-        reply_markup=markup
-    )
+def refresh_webhook() -> None:
+    bot.remove_webhook()
+    bot.set_webhook(WEBHOOK_URL + "/" + WEBHOOK_PATH)
+
+
+def process_update(update_json: dict) -> None:
+    update = Update.de_json(update_json)
+    bot.process_new_updates([update])
