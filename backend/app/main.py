@@ -1,38 +1,50 @@
-# backend/app/main.py
-
+import os
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Импортируем bot.py из той же директории
 from bot import process_update, refresh_webhook
 
 app = Flask(__name__)
 
-
-@app.route("/")
-def home():
-    return jsonify({"status": "ok"})
-
-
-@app.route("/health")
+# ---------------- health-check ----------------
+@app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"message": "webhook is alive"})
+    return jsonify({"status": "ok"}), 200
 
 
-@app.route("/refresh_webhook")
-def set_hook():
+# ---------------- webhook test ----------------
+@app.route("/webhook", methods=["GET"])
+def webhook_test():
+    return jsonify({"message": "webhook is alive"}), 200
+
+
+# ---------------- refresh webhook ----------------
+@app.route("/refresh_webhook", methods=["GET"])
+def refresh_hook():
     refresh_webhook()
-    return jsonify({"status": "webhook refreshed"})
+    return jsonify({"status": "webhook updated"}), 200
 
 
+# ---------------- receive updates from Telegram ----------------
 @app.route("/bot", methods=["POST"])
-def receive_update():
-    json_data = request.get_json(force=True, silent=True)
+def bot_webhook():
+    try:
+        update_json = request.get_json(force=True, silent=True)
+        if not update_json:
+            return jsonify({"error": "No JSON received"}), 400
 
-    if not json_data:
-        return jsonify({"error": "empty update"}), 400
+        process_update(update_json)
+        return jsonify({"status": "ok"}), 200
 
-    process_update(json_data)
-    return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# Run local (Render ignores this)
+# ---------------- start server ----------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
