@@ -1,210 +1,166 @@
 # backend/app/bot.py
+
 import logging
 import os
-import re
 import json
+import re
 
 import telebot
 from telebot import TeleBot
 from telebot.types import Update, WebAppInfo, Message
 from telebot.util import quick_markup
 
-# ---------- конфиг из переменных окружения ----------
-
+# ------------------------
+# ENV
+# ------------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")             # https://tma-cafe-backend.onrender.com
-WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "bot")    # просто "bot", без слеша
-APP_URL = os.getenv("APP_URL")                     # https://luvcore.shop
-OWNER_CHAT_ID = 623300887                          # твой user_id
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")          # https://tma-cafe-backend.onrender.com
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH")        # /bot
+APP_URL = os.getenv("APP_URL")                  # https://luvcore.shop
+OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID", "62330887"))
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN env var is not set")
-
-bot: TeleBot = TeleBot(BOT_TOKEN, parse_mode=None)
+bot = TeleBot(BOT_TOKEN, parse_mode=None)
 
 
-def enable_debug_logging() -> None:
-    """Включаем подробные логи TeleBot (видно в Render-логах)."""
+# -----------------------------------------
+# DEBUG LOGGING
+# -----------------------------------------
+def enable_debug_logging():
     telebot.logger.setLevel(logging.DEBUG)
 
 
-# ---------- Mini App -> sendData(order) ----------
-
-
+# -----------------------------------------
+# WebApp → Checkout JSON
+# -----------------------------------------
 @bot.message_handler(content_types=["web_app_data"])
-def handle_web_app_data(message: Message) -> None:
-    """
-    Сюда прилетает JSON с заказом из MiniApp (Checkout -> Telegram.WebApp.sendData()).
-    """
-    raw = (message.web_app_data.data or "").strip()
-    logging.info("[BOT] got web_app_data: %s", raw)
+def handle_web_app_data(message: Message):
+    raw = message.web_app_data.data
+    logging.info(f"[BOT] got web_app_data: {raw}")
 
-    # --- пробуем распарсить JSON ---
     try:
         order = json.loads(raw)
     except Exception as e:
-        logging.exception("Failed to parse web_app_data JSON")
-        bot.send_message(
-            chat_id=message.chat.id,
-            text=f"Ошибка разбора заказа: {e}",
-        )
+        bot.send_message(message.chat.id, f"Ошибка разбора JSON: {e}")
         return
 
     if not isinstance(order, list):
-        bot.send_message(
-            chat_id=message.chat.id,
-            text=f"Неожиданный формат заказа: {order!r}",
-        )
+        bot.send_message(message.chat.id, f"Неожиданный формат заказа: {order}")
         return
 
-    # ---------- формируем текст заказа и считаем сумму ----------
-    items_text = ""
+    # ---- Формируем текст заказа ----
+    text = ""
     total = 0
 
     for item in order:
         caf = item.get("cafeteria") or {}
         var = item.get("variant") or {}
-        qty = int(item.get("quantity") or 1)
-        price = int(item.get("cost") or 0)
+        qty = int(item.get("quantity", 1))
+        price = int(item.get("cost", 0))
 
         name = caf.get("name", "Товар")
         variant = var.get("name", "")
         total += price * qty
 
-        items_text += f"{name} — {variant} × {qty} = {price * qty} ₽\n"
+        text += f"{name} {variant} × {qty} = {price * qty} ₽\n"
 
-    summary = f"Ваш заказ:\n\n{items_text}\nИтого: {total} ₽"
+    summary = f"Ваш заказ:\n\n{text}\nИтого: {total} ₽"
 
-    # ---------- создаём счёт (invoice link) ----------
-    invoice_link = bot.create_invoice_link(
+    # ---- создаём invoice link ----
+    invoice = bot.create_invoice_link(
         title="Оплата заказа",
-        description="Оплата покупки в Laurel Cafe",
+        description="Покупка в Laurel Cafe",
         payload="order_payload",
         provider_token=PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[{"label": "Заказ", "amount": total * 100}],
         need_name=True,
-        need_phone_number=True,
+        need_phone_number=True
     )
 
-    # ---------- отправляем ссылку клиенту ----------
+    # ---- отправляем клиенту ----
     bot.send_message(message.chat.id, summary)
-    bot.send_message(message.chat.id, "Перейдите к оплате по ссылке ниже:")
+    bot.send_message(message.chat.id, "Перейдите к оплате:")
     bot.send_message(
         message.chat.id,
-        f'<a href="{invoice_link}">Оплатить заказ</a>',
-        parse_mode="HTML",
+        f"<a href='{invoice}'>Оплатить заказ</a>",
+        parse_mode="HTML"
     )
 
-    # ---------- уведомляем владельца ----------
+    # ---- уведомление владельцу ----
     bot.send_message(
         OWNER_CHAT_ID,
-        f"🧾 Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}",
+        f"🆕 Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}"
     )
 
 
-# ---------- успешная оплата (Telegram Payments) ----------
-
-
+# -----------------------------------------
+# Successful payment
+# -----------------------------------------
 @bot.message_handler(content_types=["successful_payment"])
-def handle_successful_payment(message: Message) -> None:
-    """
-    Срабатывает, когда Telegram подтверждает успешный платёж.
-    Тут шлём подтверждение клиенту и уведомление владельцу.
-    """
+def handle_successful_payment(message: Message):
     amount = message.successful_payment.total_amount // 100
 
-    # клиенту
     bot.send_message(
         message.chat.id,
-        f"✅ Оплата {amount} ₽ прошла успешно!\nСпасибо за покупку ❤️",
+        f"❤️ Оплата {amount} ₽ прошла успешно!"
     )
 
-    # владельцу
     bot.send_message(
         OWNER_CHAT_ID,
-        f"💰 Клиент @{message.from_user.username or 'user'} "
-        f"успешно оплатил заказ на {amount} ₽",
+        f"💰 Клиент @{message.from_user.username or 'user'} оплатил заказ — {amount} ₽"
     )
 
 
-# ---------- pre_checkout (обязательный хендлер Telegram) ----------
-
-
-@bot.pre_checkout_query_handler(func=lambda _: True)
-def handle_pre_checkout_query(pre_checkout_query) -> None:
-    """
-    Здесь можно проверять наличие товара и т.п.
-    Сейчас просто говорим Telegram, что всё ОК.
-    """
+# -----------------------------------------
+# Pre-checkout
+# -----------------------------------------
+@bot.pre_checkout_query_handler(func=lambda q: True)
+def handle_pre_checkout(pre_checkout_query):
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
-# ---------- /start ----------
-
-
+# -----------------------------------------
+# /start
+# -----------------------------------------
 @bot.message_handler(commands=["start"])
-def handle_start_command(message: Message) -> None:
-    """Обработчик /start — отправляем кнопку с Mini App."""
-    logging.info("[BOT] handle_start for chat %s", message.chat.id)
-    send_actionable_message(
-        chat_id=message.chat.id,
-        text="Welcome to Laurel Cafe! 🌿\n\nTap the button below to open the menu.",
-    )
-
-
-# ---------- fallback-хендлер ----------
-
-
-@bot.message_handler(func=lambda m: True)
-def handle_all_messages(message: Message) -> None:
-    """
-    На все остальные сообщения просто даём ссылку на Mini App.
-    """
-    logging.info("[BOT] fallback handler, text=%r", message.text)
-    send_actionable_message(
-        chat_id=message.chat.id,
-        text="Чтобы оформить заказ, откройте меню по кнопке ниже 🙂",
-    )
-
-
-def send_actionable_message(chat_id: int, text: str) -> None:
-    """Отправляем текст + inline-кнопку, которая открывает Mini App."""
+def handle_start(message: Message):
     markup = quick_markup(
         {
-            "Open menu": {
-                "web_app": WebAppInfo(APP_URL),
-            },
+            "Open menu": {"web_app": WebAppInfo(APP_URL)}
         },
         row_width=1,
     )
+    bot.send_message(message.chat.id,
+                     "Welcome to Laurel Cafe! 🥐\nНажмите ниже, чтобы открыть меню.",
+                     reply_markup=markup)
 
-    bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=markup,
-        parse_mode="Markdown",
+
+# -----------------------------------------
+# fallback
+# -----------------------------------------
+@bot.message_handler()
+def handle_all(message: Message):
+    markup = quick_markup(
+        {"Open menu": {"web_app": WebAppInfo(APP_URL)}},
+        row_width=1,
     )
+    bot.send_message(message.chat.id,
+                     "Чтобы оформить заказ, откройте меню:",
+                     reply_markup=markup)
 
 
-# ---------- работа с вебхуком (вызывает Flask) ----------
-
-
-def refresh_webhook() -> None:
-    """Снять старый webhook и поставить новый на WEBHOOK_URL + WEBHOOK_PATH."""
-    url = (WEBHOOK_URL or "").rstrip("/")
-    path = (WEBHOOK_PATH or "bot").strip("/")
-    full = f"{url}/{path}"
-    logging.info("[BOT] set webhook to %s", full)
-    bot.remove_webhook()
-    bot.set_webhook(full)
-
-
-def process_update(update_json: dict) -> None:
-    """
-    Получает update JSON от Flask и передаёт его TeleBot'у.
-    Используется в маршруте /bot в main.py.
-    """
+# -----------------------------------------
+# Webhook handler (used by Flask)
+# -----------------------------------------
+def process_update(update_json: dict):
     update = Update.de_json(update_json)
     bot.process_new_updates([update])
+
+
+# -----------------------------------------
+# Refresh webhook
+# -----------------------------------------
+def refresh_webhook():
+    bot.remove_webhook()
+    bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
