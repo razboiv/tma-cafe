@@ -1,5 +1,4 @@
 # backend/app/main.py
-
 from __future__ import annotations
 
 import os
@@ -8,27 +7,24 @@ import secrets
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict, List
 
+from app.bot import process_update, refresh_webhook, enable_debug_logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from app.bot import process_update, refresh_webhook, enable_debug_logging
-
-
-# ----------- пути к данным -----------
+# ---------- пути к данным ----------
 
 BASE_DIR = Path(__file__).resolve().parent          # backend/app
 DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
 
-
 app = Flask(__name__)
-# CORS для MiniApp (https://luvcore.shop)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
 
 # включаем подробные логи бота
 enable_debug_logging()
 
 
-# ----------- утилиты работы с JSON -----------
+# ---------- утилиты работы с JSON ----------
+
 
 def _safe_json_path(relpath: str) -> Path:
     """
@@ -40,15 +36,14 @@ def _safe_json_path(relpath: str) -> Path:
 
     # защита от выхода из каталога data
     if not str(candidate).startswith(str(DATA_DIR.resolve())):
+        # вернём путь, который гарантированно не существует
         return DATA_DIR / "__forbidden__.json"
 
     return candidate
 
 
 def load_json(relpath: str) -> Tuple[Optional[Any], Optional[str]]:
-    """
-    Безопасное чтение JSON по относительному пути внутри backend/data.
-    """
+    """Безопасное чтение JSON по относительному пути внутри backend/data."""
     p = _safe_json_path(relpath)
     if not p.exists():
         return None, f"{p.name} not found"
@@ -66,7 +61,8 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ----------- health / root -----------
+# ---------- health / root ----------
+
 
 @app.get("/")
 def root():
@@ -88,7 +84,8 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-# ----------- публичные GET -----------
+# ---------- публичные GET ----------
+
 
 @app.get("/info")
 def get_info():
@@ -160,7 +157,7 @@ def get_menu_details(item_id: str):
     """
     /menu/details/burger-1 -> ищем burger-1 внутри menu/burgers.json
     """
-    prefix = item_id.split("-", 1)[0]      # 'burger-1' -> 'burger'
+    prefix = item_id.split("-", 1)[0]  # 'burger-1' -> 'burger'
     json_name = DETAILS_PREFIX_MAP.get(prefix)
     if not json_name:
         return json_error("Not found", 404)
@@ -179,14 +176,12 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ----------- создание заказа (через HTTPS-backend, не MiniApp) -----------
+# ---------- создание заказа (старый REST-вариант) ----------
+
 
 @app.post("/order")
 def create_order():
-    """
-    Эндпоинт для backend-варианта (если будешь посылать заказ не через sendData,
-    а прямо на бэкенд). Сейчас просто валидирует корзину и возвращает echo.
-    """
+    # JSON только объект
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return json_error("Request must be a JSON object", 400)
@@ -240,7 +235,8 @@ def create_order():
     ), 200
 
 
-# ----------- webhook от Telegram -----------
+# ---------- webhook от Telegram ----------
+
 
 @app.post("/bot")
 def telegram_webhook():
@@ -259,18 +255,23 @@ def telegram_webhook():
 
 @app.get("/bot")
 def webhook_debug():
-    """Просто проверка, что эндпоинт жив."""
+    """
+    Просто проверка, что эндпоинт жив.
+    """
     return jsonify({"message": "webhook is alive"})
 
 
 @app.get("/refresh_webhook")
 def refresh_webhook_route():
-    """Ручка для обновления webhook через браузер."""
+    """
+    Ручной сброс/установка webhook.
+    """
     refresh_webhook()
-    return jsonify({"message": "webhook refreshed"})
+    return jsonify({"status": "ok"})
 
 
-# ----------- error handlers -----------
+# ---------- error handlers ----------
+
 
 @app.errorhandler(404)
 def not_found(e):
@@ -279,11 +280,11 @@ def not_found(e):
 
 @app.errorhandler(500)
 def internal_error(e):
-    app.logger.exception("Unhandled server error", exc_info=e)
+    app.logger.exception("Unhandled server error")
     return json_error("Internal server error", 500)
 
 
-# ----------- локальный запуск -----------
+# ---------- локальный запуск ----------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
