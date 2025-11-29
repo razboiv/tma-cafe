@@ -1,5 +1,4 @@
 # backend/app/main.py
-
 from __future__ import annotations
 
 import os
@@ -12,17 +11,20 @@ from app.bot import process_update, refresh_webhook, enable_debug_logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+
 # ------------ пути к данным ------------
 
-BASE_DIR = Path(__file__).resolve().parent          # backend/app
-DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
+BASE_DIR = Path(__file__).resolve().parent        # backend/app
+DATA_DIR = BASE_DIR.parent / "data"               # backend/data
 
 app = Flask(__name__)
 CORS(app)
+
+# включаем подробные логи бота
 enable_debug_logging()
 
-# ------------ утилиты работы с JSON ------------
 
+# ------------ утилиты работы с JSON ------------
 
 def _safe_json_path(relpath: str) -> Path:
     """
@@ -30,7 +32,6 @@ def _safe_json_path(relpath: str) -> Path:
     Поддерживаем подпапки, например 'menu/burgers'.
     """
     rel = relpath.lstrip("/")
-
     candidate = (DATA_DIR / f"{rel}.json").resolve()
 
     # защита от выхода из каталога data
@@ -62,11 +63,10 @@ def json_error(message: str, code: int):
 
 # ------------ health / root ------------
 
-
 @app.get("/")
 def root():
     """
-    Простой корневой эндпоинт — удобно проверять руками и для UptimeRobot.
+    простой корневой эндпоинт — удобно проверять руками и для UptimeRobot.
     """
     return jsonify(
         {
@@ -84,7 +84,6 @@ def health():
 
 
 # ------------ публичные GET ------------
-
 
 @app.get("/info")
 def get_info():
@@ -110,7 +109,7 @@ def get_popular():
     return jsonify(data)
 
 
-# ---- /menu/<category_id>  ----
+# ---- /menu/<category_id> ----
 
 CATEGORY_FILE_MAP: Dict[str, str] = {
     "burgers": "burgers",
@@ -174,8 +173,7 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ------------ создание заказа ------------
-
+# ------------ создание заказа (старый REST /order, можно оставить) ------------
 
 @app.post("/order")
 def create_order():
@@ -232,12 +230,14 @@ def create_order():
         }
     ), 200
 
+
 # ------------ webhook от Telegram ------------
 
 @app.post("/bot")
 def telegram_webhook():
     """
     Сюда Telegram шлёт апдейты (сообщения, web_app_data, оплаты и т.д.).
+    URL: WEBHOOK_URL + '/' + WEBHOOK_PATH
     """
     update_json = request.get_json(silent=True, force=True)
     app.logger.debug("[WEBHOOK] /bot payload: %s", update_json)
@@ -251,13 +251,18 @@ def telegram_webhook():
 
 @app.get("/bot")
 def webhook_debug():
-    """
-    Просто проверка, что эндпоинт жив.
-    """
+    """Просто проверка, что эндпоинт жив."""
     return jsonify({"message": "webhook is alive"})
 
-# ------------ error handlers ------------
 
+@app.get("/refresh_webhook")
+def webhook_refresh():
+    """Ручка, чтобы руками перевыставить вебхук."""
+    refresh_webhook()
+    return jsonify({"status": "ok"})
+
+
+# ------------ error handlers ------------
 
 @app.errorhandler(404)
 def not_found(e):
