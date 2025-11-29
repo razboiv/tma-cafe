@@ -139,7 +139,6 @@ def get_menu_category(category_id: str):
 
 # ---- /menu/details/<item_id> ----
 
-# по префиксу id определяем файл
 DETAILS_PREFIX_MAP: Dict[str, str] = {
     "burger": "burgers",
     "pizza": "pizza",
@@ -203,10 +202,10 @@ def create_order():
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
+        cost = var.get("cost")
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
-        cost = var.get("cost")
 
         if not caf_id or not var_id:
             return json_error(f"Bad cart item format at index {i}", 400)
