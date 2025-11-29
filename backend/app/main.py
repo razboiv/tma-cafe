@@ -11,18 +11,16 @@ from app.bot import process_update, refresh_webhook, enable_debug_logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-
 # ------------ пути к данным ------------
 
-BASE_DIR = Path(__file__).resolve().parent          # backend/app
-DATA_DIR = BASE_DIR.parent / "data"                 # backend/data
+BASE_DIR = Path(__file__).resolve().parent        # backend/app
+DATA_DIR = BASE_DIR.parent / "data"               # backend/data
 
 app = Flask(__name__)
 CORS(app)
 
 # включаем подробные логи бота
 enable_debug_logging()
-
 
 # ------------ утилиты работы с JSON ------------
 
@@ -66,7 +64,7 @@ def json_error(message: str, code: int):
 @app.get("/")
 def root():
     """
-    простой корневой эндпоинт — удобно проверять руками и для UptimeRobot.
+    Простой корневой эндпоинт — удобно проверять руками и для UptimeRobot.
     """
     return jsonify(
         {
@@ -154,7 +152,7 @@ def get_menu_details(item_id: str):
     """
     /menu/details/burger-1 -> ищем burger-1 внутри menu/burgers.json
     """
-    prefix = item_id.split("-", 1)[0]   # 'burger-1' -> 'burger'
+    prefix = item_id.split("-", 1)[0]       # 'burger-1' -> 'burger'
     json_name = DETAILS_PREFIX_MAP.get(prefix)
     if not json_name:
         return json_error("Not found", 404)
@@ -173,11 +171,11 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ------------ создание заказа ------------
+# ------------ создание заказа (Mini App → backend) ------------
 
 @app.post("/order")
 def create_order():
-    """JSON только объект"""
+    # JSON только объект
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return json_error("Request must be a JSON object", 400)
@@ -203,10 +201,10 @@ def create_order():
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
+        cost = it.get("cost")
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
-        cost = var.get("cost")
 
         if not caf_id or not var_id:
             return json_error(f"Bad cart item format at index {i}", 400)
@@ -250,8 +248,15 @@ def telegram_webhook():
 
 @app.get("/bot")
 def webhook_debug():
-    """просто проверка, что эндпоинт жив."""
+    """Просто проверка, что эндпоинт жив."""
     return jsonify({"message": "webhook is alive"})
+
+
+@app.get("/refresh_webhook")
+def refresh_webhook_route():
+    """Ручной вызов refresh_webhook из браузера."""
+    refresh_webhook()
+    return jsonify({"message": "webhook refreshed"})
 
 
 # ------------ error handlers ------------
