@@ -13,20 +13,21 @@ from flask_cors import CORS
 
 from app.bot import process_update, refresh_webhook, enable_debug_logging
 
+# ------------ пути к данным ------------
 
-# ----------- пути к данным -----------
-
-BASE_DIR = Path(__file__).resolve().parent        # backend/app
-DATA_DIR = BASE_DIR.parent / "data"               # backend/data
+BASE_DIR = Path(__file__).resolve().parent       # backend/app
+DATA_DIR = BASE_DIR.parent / "data"              # backend/data
 
 app = Flask(__name__)
-CORS(app)
 
-# включаем подробные логи бота
+# CORS
+CORS(app, resources={r"/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
+
+# подробные логи бота
 enable_debug_logging()
 
 
-# ----------- утилиты работы с JSON -----------
+# ------------ утилиты работы с JSON ------------
 
 def _safe_json_path(relpath: str) -> Path:
     """
@@ -34,6 +35,7 @@ def _safe_json_path(relpath: str) -> Path:
     Поддерживаем подпапки, например 'menu/burgers'.
     """
     rel = relpath.lstrip("/")
+
     candidate = (DATA_DIR / f"{rel}.json").resolve()
 
     # защита от выхода из каталога data
@@ -63,7 +65,7 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ----------- health / root -----------
+# ------------ health / root ------------
 
 @app.get("/")
 def root():
@@ -85,7 +87,7 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-# ----------- публичные GET -----------
+# ------------ публичные GET ------------
 
 @app.get("/info")
 def get_info():
@@ -157,7 +159,7 @@ def get_menu_details(item_id: str):
     """
     /menu/details/burger-1 -> ищем burger-1 внутри menu/burgers.json
     """
-    prefix = item_id.split("-", 1)[0]   # 'burger-1' -> 'burger'
+    prefix = item_id.split("-", 1)[0]  # 'burger-1' -> 'burger'
     json_name = DETAILS_PREFIX_MAP.get(prefix)
     if not json_name:
         return json_error("Not found", 404)
@@ -176,7 +178,7 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ----------- создание заказа (backend-валидация) -----------
+# ------------ создание заказа (через /order) ------------
 
 @app.post("/order")
 def create_order():
@@ -206,10 +208,10 @@ def create_order():
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
+        cost = it.get("cost", 0)
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
-        cost = var.get("cost")
 
         if not caf_id or not var_id:
             return json_error(f"Bad cart item format at index {i}", 400)
@@ -234,7 +236,7 @@ def create_order():
     ), 200
 
 
-# ----------- webhook от Telegram -----------
+# ------------ webhook от Telegram ------------
 
 @app.post("/bot")
 def telegram_webhook():
@@ -247,30 +249,36 @@ def telegram_webhook():
     if not update_json:
         return jsonify({"ok": False}), 400
 
-    # передаём апдейт в TeleBot
+    # передаём в TeleBot
     process_update(update_json)
+
     return jsonify({"ok": True})
 
 
 @app.get("/bot")
 def webhook_debug():
-    """Просто проверка, что эндпоинт жив."""
+    """
+    Простая проверка, что эндпоинт жив.
+    """
     return jsonify({"message": "webhook is alive"})
 
 
-# ----------- refresh_webhook (ручной вызов из браузера) -----------
+# ------------ обновление webhook ------------
 
 @app.get("/refresh_webhook")
-def refresh_webhook_view():
+def refresh_webhook_route():
     """
-    Снимаем старый webhook и ставим новый на текущий BACKEND_URL.
-    Вызывается руками: https://tma-cafe-backend.onrender.com/refresh_webhook
+    Вручную обновить webhook у Telegram-бота.
     """
-    refresh_webhook()
-    return jsonify({"status": "ok"})
+    try:
+        result = refresh_webhook()
+        return jsonify(result)
+    except Exception as e:
+        app.logger.exception("refresh_webhook failed: %s", e)
+        return json_error("Internal server error", 500)
 
 
-# ----------- error handlers -----------
+# ------------ error handlers ------------
 
 @app.errorhandler(404)
 def not_found(e):
@@ -279,11 +287,11 @@ def not_found(e):
 
 @app.errorhandler(500)
 def internal_error(e):
-    app.logger.exception("Unhandled server error")
+    app.logger.exception("Unhandled server error", e)
     return json_error("Internal server error", 500)
 
 
-# ----------- локальный запуск -----------
+# ------------ локальный запуск ------------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
