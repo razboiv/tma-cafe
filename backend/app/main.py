@@ -1,5 +1,4 @@
 # backend/app/main.py
-
 from __future__ import annotations
 
 import os
@@ -8,27 +7,25 @@ import secrets
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict, List
 
+from app.bot import process_update, refresh_webhook, enable_debug_logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# ВАЖНО: bot.py лежит в этой же папке (backend/app),
-# поэтому импорт вот такой:
-from app.bot import process_update, refresh_webhook, enable_debug_logging
 
-
-# ----------- пути к данным -----------
+# ------------ пути к данным ------------
 
 BASE_DIR = Path(__file__).resolve().parent      # backend/app
-DATA_DIR = BASE_DIR.parent / "data"             # backend/data
+DATA_DIR = BASE_DIR.parent / "data"            # backend/data
+
 
 app = Flask(__name__)
 CORS(app)
 
-# подробные логи TeleBot'а (видно в логах Render)
+# включаем подробные логи бота
 enable_debug_logging()
 
 
-# ----------- утилиты работы с JSON -----------
+# ------------ утилиты работы с JSON ------------
 
 def _safe_json_path(relpath: str) -> Path:
     """
@@ -49,10 +46,8 @@ def _safe_json_path(relpath: str) -> Path:
 def load_json(relpath: str) -> Tuple[Optional[Any], Optional[str]]:
     """
     Безопасное чтение JSON по относительному пути внутри backend/data.
-    Возвращает (данные, ошибка_или_None).
     """
     p = _safe_json_path(relpath)
-
     if not p.exists():
         return None, f"{p.name} not found"
 
@@ -69,12 +64,12 @@ def json_error(message: str, code: int):
     return resp
 
 
-# ----------- health / root -----------
+# ------------ health / root ------------
 
 @app.get("/")
 def root():
     """
-    Корневой эндпоинт — удобно проверять руками и для UptimeRobot.
+    Простой корневой эндпоинт — удобно проверять руками и для UptimeRobot.
     """
     return jsonify(
         {
@@ -91,7 +86,7 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-# ----------- публичные GET -----------
+# ------------ публичные GET ------------
 
 @app.get("/info")
 def get_info():
@@ -147,8 +142,8 @@ def get_menu_category(category_id: str):
 
 
 # ---- /menu/details/<item_id> ----
-
 # по префиксу id определяем файл
+
 DETAILS_PREFIX_MAP: Dict[str, str] = {
     "burger": "burgers",
     "pizza": "pizza",
@@ -163,7 +158,7 @@ def get_menu_details(item_id: str):
     """
     /menu/details/burger-1 -> ищем burger-1 внутри menu/burgers.json
     """
-    prefix = item_id.split("-", 1)[0]   # 'burger-1' -> 'burger'
+    prefix = item_id.split("-", 1)[0]  # 'burger-1' -> 'burger'
     json_name = DETAILS_PREFIX_MAP.get(prefix)
     if not json_name:
         return json_error("Not found", 404)
@@ -182,11 +177,17 @@ def get_menu_details(item_id: str):
     return jsonify(item)
 
 
-# ----------- создание заказа из Mini App (Checkout) -----------
+# ------------ создание заказа (REST) ------------
 
 @app.post("/order")
 def create_order():
-    # JSON только объект
+    """
+    JSON только объект:
+    {
+      "_auth": "...",       # initData из Telegram
+      "cartItems": [ ... ]  # корзина
+    }
+    """
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return json_error("Request must be a JSON object", 400)
@@ -212,7 +213,7 @@ def create_order():
         caf = it.get("cafeteria") or {}
         var = it.get("variant") or {}
         qty = it.get("quantity", 1)
-        cost = var.get("cost")
+        cost = it.get("cost", None)
 
         caf_id = caf.get("id") or caf.get("name")
         var_id = var.get("id") or var.get("name")
@@ -240,12 +241,12 @@ def create_order():
     ), 200
 
 
-# ----------- webhook от Telegram -----------
+# ------------ webhook от Telegram ------------
 
 @app.post("/bot")
 def telegram_webhook():
     """
-    Сюда Telegram шлёт апдейты (сообщения, web_app_data, оплаты и т.д.).
+    Сюда Telegram шлёт апдейты (сообщения, web_app_data, оплату и т.д.).
     """
     update_json = request.get_json(silent=True, force=True)
     app.logger.debug("[WEBHOOK] /bot payload: %s", update_json)
@@ -259,27 +260,22 @@ def telegram_webhook():
 
 @app.get("/bot")
 def webhook_debug():
-    """Просто проверка, что эндпоинт жив."""
+    """
+    Просто проверка, что эндпоинт жив.
+    """
     return jsonify({"message": "webhook is alive"})
 
-
-# ----------- обновление webhook'а -----------
 
 @app.get("/refresh_webhook")
 def refresh_webhook_route():
     """
-    Снять старый webhook и прописать новый (WEBHOOK_URL + WEBHOOK_PATH).
-    WEBHOOK_URL и WEBHOOK_PATH берутся из переменных окружения.
+    Ручка для обновления вебхука.
     """
-    try:
-        url = refresh_webhook()
-        return jsonify({"status": "ok", "webhook": url})
-    except Exception as e:
-        app.logger.exception("Failed to refresh webhook: %s", e)
-        return json_error(f"Failed to refresh webhook: {e}", 500)
+    refresh_webhook()
+    return jsonify({"status": "ok"})
 
 
-# ----------- error handlers -----------
+# ------------ error handlers ------------
 
 @app.errorhandler(404)
 def not_found(e):
@@ -288,11 +284,11 @@ def not_found(e):
 
 @app.errorhandler(500)
 def internal_error(e):
-    app.logger.exception("Unhandled server error", exc_info=e)
+    app.logger.exception("Unhandled server error")
     return json_error("Internal server error", 500)
 
 
-# ----------- локальный запуск -----------
+# ------------ локальный запуск ------------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
