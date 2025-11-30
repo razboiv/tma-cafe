@@ -4,38 +4,44 @@ import os
 import re
 import json
 
+import telebot
 from telebot import TeleBot
 from telebot.types import Update, WebAppInfo, Message
 from telebot.util import quick_markup
 
+# ---------- ENV ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")          # https://tma-cafe-backend.onrender.com
-WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "bot") # без слеша
-APP_URL = os.getenv("APP_URL")                  # https://luvcore.shop
-OWNER_CHAT_ID = 62330887                        # твой id
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")            # https://tma-cafe-backend.onrender.com
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "bot")   # bot или /bot
+APP_URL = os.getenv("APP_URL")                    # https://luvcore.shop  (Mini App)
+OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID", "0"))
+
+# нормализуем путь
+if not WEBHOOK_PATH.startswith("/"):
+    WEBHOOK_PATH = "/" + WEBHOOK_PATH
 
 bot = TeleBot(BOT_TOKEN, parse_mode=None)
 
 
 def enable_debug_logging() -> None:
-    """Включаем подробные логи TeleBot (видно в Render-логах)."""
-    telebot_logger = logging.getLogger('TeleBot')
-    telebot_logger.setLevel(logging.DEBUG)
+    telebot.logger.setLevel(logging.DEBUG)
 
 
 # ---------- Mini App -> sendData(order) ----------
-
 @bot.message_handler(content_types=["web_app_data"])
 def handle_web_app_data(message: Message) -> None:
-    # сырой JSON
+    """
+    Принимаем JSON заказа из Mini App (Checkout -> TelegramSDK.sendData()).
+    """
     raw = message.web_app_data.data
     logging.info("[BOT] got web_app_data: %s", raw)
 
-    # распарсим
     try:
         order = json.loads(raw)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        logging.exception("Failed to parse web_app_data JSON: %s", e)
         bot.send_message(
             chat_id=message.chat.id,
             text=f"Ошибка разбора заказа: {e}",
@@ -49,6 +55,7 @@ def handle_web_app_data(message: Message) -> None:
         )
         return
 
+    # -------- формируем текст и сумму --------
     items_text = ""
     total = 0
 
@@ -62,11 +69,11 @@ def handle_web_app_data(message: Message) -> None:
         variant = var.get("name", "")
         total += price * qty
 
-        items_text += f"{name} — {variant} × {qty} = {price * qty} ₽\n"
+        items_text += f"{name} {variant} × {qty} = {price * qty} ₽\n"
 
     summary = f"Ваш заказ:\n\n{items_text}\nИтого: {total} ₽"
 
-    # ---------- создаём счёт (invoice link) ----------
+    # ---------- создаём invoice link ----------
     invoice_link = bot.create_invoice_link(
         title="Оплата заказа",
         description="Оплата покупки в Laurel Cafe",
@@ -78,7 +85,7 @@ def handle_web_app_data(message: Message) -> None:
         need_phone_number=True,
     )
 
-    # ---------- отправляем ссылку клиенту ----------
+    # ---------- отправляем клиенту ----------
     bot.send_message(message.chat.id, summary)
     bot.send_message(message.chat.id, "Перейдите к оплате по ссылке ниже:")
     bot.send_message(
@@ -88,38 +95,37 @@ def handle_web_app_data(message: Message) -> None:
     )
 
     # ---------- уведомляем владельца ----------
+    username = message.from_user.username or "клиента"
     bot.send_message(
         OWNER_CHAT_ID,
-        f"📦 Новый заказ от @{message.from_user.username or 'клиента'}\n\n{summary}",
+        f"Новый заказ от @{username}\n\n{summary}",
     )
 
 
 # ---------- успешная оплата ----------
-
 @bot.message_handler(content_types=["successful_payment"])
 def handle_successful_payment(message: Message) -> None:
-    amount = message.successful_payment.total_amount // 100
+    amount = message.successful_payment.total_amount / 100
 
     bot.send_message(
         message.chat.id,
-        f"💳 Оплата {amount} ₽ прошла успешно!\nСпасибо за покупку ❤️",
+        f"✅ Оплата {amount:.0f} ₽ прошла успешно!\nСпасибо за покупку ❤️",
     )
 
+    username = message.from_user.username or "user"
     bot.send_message(
         OWNER_CHAT_ID,
-        f"💰 Клиент @{message.from_user.username or 'user'} успешно оплатил заказ на {amount} ₽",
+        f"💰 Клиент @{username} успешно оплатил заказ на {amount:.0f} ₽",
     )
 
 
-# ---------- pre_checkout ----------
-
+# ---------- pre_checkout (обязательный хендлер) ----------
 @bot.pre_checkout_query_handler(func=lambda _: True)
 def handle_pre_checkout_query(pre_checkout_query):
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
 # ---------- /start ----------
-
 @bot.message_handler(func=lambda m: re.match(r"^/start", m.text or "", re.IGNORECASE))
 def handle_start_command(message: Message) -> None:
     send_actionable_message(
@@ -128,8 +134,7 @@ def handle_start_command(message: Message) -> None:
     )
 
 
-# ---------- fallback-хендлер ----------
-
+# ---------- fallback ----------
 @bot.message_handler()
 def handle_all_messages(message: Message) -> None:
     send_actionable_message(
@@ -143,7 +148,7 @@ def send_actionable_message(chat_id: int, text: str) -> None:
         {
             "Open menu": {
                 "web_app": WebAppInfo(APP_URL),
-            },
+            }
         },
         row_width=1,
     )
@@ -157,15 +162,19 @@ def send_actionable_message(chat_id: int, text: str) -> None:
 
 
 # ---------- работа с вебхуком (вызывает Flask) ----------
-
-def refresh_webhook() -> None:
-    bot.remove_webhook()
-    bot.set_webhook(
-        f"{WEBHOOK_URL}/{WEBHOOK_PATH}",
-        allowed_updates=["message", "pre_checkout_query", "successful_payment"],
-    )
+def refresh_webhook() -> str:
+    """
+    Снимаем старый webhook и ставим новый на WEBHOOK_URL + WEBHOOK_PATH.
+    """
+    bot.remove_webhook()  # без drop_pending_updates — у тебя старая версия pyTelegramBotAPI
+    url = WEBHOOK_URL.rstrip("/") + WEBHOOK_PATH
+    bot.set_webhook(url)
+    return url
 
 
 def process_update(update_json: dict) -> None:
+    """
+    Получает update JSON от Flask и передаёт его TeleBot'у.
+    """
     update = Update.de_json(update_json)
     bot.process_new_updates([update])
