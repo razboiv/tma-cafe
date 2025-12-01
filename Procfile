@@ -1,1 +1,1 @@
-web: gunicorn backend.app.main:app --preload
+web: cd backend && gunicorn app.main:app
