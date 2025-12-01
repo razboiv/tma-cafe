@@ -1,39 +1,15 @@
-# backend/app/main.py
 from flask import Flask, request, jsonify
-
-from .bot import process_update, refresh_webhook
+from bot import bot, process_update
 
 app = Flask(__name__)
 
+@app.route("/", methods=["GET"])
+def home():
+    return "OK", 200
 
-@app.get("/")
-def index():
-    return jsonify(
-        {
-            "backend_url": "",
-            "env": "production",
-            "version": "mini-patch-2025-11-11",
-        }
-    )
-
-
-@app.get("/health")
-def health():
-    return jsonify({"status": "ok"})
-
-
-@app.post("/bot")
-def bot_route():
-    json_data = request.get_json(silent=True) or {}
-    process_update(json_data)
-    return jsonify({"status": "ok"})
-
-
-@app.get("/refresh_webhook")
-def refresh_webhook_route():
-    refresh_webhook()
-    return jsonify({"message": "webhook is alive"})
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+@app.route("/bot", methods=["POST"])
+def bot_webhook():
+    json_data = request.get_json(force=True, silent=True)
+    if json_data:
+        process_update(json_data)
+    return "OK", 200
