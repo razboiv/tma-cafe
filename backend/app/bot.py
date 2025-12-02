@@ -2,10 +2,8 @@ import os
 import json
 import logging
 import re
-
 import telebot
 from telebot import TeleBot
-from telebot.apihelper import ApiTelegramException
 from telebot.types import (
     Update,
     InlineKeyboardMarkup,
@@ -13,36 +11,35 @@ from telebot.types import (
     WebAppInfo,
     LabeledPrice,
 )
+from telebot.apihelper import ApiTelegramException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === ENV ===
+# --- ENV ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 APP_URL = os.getenv("APP_URL", "")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
 WEBHOOK_PATH = "/" + os.getenv("WEBHOOK_PATH", "bot").strip("/")
 PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN", "")
 
-# === Bot ===
+# --- BOT ---
 bot: TeleBot = TeleBot(BOT_TOKEN, parse_mode=None)
 
-
-# ---------- Хэндлеры сообщений ----------
-
+# -------- handlers --------
 @bot.message_handler(func=lambda m: re.match(r"^/?start", (m.text or ""), re.I))
 def handle_start(message):
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("Explore Menu", web_app=WebAppInfo(APP_URL)))
     bot.send_message(
         message.chat.id,
-        "Привет! Нажми кнопку ниже, чтобы открыть меню кафе.",
+        "Welcome to Laurel Cafe! Tap the button to open the menu.",
         reply_markup=kb,
     )
 
 @bot.message_handler(content_types=["web_app_data"])
 def handle_web_app_data(message):
-    """Приходит после Checkout из Mini App (Telegram.WebApp.sendData)."""
+    """Приходит из MiniApp после Checkout: Telegram.WebApp.sendData(JSON)."""
     try:
         data = json.loads(message.web_app_data.data or "{}")
         items = data.get("cartItems") or []
@@ -50,19 +47,14 @@ def handle_web_app_data(message):
             bot.send_message(message.chat.id, "Корзина пустая 🤷‍♂️")
             return
 
-        # Готовим позиции для инвойса
         prices = []
-        total = 0
         for it in items:
             name = it["cafeItem"]["name"]
             variant = it["variant"]["name"]
-            cost = int(it["variant"]["cost"])
+            cost = int(it["variant"]["cost"])      # сумма в центах
             qty = int(it["quantity"])
-            amount = cost * qty
-            total += amount
-            prices.append(LabeledPrice(label=f"{name} ({variant}) x{qty}", amount=amount))
+            prices.append(LabeledPrice(f"{name} ({variant}) x{qty}", cost * qty))
 
-        # Отправляем инвойс в чат
         bot.send_invoice(
             chat_id=message.chat.id,
             title="Laurel Cafe — Order",
@@ -76,8 +68,8 @@ def handle_web_app_data(message):
             need_shipping_address=True,
             start_parameter="tma-cafe",
         )
-    except Exception as e:
-        logger.exception("Failed to handle web_app_data: %s", e)
+    except Exception:
+        logger.exception("web_app_data error")
         bot.send_message(message.chat.id, "Не удалось создать счёт 😕")
 
 @bot.pre_checkout_query_handler(func=lambda _: True)
@@ -86,32 +78,33 @@ def handle_pre_checkout(pre_checkout_query):
 
 @bot.message_handler(content_types=["successful_payment"])
 def handle_successful_payment(message):
-    bot.send_message(message.chat.id, "✅ Оплата прошла успешно! Спасибо за заказ 🙌")
+    bot.send_message(message.chat.id, "✅ Оплата прошла успешно! Спасибо 🙌")
 
-
-# ---------- Сервис для webhooks ----------
-
-def process_update(update_json):
+# -------- webhook utils --------
+def process_update(update_raw):
+    """Принимаем строку/bytes/словарь, превращаем в Update и отдаём боту."""
     try:
-        upd = Update.de_json(update_json)
+        if isinstance(update_raw, (bytes, bytearray)):
+            update_raw = update_raw.decode("utf-8")
+        data = json.loads(update_raw) if isinstance(update_raw, str) else update_raw
+        upd = Update.de_json(data)
         if upd:
             bot.process_new_updates([upd])
     except Exception:
         logger.exception("Failed to process update")
 
 def refresh_webhook():
-    """Ставит вебхук и возвращает краткую информацию для /refresh-webhook."""
+    """Переустанавливаем вебхук, возвращаем краткую инфу для /refresh-webhook."""
     full_url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
     try:
         bot.remove_webhook()
         ok = bot.set_webhook(
             url=full_url,
-            allowed_updates=["message", "web_app_data", "pre_checkout_query", "successful_payment"],
+            # Важно: Telegram оперирует ТИПАМИ апдейтов. Этого достаточно.
+            allowed_updates=["message", "pre_checkout_query"],
         )
         logger.info("Webhook set to %s (ok=%s)", full_url, ok)
-        # get_webhook_info может отсутствовать в старых версиях pyTelegramBotAPI — поэтому без строгой зависимости
-        info = {"url": full_url}
+        return {"url": full_url, "ok": ok}
     except ApiTelegramException as e:
         logger.exception("Failed to set webhook: %s", e)
-        info = {"error": str(e)}
-    return info
+        return {"error": str(e), "url": full_url}
