@@ -2,8 +2,8 @@
 
 export class TelegramSDK {
   static #readyDone = false;
-  static #mbHandler = null;     // текущий обработчик (обёртка)
-  static #mbLastTs = 0;         // анти-дубль
+  static #mbHandler = null;  // единый обработчик (обёртка)
+  static #mbLastTs = 0;      // анти-дубль
   static #bbHandler = null;
 
   // ---- базовое ----
@@ -31,7 +31,7 @@ export class TelegramSDK {
       try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
     }
 
-    // обёртка + анти-дубль
+    // обёртка + защита от двойного вызова
     this.#mbHandler = () => {
       const now = Date.now();
       if (now - this.#mbLastTs < 200) return;
@@ -44,7 +44,7 @@ export class TelegramSDK {
     try { MB.enable(); } catch {}
     try { MB.show(); } catch {}
 
-    // подписка двумя способами — какой-то точно сработает
+    // двойная подписка — какой-то канал точно сработает
     try { MB.onClick(this.#mbHandler); } catch {}
     try { W.onEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
   }
@@ -56,7 +56,7 @@ export class TelegramSDK {
 
     if (this.#mbHandler) {
       try { MB.offClick(this.#mbHandler); } catch {}
-      try { W?.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
+      try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
       this.#mbHandler = null;
     }
     try { MB.hide(); } catch {}
@@ -88,10 +88,10 @@ export class TelegramSDK {
   }
 
   // ---- утилиты ----
-  static sendData(data) { try { window.Telegram?.WebApp?.sendData?.(data); } catch {} }
-  static openInvoice(url, cb) { try { window.Telegram?.WebApp?.openInvoice?.(url, cb); } catch {} }
-  static showAlert(t) { try { window.Telegram?.WebApp?.showAlert?.(t); } catch {} }
-  static showConfirm(t) { try { return window.Telegram?.WebApp?.showConfirm?.(t); } catch {} return Promise.resolve(false); }
+  static sendData(data)    { try { window.Telegram?.WebApp?.sendData?.(data); } catch {} }
+  static openInvoice(u,cb) { try { window.Telegram?.WebApp?.openInvoice?.(u, cb); } catch {} }
+  static showAlert(t)      { try { window.Telegram?.WebApp?.showAlert?.(t); } catch {} }
+  static showConfirm(t)    { try { return window.Telegram?.WebApp?.showConfirm?.(t); } catch {} return Promise.resolve(false); }
 }
 
 export default TelegramSDK;
