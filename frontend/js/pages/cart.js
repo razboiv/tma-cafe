@@ -1,115 +1,70 @@
 // frontend/js/pages/cart.js
-import { Route } from "../routing/route.js";
-import { navigateTo } from "../routing/router.js";
+// Серверный Checkout: отдаём корзину на /order, открываем invoice в Telegram
+
 import TelegramSDK from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
-import { toDisplayCost } from "../utils/currency.js";
+import { createOrder } from "../requests/requests.js";
 
-/**
- * Страница корзины
- */
-export default class CartPage extends Route {
-  constructor() {
-    super("cart", "/pages/cart.html");
+// Нужен только обработчик checkout; остальное в проекте не трогаем.
+export default function initCartPage() {
+  const checkoutBtn =
+    document.querySelector('[data-action="checkout"]') ||
+    document.querySelector(".js-checkout") ||
+    document.getElementById("checkout") ||
+    document.querySelector('button[type="submit"]');
+
+  if (checkoutBtn) {
+    checkoutBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await handleCheckout(checkoutBtn);
+    });
   }
+}
 
-  async load(params) {
-    console.log("[CartPage] load", params);
+async function handleCheckout(btn) {
+  try {
+    btn?.setAttribute("disabled", "disabled");
 
-    TelegramSDK.expand();
-    TelegramSDK.showMainButton("CHECKOUT", () => this.#checkout());
-
-    this.#render();
-
-    // Подпишемся на изменения корзины, чтобы пересобирать список
-    if (!this._unsubscribe) {
-      this._unsubscribe = Cart.subscribe(() => this.#render());
-    }
-  }
-
-  unload() {
-    // спрячем main-button, когда уходим со страницы
-    TelegramSDK.hideMainButton();
-    if (this._unsubscribe) {
-      this._unsubscribe();
-      this._unsubscribe = null;
-    }
-  }
-
-  #render() {
     const items = Cart.getItems();
-
-    const emptyBlock = $("#cart-empty");
-    const listBlock = $("#cart-items");
-    const totalCostEl = $("#cart-total");
-
-    listBlock.empty();
-
-    if (!items.length) {
-      emptyBlock.show();
-      totalCostEl.text(toDisplayCost(0));
+    if (!items || !items.length) {
+      (TelegramSDK.showAlert && TelegramSDK.showAlert("Cart is empty")) || alert("Cart is empty");
+      btn?.removeAttribute("disabled");
       return;
     }
 
-    emptyBlock.hide();
+    // Строим payload как ждёт /order
+    const payload = {
+      _auth:
+        (TelegramSDK.getInitData && TelegramSDK.getInitData()) ||
+        (window.Telegram?.WebApp?.initData ?? ""),
+      cartItems: items.map((it) => ({
+        cafeItem: { id: it.cafeItem.id, name: it.cafeItem.name },
+        variant: { name: it.variant.name, cost: Number(it.variant.cost) }, // cost в центах
+        quantity: Number(it.quantity),
+      })),
+    };
 
-    const templateHtml = $("#cart-item-template").html();
+    // Вызываем бекенд
+    const res = await createOrder(payload);
+    if (!res || !res.invoiceUrl) throw new Error("No invoiceUrl in response");
 
-    let total = 0;
+    // Открываем счёт в Telegram
+    if (typeof TelegramSDK.openInvoice === "function") {
+      TelegramSDK.openInvoice(res.invoiceUrl, (status) => console.log("invoice:", status));
+    } else if (window.Telegram?.WebApp?.openInvoice) {
+      window.Telegram.WebApp.openInvoice(res.invoiceUrl, (status) => console.log("invoice:", status));
+    } else {
+      // крайний случай
+      window.location.href = res.invoiceUrl;
+    }
 
-    items.forEach((cartItem) => {
-      const el = $(templateHtml);
-      const { cafeItem, variant, quantity } = cartItem;
-      el.find(".cart-item-image").attr("src", cafeItem.image || "");
-
-      const positionCost = (Number(variant.cost) || 0) * quantity;
-      total += positionCost;
-
-      el.attr("id", cartItem.getId());
-
-      el.find(".cart-qty-value").text(quantity);
-      el.find(".cart-item-name").text(cafeItem.name ?? "");
-      el.find(".cart-item-image").attr("src", cafeItem.image ?? cafeItem.imageUrl ?? "");
-      el.find(".cart-item-variant").text(variant.name ?? "");
-      el.find(".cart-item-weight").text(variant.weight ?? "");
-      el.find(".cart-item-cost").text(toDisplayCost(positionCost));
-      el.find(".cart-item-qty").text(quantity);
-
-      // кнопки +/-
-// --- КНОПКИ +/-
-    // --- КНОПКИ +/- ---
-    el.find(".cart-btn-inc").on("click", () => {
-      Cart.increaseQuantity(cartItem);
-    });
-
-    el.find(".cart-btn-dec").on("click", () => {
-      Cart.decreaseQuantity(cartItem);
-    });
-
-    listBlock.append(el);
-  });
-
-  totalCostEl.text(toDisplayCost(total));
-}
-
-/** оформить заказ */
-#checkout() {
-  const order = Cart.toOrderJSON();
-  console.log("[CartPage] checkout payload", order);
-
-  // если корзина пуста — просто выходим
-  if (!order.length) {
-    return;
+    // Очищаем корзину после попытки открыть инвойс
+    Cart.clear();
+  } catch (err) {
+    console.error("Checkout error:", err);
+    (TelegramSDK.showAlert && TelegramSDK.showAlert("Не удалось создать оплату. Попробуйте ещё раз.")) ||
+      alert("Не удалось создать оплату. Попробуйте ещё раз.");
+  } finally {
+    btn?.removeAttribute("disabled");
   }
-
-  // отправляем данные боту
-  TelegramSDK.sendData(JSON.stringify(order));
-
-  // очищаем корзину у себя
-  Cart.clear();
-
-  // закрываем Mini App
-  TelegramSDK.close();
 }
-}
-
