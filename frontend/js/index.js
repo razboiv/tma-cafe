@@ -1,4 +1,9 @@
+// frontend/js/index.js
+import TelegramSDK from "./telegram/telegram.js";
 import { handleLocation } from "./routing/router.js";
 
-// Load root route on app load.
+TelegramSDK.ready();
+TelegramSDK.expand();
+
+// Загружаем роуты
 handleLocation();
