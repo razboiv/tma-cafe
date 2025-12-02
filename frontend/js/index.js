@@ -1,14 +1,15 @@
-// frontend/js/index.js
+// Глобальная инициализация и рабочая кнопка "MY CART"
+
 import TelegramSDK from "./telegram/telegram.js";
 import { Cart } from "./cart/cart.js";
 import { handleLocation, navigateTo } from "./routing/router.js";
 
-// --- инициализация Telegram + роутера ---
+// --- Старт приложения ---
 TelegramSDK.ready();
 TelegramSDK.expand();
 handleLocation();
 
-// --- переход в корзину (универсально) ---
+// --- Переход в корзину ---
 function goCart() {
   if (typeof navigateTo === "function") {
     navigateTo("cart");
@@ -18,36 +19,19 @@ function goCart() {
   }
 }
 
-// --- жёсткая подписка на MainButton кликом двумя путями ---
-let mbHooked = false;
-function attachMainButtonHandlers() {
-  const W = window.Telegram?.WebApp;
-  const MB = W?.MainButton;
-  if (!W || !MB) return;
-
-  // Снять старые и навесить заново — иногда кто-то «сбрасывает» обработчики
-  try { MB.offClick(goCart); } catch {}
-  try { W.offEvent?.("mainButtonClicked", goCart); } catch {}
-
-  try { MB.onClick(goCart); } catch {}
-  try { W.onEvent?.("mainButtonClicked", goCart); } catch {}
-
-  mbHooked = true;
-}
-
-// --- обновление текста/видимости кнопки ---
+// --- Управление MainButton ---
 let lastCount = -1;
-function countItems() {
+
+function getCount() {
   const items = (Cart.getItems && Cart.getItems()) || [];
   return items.reduce((s, it) => s + Number(it?.quantity || 0), 0);
 }
 
 function refreshMainButton(force = false) {
-  const count = countItems();
+  const count = getCount();
   if (force || count !== lastCount) {
     if (count > 0) {
       TelegramSDK.showMainButton(`MY CART · ${count}`, goCart);
-      attachMainButtonHandlers(); // на всякий повторно закрепим хендлер
     } else {
       TelegramSDK.hideMainButton();
     }
@@ -55,24 +39,10 @@ function refreshMainButton(force = false) {
   }
 }
 
-// --- регулярные «подпинывания» (боремся с редкими глитчами WebApp) ---
+// первый рендер + периодическое «переподвешивание» на всякий случай
 refreshMainButton(true);
-attachMainButtonHandlers();
+setInterval(refreshMainButton, 700);
 
-// обновляем кнопку и переподписываемся раз в 700 мс
-setInterval(() => {
-  refreshMainButton();
-  if (!mbHooked) attachMainButtonHandlers();
-}, 700);
-
-// подстрахуемся на смену видимости/фокуса
-window.addEventListener("focus", () => {
-  mbHooked = false;
-  refreshMainButton(true);
-  setTimeout(attachMainButtonHandlers, 0);
-});
-document.addEventListener("visibilitychange", () => {
-  mbHooked = false;
-  refreshMainButton(true);
-  setTimeout(attachMainButtonHandlers, 0);
-});
+// подстрахуемся на смену фокуса/видимости
+window.addEventListener("focus", () => refreshMainButton(true));
+document.addEventListener("visibilitychange", () => refreshMainButton(true));
