@@ -6,7 +6,7 @@ export class TelegramSDK {
   static #mainBtnHandler = null;
   static #backBtnHandler = null;
 
-  // ----- базовое -----
+  // ---- базовые методы ----
   static ready() {
     const W = window.Telegram?.WebApp;
     if (!this.#readyDone && W) {
@@ -14,36 +14,26 @@ export class TelegramSDK {
       this.#readyDone = true;
     }
   }
+  static expand() { try { window.Telegram?.WebApp?.expand(); } catch {} }
+  static close() { try { window.Telegram?.WebApp?.close(); } catch {} }
+  static getInitData() { return window.Telegram?.WebApp?.initData || ""; }
 
-  static expand() {
-    try { window.Telegram?.WebApp?.expand(); } catch {}
-  }
-
-  static close() {
-    try { window.Telegram?.WebApp?.close(); } catch {}
-  }
-
-  static getInitData() {
-    return window.Telegram?.WebApp?.initData || '';
-  }
-
-  // ----- MainButton (MY CART) -----
+  // ---- MainButton (MY CART) ----
   static showMainButton(text, onClick) {
-    const W = window.Telegram?.WebApp;
-    if (!W || !W.MainButton) return;
-    this.ready(); // на всякий случай
+    const MB = window.Telegram?.WebApp?.MainButton;
+    if (!MB) return;
+    this.ready();
 
-    const MB = W.MainButton;
-    MB.setText(text || 'MY CART');
-    MB.enable();
-    MB.show();
+    try { MB.setText(text || "MY CART"); } catch {}
+    try { MB.enable(); } catch {}
+    try { MB.show(); } catch {}
 
-    // Снимаем предыдущий обработчик и вешаем новый
+    // снять старый обработчик, повесить новый
     if (this.#mainBtnHandler) {
       try { MB.offClick(this.#mainBtnHandler); } catch {}
     }
     this.#mainBtnHandler = () => { try { onClick?.(); } catch {} };
-    MB.onClick(this.#mainBtnHandler);
+    try { MB.onClick(this.#mainBtnHandler); } catch {}
   }
 
   static hideMainButton() {
@@ -53,20 +43,20 @@ export class TelegramSDK {
       try { MB.offClick(this.#mainBtnHandler); } catch {}
       this.#mainBtnHandler = null;
     }
-    MB.hide();
+    try { MB.hide(); } catch {}
   }
 
-  // ----- BackButton -----
+  // ---- BackButton ----
   static showBackButton(onClick) {
     const BB = window.Telegram?.WebApp?.BackButton;
     if (!BB) return;
     this.ready();
-    BB.show();
+    try { BB.show(); } catch {}
     if (this.#backBtnHandler) {
       try { BB.offClick(this.#backBtnHandler); } catch {}
     }
     this.#backBtnHandler = () => { try { onClick?.(); } catch {} };
-    BB.onClick(this.#backBtnHandler);
+    try { BB.onClick(this.#backBtnHandler); } catch {}
   }
 
   static hideBackButton() {
@@ -76,26 +66,14 @@ export class TelegramSDK {
       try { BB.offClick(this.#backBtnHandler); } catch {}
       this.#backBtnHandler = null;
     }
-    BB.hide();
+    try { BB.hide(); } catch {}
   }
 
-  // ----- утилиты -----
-  static sendData(data) {
-    try { window.Telegram?.WebApp?.sendData?.(data); } catch {}
-  }
-
-  static openInvoice(url, callback) {
-    try { window.Telegram?.WebApp?.openInvoice?.(url, callback); } catch {}
-  }
-
-  static showAlert(text) {
-    try { window.Telegram?.WebApp?.showAlert?.(text); } catch {}
-  }
-
-  static showConfirm(text) {
-    try { return window.Telegram?.WebApp?.showConfirm?.(text); } catch {}
-    return Promise.resolve(false);
-  }
+  // ---- утилиты ----
+  static sendData(data) { try { window.Telegram?.WebApp?.sendData?.(data); } catch {} }
+  static openInvoice(url, cb) { try { window.Telegram?.WebApp?.openInvoice?.(url, cb); } catch {} }
+  static showAlert(t) { try { window.Telegram?.WebApp?.showAlert?.(t); } catch {} }
+  static showConfirm(t) { try { return window.Telegram?.WebApp?.showConfirm?.(t); } catch {} return Promise.resolve(false); }
 }
 
 export default TelegramSDK;
