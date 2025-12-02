@@ -5,28 +5,24 @@ import re
 import telebot
 from telebot import TeleBot
 from telebot.types import (
-    Update,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    WebAppInfo,
-    LabeledPrice,
+    Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, LabeledPrice
 )
 from telebot.apihelper import ApiTelegramException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- ENV ---
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-APP_URL = os.getenv("APP_URL", "")
+# === ENV ===
+BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
+APP_URL     = os.getenv("APP_URL", "")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
 WEBHOOK_PATH = "/" + os.getenv("WEBHOOK_PATH", "bot").strip("/")
 PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN", "")
 
-# --- BOT ---
+# === bot ===
 bot: TeleBot = TeleBot(BOT_TOKEN, parse_mode=None)
 
-# -------- handlers --------
+# ------------- handlers -------------
 @bot.message_handler(func=lambda m: re.match(r"^/?start", (m.text or ""), re.I))
 def handle_start(message):
     kb = InlineKeyboardMarkup()
@@ -37,9 +33,9 @@ def handle_start(message):
         reply_markup=kb,
     )
 
+# оставляем и вариант через sendData — вдруг запустят из кнопки в чате
 @bot.message_handler(content_types=["web_app_data"])
 def handle_web_app_data(message):
-    """Приходит из MiniApp после Checkout: Telegram.WebApp.sendData(JSON)."""
     try:
         data = json.loads(message.web_app_data.data or "{}")
         items = data.get("cartItems") or []
@@ -51,8 +47,8 @@ def handle_web_app_data(message):
         for it in items:
             name = it["cafeItem"]["name"]
             variant = it["variant"]["name"]
-            cost = int(it["variant"]["cost"])      # сумма в центах
-            qty = int(it["quantity"])
+            cost = int(it["variant"]["cost"])
+            qty  = int(it["quantity"])
             prices.append(LabeledPrice(f"{name} ({variant}) x{qty}", cost * qty))
 
         bot.send_invoice(
@@ -80,9 +76,8 @@ def handle_pre_checkout(pre_checkout_query):
 def handle_successful_payment(message):
     bot.send_message(message.chat.id, "✅ Оплата прошла успешно! Спасибо 🙌")
 
-# -------- webhook utils --------
+# ------------- webhook utils -------------
 def process_update(update_raw):
-    """Принимаем строку/bytes/словарь, превращаем в Update и отдаём боту."""
     try:
         if isinstance(update_raw, (bytes, bytearray)):
             update_raw = update_raw.decode("utf-8")
@@ -94,17 +89,28 @@ def process_update(update_raw):
         logger.exception("Failed to process update")
 
 def refresh_webhook():
-    """Переустанавливаем вебхук, возвращаем краткую инфу для /refresh-webhook."""
-    full_url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
+    full = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
     try:
         bot.remove_webhook()
         ok = bot.set_webhook(
-            url=full_url,
-            # Важно: Telegram оперирует ТИПАМИ апдейтов. Этого достаточно.
-            allowed_updates=["message", "pre_checkout_query"],
+            url=full,
+            allowed_updates=["message", "pre_checkout_query"],  # достаточно
         )
-        logger.info("Webhook set to %s (ok=%s)", full_url, ok)
-        return {"url": full_url, "ok": ok}
+        logger.info("Webhook set to %s (ok=%s)", full, ok)
+        return {"url": full, "ok": ok}
     except ApiTelegramException as e:
         logger.exception("Failed to set webhook: %s", e)
-        return {"error": str(e), "url": full_url}
+        return {"error": str(e), "url": full}
+
+def create_invoice_link(prices):
+    return bot.create_invoice_link(
+        title="Order #1",
+        description="Great choice! Last steps and we will get to cooking ;)",
+        payload="orderID",
+        provider_token=PAYMENT_PROVIDER_TOKEN,
+        currency="USD",
+        prices=prices,
+        need_name=True,
+        need_phone_number=True,
+        need_shipping_address=True,
+    )
