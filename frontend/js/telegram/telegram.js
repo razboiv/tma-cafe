@@ -1,90 +1,101 @@
-/**
- * Wrapper for simplifying usage of Telegram.WebApp class and it's methods.
- */
+// frontend/js/telegram/telegram.js
+// Мини-обёртка над Telegram.WebApp с корректной работой MainButton/BackButton.
+
 export class TelegramSDK {
+  static #readyDone = false;
+  static #mainBtnHandler = null;
+  static #backBtnHandler = null;
 
-    static #mainButtonClickCallback
-    static #backButtonClickCallback
-
-    static getInitData() {
-        return Telegram.WebApp.initData || '';
+  // ----- базовое -----
+  static ready() {
+    const W = window.Telegram?.WebApp;
+    if (!this.#readyDone && W) {
+      try { W.ready(); } catch {}
+      this.#readyDone = true;
     }
-
-    static showMainButton(text, onClick) {
-        // $('#telegram-button').text(text);
-        // $('#telegram-button').off('click').on('click', onClick);
-        // $('#telegram-button').show();
-        Telegram.WebApp.MainButton
-            .offClick(this.#mainButtonClickCallback)
-            .setParams({
-                text: text,
-                is_visible: true
-            })
-            .onClick(onClick);
-        this.#mainButtonClickCallback = onClick;
-    }
-
-    static setMainButtonLoading(isLoading) {
-        if (isLoading) {
-            Telegram.WebApp.MainButton.showProgress(false);
-        } else {
-            Telegram.WebApp.MainButton.hideProgress();
-        }
-    }
-
-    static hideMainButton() {
-        //$('#telegram-button').hide();
-        Telegram.WebApp.MainButton.hide();
-    }
-
-static sendData(data) {
-  if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.sendData(data);
   }
-}
 
-static close() {
-  if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.close();
+  static expand() {
+    try { window.Telegram?.WebApp?.expand(); } catch {}
   }
-}
-    
-    static showBackButton(onClick) {
-        Telegram.WebApp.BackButton
-            .offClick(this.#backButtonClickCallback)
-            .onClick(onClick)
-            .show();
-        this.#backButtonClickCallback = onClick;
-    }
 
-    static hideBackButton() {
-        Telegram.WebApp.BackButton.hide();
-    }
+  static close() {
+    try { window.Telegram?.WebApp?.close(); } catch {}
+  }
 
-    static impactOccured(style) {
-        if (Telegram.WebApp.isVersionAtLeast('6.1')) {
-            Telegram.WebApp.HapticFeedback.impactOccurred(style);
-        }
-    }
+  static getInitData() {
+    return window.Telegram?.WebApp?.initData || '';
+  }
 
-    static notificationOccured(style) {
-        if (Telegram.WebApp.isVersionAtLeast('6.1')) {
-            Telegram.WebApp.HapticFeedback.notificationOccurred(style);
-        }
-    }
+  // ----- MainButton (MY CART) -----
+  static showMainButton(text, onClick) {
+    const W = window.Telegram?.WebApp;
+    if (!W || !W.MainButton) return;
+    this.ready(); // на всякий случай
 
-    static openInvoice(url, callback) {
-        Telegram.WebApp.openInvoice(url, callback);
-    }
+    const MB = W.MainButton;
+    MB.setText(text || 'MY CART');
+    MB.enable();
+    MB.show();
 
-    static expand() {
-        Telegram.WebApp.expand();
+    // Снимаем предыдущий обработчик и вешаем новый
+    if (this.#mainBtnHandler) {
+      try { MB.offClick(this.#mainBtnHandler); } catch {}
     }
+    this.#mainBtnHandler = () => { try { onClick?.(); } catch {} };
+    MB.onClick(this.#mainBtnHandler);
+  }
 
-    static close() {
-        Telegram.WebApp.close();
+  static hideMainButton() {
+    const MB = window.Telegram?.WebApp?.MainButton;
+    if (!MB) return;
+    if (this.#mainBtnHandler) {
+      try { MB.offClick(this.#mainBtnHandler); } catch {}
+      this.#mainBtnHandler = null;
     }
+    MB.hide();
+  }
 
+  // ----- BackButton -----
+  static showBackButton(onClick) {
+    const BB = window.Telegram?.WebApp?.BackButton;
+    if (!BB) return;
+    this.ready();
+    BB.show();
+    if (this.#backBtnHandler) {
+      try { BB.offClick(this.#backBtnHandler); } catch {}
+    }
+    this.#backBtnHandler = () => { try { onClick?.(); } catch {} };
+    BB.onClick(this.#backBtnHandler);
+  }
+
+  static hideBackButton() {
+    const BB = window.Telegram?.WebApp?.BackButton;
+    if (!BB) return;
+    if (this.#backBtnHandler) {
+      try { BB.offClick(this.#backBtnHandler); } catch {}
+      this.#backBtnHandler = null;
+    }
+    BB.hide();
+  }
+
+  // ----- утилиты -----
+  static sendData(data) {
+    try { window.Telegram?.WebApp?.sendData?.(data); } catch {}
+  }
+
+  static openInvoice(url, callback) {
+    try { window.Telegram?.WebApp?.openInvoice?.(url, callback); } catch {}
+  }
+
+  static showAlert(text) {
+    try { window.Telegram?.WebApp?.showAlert?.(text); } catch {}
+  }
+
+  static showConfirm(text) {
+    try { return window.Telegram?.WebApp?.showConfirm?.(text); } catch {}
+    return Promise.resolve(false);
+  }
 }
 
 export default TelegramSDK;
