@@ -1,55 +1,58 @@
-# backend/app/main.py
-import logging
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from app.bot import process_update, refresh_webhook
-
-logging.basicConfig(level=logging.INFO)
+from bot import bot, process_update, drop_pending_updates
 
 app = Flask(__name__)
 CORS(app)
 
+APP_URL = os.environ.get("APP_URL", "https://tma-cafe-backend.onrender.com")
+WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "bot")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", f"{APP_URL}/{WEBHOOK_PATH}")
 
-# ---------- сервисные роуты ----------
+
+# ---------- health ----------
 
 @app.route("/health")
 def health():
     return jsonify(status="ok")
 
 
-@app.route("/")
-def root():
-    return jsonify(
-        backend_url="",
-        env=os.getenv("RENDER_ENV") or "production",
-        version="mini-patch-2025-11-11",
-    )
+# ---------- webhook ----------
 
+@app.route(f"/{WEBHOOK_PATH}", methods=["POST"])
+def webhook_route():
+    json_update = request.get_json(force=True, silent=True)
+    if not json_update:
+        return jsonify(status="no json"), 400
 
-# ---------- Telegram webhook ----------
-
-@app.route("/bot", methods=["POST"])
-def bot_route():
-    update_json = request.get_json(silent=True)
-    if not update_json:
-        return jsonify({"status": "ignored", "reason": "no json"}), 400
-
-    process_update(update_json)
-    return jsonify({"status": "ok"})
+    process_update(json_update)
+    return jsonify(status="ok")
 
 
 @app.route("/refresh_webhook")
 def refresh_webhook_route():
-    try:
-        refresh_webhook()
-        return jsonify({"status": "ok"})
-    except Exception:
-        logging.exception("ERROR: refresh_webhook failed")
-        return jsonify({"message": "Internal server error"}), 500
+    # 1. очистим старые апдейты
+    drop_pending_updates()
 
+    # 2. снимем старый вебхук и поставим новый
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass
+
+    bot.set_webhook(
+        url=WEBHOOK_URL,
+        allowed_updates=["message", "pre_checkout_query", "successful_payment"],
+    )
+
+    return jsonify(message="webhook is alive")
+
+
+# ---------- локальный запуск ----------
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
