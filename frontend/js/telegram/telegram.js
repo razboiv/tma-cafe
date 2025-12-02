@@ -1,10 +1,9 @@
-// frontend/js/telegram/telegram.js
-// Обёртка Telegram.WebApp с надёжным кликом по MainButton (и через onClick, и через onEvent)
+// Надёжная обёртка над Telegram.WebApp с кликом MainButton через onClick и onEvent
 
 export class TelegramSDK {
   static #readyDone = false;
-  static #mbHandler = null;       // наш обработчик (обёртка)
-  static #mbLastTs = 0;           // анти-дубль (если два канала сработают одновременно)
+  static #mbHandler = null;     // текущий обработчик (обёртка)
+  static #mbLastTs = 0;         // анти-дубль
   static #bbHandler = null;
 
   // ---- базовое ----
@@ -26,26 +25,26 @@ export class TelegramSDK {
     if (!W || !MB) return;
     this.ready();
 
-    // применяем параметры и гарантируем видимость/активность
-    try { MB.setParams({ text, is_active: true, is_visible: true }); } catch {}
-    try { MB.enable(); } catch {}
-    try { MB.show(); } catch {}
-
-    // снимаем старые обработчики (и onClick, и onEvent)
+    // снять старые обработчики
     if (this.#mbHandler) {
       try { MB.offClick(this.#mbHandler); } catch {}
       try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
     }
 
-    // единый обёрточный обработчик + анти-дабл (на случай двойного вызова)
+    // обёртка + анти-дубль
     this.#mbHandler = () => {
       const now = Date.now();
-      if (now - this.#mbLastTs < 200) return;  // глушим дубль
+      if (now - this.#mbLastTs < 200) return;
       this.#mbLastTs = now;
       try { onClick?.(); } catch (e) { console.error(e); }
     };
 
-    // вешаем обеим способами — какой-то точно сработает
+    // применяем параметры и гарантируем видимость/активность
+    try { MB.setParams({ text, is_visible: true, is_active: true }); } catch {}
+    try { MB.enable(); } catch {}
+    try { MB.show(); } catch {}
+
+    // подписка двумя способами — какой-то точно сработает
     try { MB.onClick(this.#mbHandler); } catch {}
     try { W.onEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
   }
@@ -70,17 +69,16 @@ export class TelegramSDK {
     if (!BB) return;
     this.ready();
 
-    try { BB.show(); } catch {}
     if (this.#bbHandler) {
       try { BB.offClick(this.#bbHandler); } catch {}
     }
     this.#bbHandler = () => { try { onClick?.(); } catch (e) { console.error(e); } };
+    try { BB.show(); } catch {}
     try { BB.onClick(this.#bbHandler); } catch {}
   }
 
   static hideBackButton() {
-    const W = window.Telegram?.WebApp;
-    const BB = W?.BackButton;
+    const BB = window.Telegram?.WebApp?.BackButton;
     if (!BB) return;
     if (this.#bbHandler) {
       try { BB.offClick(this.#bbHandler); } catch {}
