@@ -1,95 +1,130 @@
+import os
 import json
 import logging
-import os
-from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from .bot import process_update, refresh_webhook
+from app.bot import process_update, refresh_webhook, enable_debug_logging
+
+
+# ---------------- базовая настройка Flask ----------------
+
+app = Flask(__name__)
+
+CORS(app, resources={r"/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
+# Включаем подробные логи TeleBot (видно в Render-логах)
+enable_debug_logging()
 
-app = Flask(__name__)
-CORS(app, origins=os.getenv("CORS_ORIGINS", "*"))
+# --------- пути к JSON-файлам (ИМЕННО абсолютные!) ---------
+
+# backend/
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# backend/data/menu/
+MENU_DIR = os.path.join(BACKEND_DIR, "data", "menu")
 
 
-# ---------- health / технические ----------
+def load_json(filename: str):
+    """Читаем JSON из backend/data/menu/<filename>."""
+    path = os.path.join(MENU_DIR, filename)
+    logger.info("Loading JSON: %s", path)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-@app.get("/health")
+
+# ---------------------- health ----------------------------
+
+@app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
 
-@app.get("/")
-def root():
-    # просто чтобы корень не давал 404
-    return jsonify({"backend_url": "", "env": "production"})
+# ---------------------- info ------------------------------
 
-
-@app.get("/refresh_webhook")
-def refresh_webhook_route():
-    try:
-        result = refresh_webhook()
-        status = 200 if result.get("status") == "ok" else 500
-        return jsonify(result), status
-    except Exception as e:
-        logger.exception("refresh_webhook failed: %s", e)
-        return jsonify({"status": "error", "description": str(e)}), 500
-
-
-# ---------- Telegram webhook ----------
-
-@app.post("/bot")
-def bot_webhook():
-    try:
-        json_data = request.get_data().decode("utf-8")
-        process_update(json_data)
-        return "OK", 200
-    except Exception as e:
-        logger.exception("Error on /bot: %s", e)
-        return "ERROR", 500
-
-
-# ---------- API для WebApp ----------
-
-def _load_json(path: Path):
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
-
-
-@app.get("/categories")
-def get_categories():
-    data = _load_json(DATA_DIR / "menu" / "categories.json")
-    return jsonify(data)
-
-
-@app.get("/info")
+@app.route("/info")
 def get_info():
-    data = _load_json(DATA_DIR / "info.json")
+    data = load_json("info.json")
     return jsonify(data)
 
 
-@app.get("/menu/popular")
+# ------------------- категории ---------------------------
+
+@app.route("/categories")
+def get_categories():
+    data = load_json("categories.json")
+    return jsonify(data)
+
+
+# ------------------- популярное меню ---------------------
+
+@app.route("/menu/popular")
 def get_popular_menu():
-    data = _load_json(DATA_DIR / "menu" / "popular.json")
+    """
+    Если у тебя отдельный JSON для популярного —
+    просто поменяй имя файла тут.
+    """
+    data = load_json("popular.json")  # при необходимости переименуй файл
     return jsonify(data)
 
 
-@app.get("/menu/details/<slug>")
-def get_menu_item(slug):
-    path = DATA_DIR / "menu" / "details" / f"{slug}.json"
-    if not path.exists():
-        return jsonify({"message": "Not found"}), 404
-    data = _load_json(path)
+# ------------- детали блюда по slug ----------------------
+
+@app.route("/menu/details/<slug>")
+def get_menu_item(slug: str):
+    """
+    Ожидает файл backend/data/menu/<slug>.json
+    Например: burger-1.json
+    """
+    filename = f"{slug}.json"
+    try:
+        data = load_json(filename)
+    except FileNotFoundError:
+        return jsonify({"error": "Item not found"}), 404
     return jsonify(data)
 
 
-# ---------- точка входа для локального запуска ----------
+# ----------------- Telegram webhook ----------------------
+
+@app.route("/bot", methods=["POST"])
+def bot_webhook():
+    """
+    Сюда Telegram шлёт апдейты.
+    """
+    update_json = request.get_json(silent=True, force=True) or {}
+    logger.info("Got update from Telegram: %s", update_json)
+    process_update(update_json)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/refresh_webhook")
+def refresh_webhook_route():
+    """
+    Ручка, которую ты открываешь в браузере,
+    чтобы пересоздать webhook.
+    """
+    logger.info("Refreshing webhook…")
+    refresh_webhook()
+    return jsonify({"message": "webhook is alive"})
+
+
+# ---------------------- root -----------------------------
+
+@app.route("/")
+def root():
+    return jsonify(
+        {
+            "backend_url": "",
+            "env": "production",
+            "version": "mini-patch-2025-11-11",
+        }
+    )
+
+
+# ---------------- локальный запуск -----------------------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
