@@ -1,9 +1,9 @@
-// Надёжная обёртка над Telegram.WebApp с кликом MainButton через onClick и onEvent
+// Надёжная обёртка над Telegram.WebApp: двойная подписка на клик MainButton.
 
 export class TelegramSDK {
   static #readyDone = false;
-  static #mbHandler = null;  // единый обработчик (обёртка)
-  static #mbLastTs = 0;      // анти-дубль
+  static #mbHandler = null;   // единый обработчик (обёртка)
+  static #mbLastTs = 0;       // анти-дубль
   static #bbHandler = null;
 
   // ---- базовое ----
@@ -34,7 +34,7 @@ export class TelegramSDK {
     // обёртка + защита от двойного вызова
     this.#mbHandler = () => {
       const now = Date.now();
-      if (now - this.#mbLastTs < 200) return;
+      if (now - this.#mbLastTs < 200) return; // гасим возможный дубль
       this.#mbLastTs = now;
       try { onClick?.(); } catch (e) { console.error(e); }
     };
