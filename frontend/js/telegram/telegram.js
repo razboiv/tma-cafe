@@ -1,12 +1,13 @@
 // frontend/js/telegram/telegram.js
-// Мини-обёртка над Telegram.WebApp с корректной работой MainButton/BackButton.
+// Обёртка Telegram.WebApp с надёжным кликом по MainButton (и через onClick, и через onEvent)
 
 export class TelegramSDK {
   static #readyDone = false;
-  static #mainBtnHandler = null;
-  static #backBtnHandler = null;
+  static #mbHandler = null;       // наш обработчик (обёртка)
+  static #mbLastTs = 0;           // анти-дубль (если два канала сработают одновременно)
+  static #bbHandler = null;
 
-  // ---- базовые методы ----
+  // ---- базовое ----
   static ready() {
     const W = window.Telegram?.WebApp;
     if (!this.#readyDone && W) {
@@ -15,56 +16,75 @@ export class TelegramSDK {
     }
   }
   static expand() { try { window.Telegram?.WebApp?.expand(); } catch {} }
-  static close() { try { window.Telegram?.WebApp?.close(); } catch {} }
+  static close()  { try { window.Telegram?.WebApp?.close(); }  catch {} }
   static getInitData() { return window.Telegram?.WebApp?.initData || ""; }
 
-  // ---- MainButton (MY CART) ----
-  static showMainButton(text, onClick) {
-    const MB = window.Telegram?.WebApp?.MainButton;
-    if (!MB) return;
+  // ---- MainButton ----
+  static showMainButton(text = "MY CART", onClick) {
+    const W = window.Telegram?.WebApp;
+    const MB = W?.MainButton;
+    if (!W || !MB) return;
     this.ready();
 
-    try { MB.setText(text || "MY CART"); } catch {}
+    // применяем параметры и гарантируем видимость/активность
+    try { MB.setParams({ text, is_active: true, is_visible: true }); } catch {}
     try { MB.enable(); } catch {}
     try { MB.show(); } catch {}
 
-    // снять старый обработчик, повесить новый
-    if (this.#mainBtnHandler) {
-      try { MB.offClick(this.#mainBtnHandler); } catch {}
+    // снимаем старые обработчики (и onClick, и onEvent)
+    if (this.#mbHandler) {
+      try { MB.offClick(this.#mbHandler); } catch {}
+      try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
     }
-    this.#mainBtnHandler = () => { try { onClick?.(); } catch {} };
-    try { MB.onClick(this.#mainBtnHandler); } catch {}
+
+    // единый обёрточный обработчик + анти-дабл (на случай двойного вызова)
+    this.#mbHandler = () => {
+      const now = Date.now();
+      if (now - this.#mbLastTs < 200) return;  // глушим дубль
+      this.#mbLastTs = now;
+      try { onClick?.(); } catch (e) { console.error(e); }
+    };
+
+    // вешаем обеим способами — какой-то точно сработает
+    try { MB.onClick(this.#mbHandler); } catch {}
+    try { W.onEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
   }
 
   static hideMainButton() {
-    const MB = window.Telegram?.WebApp?.MainButton;
+    const W = window.Telegram?.WebApp;
+    const MB = W?.MainButton;
     if (!MB) return;
-    if (this.#mainBtnHandler) {
-      try { MB.offClick(this.#mainBtnHandler); } catch {}
-      this.#mainBtnHandler = null;
+
+    if (this.#mbHandler) {
+      try { MB.offClick(this.#mbHandler); } catch {}
+      try { W?.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
+      this.#mbHandler = null;
     }
     try { MB.hide(); } catch {}
   }
 
   // ---- BackButton ----
   static showBackButton(onClick) {
-    const BB = window.Telegram?.WebApp?.BackButton;
+    const W = window.Telegram?.WebApp;
+    const BB = W?.BackButton;
     if (!BB) return;
     this.ready();
+
     try { BB.show(); } catch {}
-    if (this.#backBtnHandler) {
-      try { BB.offClick(this.#backBtnHandler); } catch {}
+    if (this.#bbHandler) {
+      try { BB.offClick(this.#bbHandler); } catch {}
     }
-    this.#backBtnHandler = () => { try { onClick?.(); } catch {} };
-    try { BB.onClick(this.#backBtnHandler); } catch {}
+    this.#bbHandler = () => { try { onClick?.(); } catch (e) { console.error(e); } };
+    try { BB.onClick(this.#bbHandler); } catch {}
   }
 
   static hideBackButton() {
-    const BB = window.Telegram?.WebApp?.BackButton;
+    const W = window.Telegram?.WebApp;
+    const BB = W?.BackButton;
     if (!BB) return;
-    if (this.#backBtnHandler) {
-      try { BB.offClick(this.#backBtnHandler); } catch {}
-      this.#backBtnHandler = null;
+    if (this.#bbHandler) {
+      try { BB.offClick(this.#bbHandler); } catch {}
+      this.#bbHandler = null;
     }
     try { BB.hide(); } catch {}
   }
