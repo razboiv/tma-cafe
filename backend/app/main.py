@@ -1,127 +1,170 @@
 import os
 import json
-import logging
-
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
+from telebot.types import LabeledPrice
 
-from app.bot import process_update, refresh_webhook
-
+# важное: импортируем наш бот (вебхук/инвойсы)
+from app import auth, bot
+from app.bot import process_update, refresh_webhook  # удобные врапперы
 
 # ---------------- базовая настройка Flask ----------------
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False  # чтобы /info и /info/ были одинаковыми
 
+# CORS — берём из ENV, по умолчанию разрешаем всё
 CORS(app, resources={r"/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# ---------------- пути к данным --------------------------
 
-# --------- пути к JSON-файлам (ИМЕННО абсолютные!) ---------
+# .../backend
+BACKEND_DIR = os.path.dirname(os.path.dirname(__file__))
+# .../backend/data
+DATA_DIR = os.path.join(BACKEND_DIR, "data")
+# .../backend/data/menu
+MENU_DIR = os.path.join(DATA_DIR, "menu")
 
-# backend/
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# backend/data/menu/
-MENU_DIR = os.path.join(BACKEND_DIR, "data", "menu")
 
-
-def load_json(filename: str):
-    """Читаем JSON из backend/data/menu/<filename>."""
-    path = os.path.join(MENU_DIR, filename)
-    logger.info("Loading JSON: %s", path)
-    with open(path, "r", encoding="utf-8") as f:
+def _read_json(abs_path: str):
+    """Читает JSON по абсолютному пути, бросает FileNotFoundError если нет файла."""
+    with open(abs_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# ---------------------- health ----------------------------
+def read_data(rel_path: str):
+    """Читает JSON из backend/data/<rel_path>"""
+    abs_path = os.path.join(DATA_DIR, rel_path)
+    return _read_json(abs_path)
 
-@app.route("/health")
+
+def read_menu(category_filename: str):
+    """Читает JSON из backend/data/menu/<category_filename>"""
+    abs_path = os.path.join(MENU_DIR, category_filename)
+    return _read_json(abs_path)
+
+
+# ---------------- health -------------------------------
+
+@app.get("/health")
 def health():
     return jsonify({"status": "ok"})
 
 
-# ---------------------- info ------------------------------
+# ---------------- info / categories --------------------
 
-@app.route("/info")
-def get_info():
-    data = load_json("info.json")
-    return jsonify(data)
-
-
-# ------------------- категории ---------------------------
-
-@app.route("/categories")
-def get_categories():
-    data = load_json("categories.json")
-    return jsonify(data)
-
-
-# ------------------- популярное меню ---------------------
-
-@app.route("/menu/popular")
-def get_popular_menu():
-    """
-    Если у тебя отдельный JSON для популярного —
-    просто поменяй имя файла тут.
-    """
-    data = load_json("popular.json")  # при необходимости переименуй файл
-    return jsonify(data)
-
-
-# ------------- детали блюда по slug ----------------------
-
-@app.route("/menu/details/<slug>")
-def get_menu_item(slug: str):
-    """
-    Ожидает файл backend/data/menu/<slug>.json
-    Например: burger-1.json
-    """
-    filename = f"{slug}.json"
+@app.get("/info")
+def info():
+    # ВАЖНО: читаем из data/info.json (а не из data/menu/info.json)
     try:
-        data = load_json(filename)
+        return jsonify(read_data("info.json"))
     except FileNotFoundError:
-        return jsonify({"error": "Item not found"}), 404
-    return jsonify(data)
+        return jsonify({"message": "Could not find info data."}), 404
 
 
-# ----------------- Telegram webhook ----------------------
+@app.get("/categories")
+def categories():
+    # ВАЖНО: читаем из data/categories.json (а не из data/menu/categories.json)
+    try:
+        return jsonify(read_data("categories.json"))
+    except FileNotFoundError:
+        return jsonify({"message": "Could not find categories data."}), 404
 
-@app.route("/bot", methods=["POST"])
+
+# ---------------- menu -------------------------------
+
+@app.get("/menu/<category_id>")
+def category_menu(category_id: str):
+    """Возвращает список позиций из категории.
+       example: /menu/popular -> data/menu/popular.json
+    """
+    try:
+        return jsonify(read_menu(f"{category_id}.json"))
+    except FileNotFoundError:
+        return jsonify({"message": f"Could not find `{category_id}` category data."}), 404
+
+
+@app.get("/menu/details/<menu_item_id>")
+def menu_item_details(menu_item_id: str):
+    """Ищем конкретную позицию по её ID во всех файлах data/menu/*.json"""
+    try:
+        for filename in os.listdir(MENU_DIR):
+            if not filename.endswith(".json"):
+                continue
+            items = read_menu(filename)
+            found = next((it for it in items if it.get("id") == menu_item_id), None)
+            if found:
+                return jsonify(found)
+        return jsonify({"message": f"Could not find item with id `{menu_item_id}`."}), 404
+    except FileNotFoundError:
+        return jsonify({"message": "Menu data folder not found."}), 404
+
+
+# ---------------- order / оплата -----------------------
+
+@app.post("/order")
+def create_order():
+    """Создаёт инвойс (invoiceUrl) для оплаты в Mini App.
+       1) валидируем initData (_auth)
+       2) конвертим корзину в список LabeledPrice
+       3) отдаём invoiceUrl
+    """
+    request_data = request.get_json(silent=True) or {}
+
+    # 1) проверяем initData
+    init_data = request_data.get("_auth")
+    if not init_data or not auth.validate_auth_data(bot.BOT_TOKEN, init_data):
+        return jsonify({"message": "Request data should contain valid auth data."}), 401
+
+    # 2) конвертим корзину в цены
+    order_items = request_data.get("cartItems")
+    if not order_items:
+        return jsonify({"message": "Cart items are not provided."}), 400
+
+    labeled_prices = []
+    for order_item in order_items:
+        name = order_item["cafeItem"]["name"]
+        variant = order_item["variant"]["name"]
+        cost = int(order_item["variant"]["cost"])
+        quantity = int(order_item["quantity"])
+        amount = cost * quantity  # в минимальных единицах валюты (центах)
+        labeled_prices.append(
+            LabeledPrice(label=f"{name} ({variant}) x{quantity}", amount=amount)
+        )
+
+    # 3) создаём ссылку на инвойс через наш bot.py
+    invoice_url = bot.create_invoice_link(prices=labeled_prices)
+    return jsonify({"invoiceUrl": invoice_url})
+
+
+# ---------------- Telegram webhook ---------------------
+
+@app.post(bot.WEBHOOK_PATH)
 def bot_webhook():
-    """
-    Сюда Telegram шлёт апдейты.
-    """
-    update_json = request.get_json(silent=True, force=True) or {}
-    logger.info("Got update from Telegram: %s", update_json)
-    process_update(update_json)
-    return jsonify({"status": "ok"})
+    """Точка входа для апдейтов Telegram (webhook)."""
+    process_update(request.get_json())
+    return jsonify({"message": "OK"})
 
 
-@app.route("/refresh_webhook")
+@app.get("/refresh-webhook")
 def refresh_webhook_route():
-    """
-    Ручка, которую ты открываешь в браузере,
-    чтобы пересоздать webhook.
-    """
-    logger.info("Refreshing webhook…")
+    """Удобно дернуть в браузере после деплоя, чтобы обновить вебхук."""
     refresh_webhook()
-    return jsonify({"message": "webhook is alive"})
+    return jsonify({"message": "Webhook was refreshed"})
 
 
-# ---------------------- root -----------------------------
+# ---------------- root (опционально) -------------------
 
-@app.route("/")
+@app.get("/")
 def root():
     return jsonify(
         {
-            "backend_url": "",
+            "service": "tma-cafe-backend",
             "env": "production",
-            "version": "mini-patch-2025-11-11",
+            "webhook_path": bot.WEBHOOK_PATH,
         }
     )
 
 
-# ---------------- локальный запуск -----------------------
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+# На старте приложения сразу ставим вебхук
+bot.refresh_webhook()
