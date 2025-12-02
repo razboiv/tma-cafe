@@ -36,6 +36,35 @@
 
     <!-- Main router -->
     <script type="module" src="js/index.js?v=9"></script>
+<script>
+/* Перманентный хук для кнопки MY CART */
+(function persistMainButton(){
+  function goCart() {
+    if (window.navigateTo) {
+      window.navigateTo('cart');
+    } else {
+      // запасной вариант — хэш-маршрутизация + ручной вызов
+      location.hash = '#/cart';
+      if (window.handleLocation) window.handleLocation();
+    }
+  }
+
+  function hook(){
+    const W = window.Telegram && Telegram.WebApp;
+    if (!W || !W.MainButton) return;
+
+    try { W.MainButton.onClick(goCart); } catch {}
+    try { W.onEvent && W.onEvent('mainButtonClicked', goCart); } catch {}
+
+    try { W.MainButton.enable(); } catch {}
+    try { W.MainButton.show(); } catch {}
+  }
+
+  // Сразу повесили и поддерживаем «в живом» состоянии
+  hook();
+  setInterval(hook, 800);
+})();
+</script>
 </head>
 
 <body>
