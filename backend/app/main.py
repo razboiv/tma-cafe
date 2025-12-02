@@ -5,7 +5,7 @@ import logging
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from app.bot import process_update, refresh_webhook, enable_debug_logging
+from app.bot import process_update, refresh_webhook
 
 
 # ---------------- базовая настройка Flask ----------------
@@ -16,9 +16,6 @@ CORS(app, resources={r"/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Включаем подробные логи TeleBot (видно в Render-логах)
-enable_debug_logging()
 
 # --------- пути к JSON-файлам (ИМЕННО абсолютные!) ---------
 
