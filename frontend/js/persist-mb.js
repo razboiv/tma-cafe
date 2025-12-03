@@ -1,38 +1,49 @@
 // frontend/js/persist-mb.js
-// Гарантированный клик по Telegram MainButton ("MY CART") + детальные логи
+// Гарантированный клик по MainButton: принудительный переход на #/cart
 
-function goCart() {
-  console.log('[persist-mb] goCart()');
-  // временно показываем алерт, чтобы убедиться что клик дошёл
-  try { window.Telegram?.WebApp?.showAlert('Opening cart…'); } catch(e) {}
+function toCart() {
+  var target = "#/cart";
+  var moved = false;
 
-  if (window.navigateTo) {
-    window.navigateTo("cart");
+  // 1) если есть navigateTo — используем его
+  try {
+    if (window.navigateTo) {
+      window.navigateTo("cart");
+      moved = true;
+    }
+  } catch (e) {}
+
+  // 2) ставим хэш, если он другой
+  if (location.hash !== target) {
+    try { location.hash = target; moved = true; } catch (e) {}
   } else {
-    location.hash = "#/cart";
-    if (window.handleLocation) window.handleLocation();
+    // 3) он уже #/cart → насильно триггерим роутер
+    try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch (e) {
+      try { window.onhashchange && window.onhashchange(); } catch (e2) {}
+    }
+    try { window.handleLocation && window.handleLocation(); } catch (e) {}
   }
+
+  // отладка — можно убрать позже
+  try { console.log("[persist-mb] toCart(), moved:", moved, "hash:", location.hash); } catch(e){}
 }
 
 function hook() {
   var W = (window.Telegram && window.Telegram.WebApp) || null;
-  if (!W || !W.MainButton) {
-    console.log('[persist-mb] no WebApp/MainButton yet');
-    return;
-  }
+  if (!W || !W.MainButton) return;
 
-  try { W.MainButton.onClick(goCart); } catch (e) {}
-  try { if (typeof W.onEvent === "function") W.onEvent("mainButtonClicked", goCart); } catch (e) {}
+  // двойная подписка — какой-то канал точно сработает
+  try { W.MainButton.onClick(toCart); } catch (e) {}
+  try { typeof W.onEvent === "function" && W.onEvent("mainButtonClicked", toCart); } catch (e) {}
 
   try { W.MainButton.enable(); } catch (e) {}
   try { W.MainButton.show(); } catch (e) {}
 
-  console.log('[persist-mb] hook() attached');
+  try { console.log("[persist-mb] hook() attached"); } catch(e){}
 }
 
-// После загрузки навешиваем и периодически «переподвешиваем»
 window.addEventListener("load", function () {
-  console.log('[persist-mb] window load');
   hook();
+  // периодически «переподвешиваем», если кто-то сбросил обработчик
   setInterval(hook, 800);
 });
