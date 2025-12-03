@@ -11,13 +11,28 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-// ...когда есть товары в корзине:
-document.body.dataset.mainbutton = 'cart';
-TelegramSDK.showMainButton(`MY CART · ${count}`, () => navigateTo('cart'));
+// ---- MainButton logic for "MY CART" ----
+const MB_REFRESH_MS = 700;
 
-// ...когда корзина пустая:
-document.body.dataset.mainbutton = '';
-TelegramSDK.hideMainButton();
+function getCartCount() {
+  try {
+    const items = (Cart.getItems && Cart.getItems()) || [];
+    return items.reduce((sum, it) => sum + Number(it?.quantity || it?.count || 0), 0);
+  } catch (e) {
+    return 0;
+  }
+}
+
+function refreshMainButton(force = false) {
+  const n = getCartCount();
+  if (n > 0) {
+    document.body.dataset.mainbutton = 'cart'; // наш «умный» хук включится
+    TelegramSDK.showMainButton(`MY CART · ${n}`, () => navigateTo('cart'));
+  } else {
+    document.body.dataset.mainbutton = ''; // хук выключится
+    TelegramSDK.hideMainButton();
+  }
+}
 
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
