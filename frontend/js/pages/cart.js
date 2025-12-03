@@ -5,6 +5,12 @@ import TelegramSDK from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 import { createOrder } from "../requests/requests.js";
 
+// при входе на страницу корзины
+document.body.dataset.mainbutton = 'checkout';        // или просто ''
+
+// при выходе со страницы корзины
+document.body.dataset.mainbutton = '';
+
 // Нужен только обработчик checkout; остальное в проекте не трогаем.
 export default function initCartPage() {
   const checkoutBtn =
