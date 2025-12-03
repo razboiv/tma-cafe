@@ -1,48 +1,53 @@
-// frontend/js/persist-mb.js
-// Гарантированный переход в корзину: дергаем ВСЕ возможные триггеры навигации.
+// Гарантированный переход в корзину: сначала дергаем роутер,
+// а затем, если что-то не сработало, насильно рендерим корзину.
+
+async function hardRenderCart() {
+  try {
+    // 1) HTML корзины
+    const resp = await fetch("/pages/cart.html", { cache: "no-store" });
+    const html = await resp.text();
+    const cur = document.querySelector("#page-current");
+    const next = document.querySelector("#page-next");
+    if (next) next.style.display = "none";
+    if (cur) cur.innerHTML = html;
+
+    // 2) JS страницы корзины
+    const mod = await import("./pages/cart.js");
+    const CartPage = mod.default;
+    const page = new CartPage();
+    page.load(null);
+
+    console.log("[persist-mb] hardRenderCart(): success");
+  } catch (e) {
+    console.error("[persist-mb] hardRenderCart(): failed", e);
+  }
+}
 
 function toCart() {
   try { console.log("[persist-mb] toCart() start, hash:", location.hash); } catch {}
 
-  // 1) Нормальный путь — если есть navigateTo, он главный
+  // — обычные триггеры роутера —
   try { if (window.navigateTo) window.navigateTo("cart"); } catch {}
-
-  // 2) Обновляем hash (вдруг роутер слушает hashchange)
   try { if (location.hash !== "#/cart") location.hash = "#/cart"; } catch {}
-
-  // 3) Насильно кидаем hashchange
   try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {}
-  try { if (typeof window.onhashchange === "function") window.onhashchange(); } catch {}
-
-  // 4) Пинаем history (на случай, если роутер на popstate)
+  try { typeof window.onhashchange === "function" && window.onhashchange(); } catch {}
   try {
-    const url = location.pathname + "?r=cart" + (location.hash || "");
-    history.pushState({ r: "cart" }, "", url);
+    const url = location.pathname + "?dest=cart" + (location.hash || "");
+    history.pushState({ dest: "cart" }, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   } catch {}
-  try { window.dispatchEvent(new PopStateEvent("popstate")); } catch {}
+  try { window.handleLocation && window.handleLocation(); } catch {}
 
-  // 5) Прямой вызов обработчика роутера
-  try { if (window.handleLocation) window.handleLocation(); } catch {}
-
-  // 6) Подстраховочные повторы — некоторые роутеры просыпаются с задержкой
-  setTimeout(() => {
-    try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {}
-    try { window.dispatchEvent(new PopStateEvent("popstate")); } catch {}
-    try { window.handleLocation && window.handleLocation(); } catch {}
-  }, 60);
-
-  setTimeout(() => {
-    try { window.handleLocation && window.handleLocation(); } catch {}
-  }, 180);
+  // — бэкап: через 120мс насильно рисуем корзину —
+  setTimeout(() => hardRenderCart(), 120);
 
   try { console.log("[persist-mb] toCart() forced"); } catch {}
 }
 
 function hook() {
-  var W = (window.Telegram && window.Telegram.WebApp) || null;
+  const W = (window.Telegram && window.Telegram.WebApp) || null;
   if (!W || !W.MainButton) return;
 
-  // Двойная подписка — какой-то точно сработает
   try { W.MainButton.onClick(toCart); } catch {}
   try { typeof W.onEvent === "function" && W.onEvent("mainButtonClicked", toCart); } catch {}
 
@@ -54,6 +59,5 @@ function hook() {
 
 window.addEventListener("load", function () {
   hook();
-  // периодически «переподвешиваем», если чей-то код снимает обработчик
-  setInterval(hook, 800);
+  setInterval(hook, 800); // если чей-то код снимает обработчик
 });
