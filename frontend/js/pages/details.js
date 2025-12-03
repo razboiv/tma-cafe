@@ -8,6 +8,13 @@ import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
+// В режиме добавления — чтобы наш хук НЕ перехватывал
+document.body.dataset.mainbutton = 'add';
+TelegramSDK.showMainButton('ADD TO CART', () => addToCart());
+
+// когда уходишь со страницы товара (unmount/cleanup)
+document.body.dataset.mainbutton = '';
+
 /**
  * Страница деталей блюда: большая фотка, описание, варианты и количество.
  */
