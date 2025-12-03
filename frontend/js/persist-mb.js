@@ -1,49 +1,42 @@
-// frontend/js/persist-mb.js
-// Гарантированный клик по MainButton: принудительный переход на #/cart
+// Гарантированный переход в корзину: дергаем все возможные триггеры роутера.
 
 function toCart() {
-  var target = "#/cart";
-  var moved = false;
+  try { console.log("[persist-mb] toCart() start, hash:", location.hash); } catch {}
 
-  // 1) если есть navigateTo — используем его
-  try {
-    if (window.navigateTo) {
-      window.navigateTo("cart");
-      moved = true;
-    }
-  } catch (e) {}
+  // 1) нормальный путь
+  try { if (window.navigateTo) window.navigateTo("cart"); } catch {}
 
-  // 2) ставим хэш, если он другой
-  if (location.hash !== target) {
-    try { location.hash = target; moved = true; } catch (e) {}
-  } else {
-    // 3) он уже #/cart → насильно триггерим роутер
-    try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch (e) {
-      try { window.onhashchange && window.onhashchange(); } catch (e2) {}
-    }
-    try { window.handleLocation && window.handleLocation(); } catch (e) {}
-  }
+  // 2) меняем hash в любом случае
+  try { if (location.hash !== "#/cart") location.hash = "#/cart"; } catch {}
 
-  // отладка — можно убрать позже
-  try { console.log("[persist-mb] toCart(), moved:", moved, "hash:", location.hash); } catch(e){}
+  // 3) насильно триггерим роутер
+  try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {}
+  try { if (window.handleLocation) window.handleLocation(); } catch {}
+
+  // 4) подстраховка — повторим через короткие таймеры (иногда роутер «просыпается» с задержкой)
+  setTimeout(() => { try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {} }, 50);
+  setTimeout(() => { try { window.handleLocation && window.handleLocation(); } catch {} }, 80);
+  setTimeout(() => { try { window.handleLocation && window.handleLocation(); } catch {} }, 200);
+
+  try { console.log("[persist-mb] toCart() forced"); } catch {}
 }
 
 function hook() {
   var W = (window.Telegram && window.Telegram.WebApp) || null;
   if (!W || !W.MainButton) return;
 
-  // двойная подписка — какой-то канал точно сработает
-  try { W.MainButton.onClick(toCart); } catch (e) {}
-  try { typeof W.onEvent === "function" && W.onEvent("mainButtonClicked", toCart); } catch (e) {}
+  // Двойная подписка — какой-то канал точно сработает
+  try { W.MainButton.onClick(toCart); } catch {}
+  try { typeof W.onEvent === "function" && W.onEvent("mainButtonClicked", toCart); } catch {}
 
-  try { W.MainButton.enable(); } catch (e) {}
-  try { W.MainButton.show(); } catch (e) {}
+  try { W.MainButton.enable(); } catch {}
+  try { W.MainButton.show(); } catch {}
 
-  try { console.log("[persist-mb] hook() attached"); } catch(e){}
+  try { console.log("[persist-mb] hook() attached"); } catch {}
 }
 
 window.addEventListener("load", function () {
   hook();
-  // периодически «переподвешиваем», если кто-то сбросил обработчик
+  // периодически «переподвешиваем» — если чей-то код снимает обработчик
   setInterval(hook, 800);
 });
