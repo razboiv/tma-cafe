@@ -7,15 +7,15 @@ import { createOrder } from "../requests/requests.js";
 export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
-    this._boundCheckout = null;
+    this._onCheckout = null;
   }
 
   async load(params) {
-    // На странице корзины наш глобальный хук НЕ должен перехватывать кнопку
+    // на странице корзины — не перехватываем MainButton нашим глобальным хуком
     document.body.dataset.mainbutton = "checkout";
     try { TelegramSDK.hideMainButton(); } catch {}
 
-    // кнопка Checkout (поддерживаем разные селекторы из шаблонов)
+    // находим кнопку Checkout (поддерживаем несколько вариантов селектора)
     const btn =
       document.querySelector('[data-action="checkout"]') ||
       document.querySelector(".js-checkout") ||
@@ -23,8 +23,8 @@ export default class CartPage extends Route {
       document.querySelector('button[type="submit"]');
 
     if (btn) {
-      this._boundCheckout = (e) => { e.preventDefault(); this.#handleCheckout(btn); };
-      btn.addEventListener("click", this._boundCheckout);
+      this._onCheckout = (e) => { e.preventDefault(); this.#checkout(btn); };
+      btn.addEventListener("click", this._onCheckout);
     }
   }
 
@@ -35,12 +35,12 @@ export default class CartPage extends Route {
       document.querySelector(".js-checkout") ||
       document.getElementById("checkout") ||
       document.querySelector('button[type="submit"]');
-    if (btn && this._boundCheckout) btn.removeEventListener("click", this._boundCheckout);
-    this._boundCheckout = null;
+    if (btn && this._onCheckout) btn.removeEventListener("click", this._onCheckout);
+    this._onCheckout = null;
     super.destroy && super.destroy();
   }
 
-  async #handleCheckout(btn) {
+  async #checkout(btn) {
     try {
       btn?.setAttribute("disabled", "disabled");
 
@@ -50,6 +50,7 @@ export default class CartPage extends Route {
         return;
       }
 
+      // формируем payload для бэка
       const payload = {
         _auth:
           (TelegramSDK.getInitData && TelegramSDK.getInitData()) ||
@@ -71,13 +72,10 @@ export default class CartPage extends Route {
       } else {
         window.location.href = res.invoiceUrl;
       }
-
-      // при необходимости можно очищать корзину:
-      // Cart.clear();
     } catch (err) {
       console.error("Checkout error:", err);
-      (TelegramSDK.showAlert && TelegramSDK.showAlert("Не удалось создать оплату. Попробуйте ещё раз.")) ||
-        alert("Не удалось создать оплату. Попробуйте ещё раз.");
+      (TelegramSDK.showAlert && TelegramSDK.showAlert("Не удалось создать оплату. Попробуйте ещё раз."))
+        || alert("Не удалось создать оплату. Попробуйте ещё раз.");
     } finally {
       btn?.removeAttribute("disabled");
     }
