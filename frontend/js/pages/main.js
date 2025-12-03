@@ -11,6 +11,14 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
+// ...когда есть товары в корзине:
+document.body.dataset.mainbutton = 'cart';
+TelegramSDK.showMainButton(`MY CART · ${count}`, () => navigateTo('cart'));
+
+// ...когда корзина пустая:
+document.body.dataset.mainbutton = '';
+TelegramSDK.hideMainButton();
+
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
  */
