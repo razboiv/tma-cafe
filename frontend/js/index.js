@@ -1,7 +1,7 @@
 import TelegramSDK from "./telegram/telegram.js";
 import { handleLocation, navigateTo } from "./routing/router.js";
 
-window.navigateTo = navigateTo;
+window.navigateTo   = navigateTo;
 window.handleLocation = handleLocation;
 
 TelegramSDK.ready();
