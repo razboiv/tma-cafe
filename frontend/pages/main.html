@@ -30,7 +30,6 @@
   <!-- КАТЕГОРИИ -->
   <div class="cafe-section-container">
     <h3 id="cafe-section-categories-title" class="cafe-section-title shimmer">Categories</h3>
-
     <div id="cafe-categories" class="cafe-section-horizontal">
       <div class="cafe-category-container shimmer"></div>
       <div class="cafe-category-container shimmer"></div>
@@ -43,7 +42,6 @@
   <!-- ПОПУЛЯРНОЕ -->
   <div class="cafe-section-container">
     <h3 id="cafe-section-popular-title" class="cafe-section-title shimmer">Popular</h3>
-
     <div id="cafe-popular" class="cafe-section-horizontal">
       <div class="cafe-item-container shimmer"></div>
       <div class="cafe-item-container shimmer"></div>
@@ -51,31 +49,26 @@
     </div>
   </div>
 
-  <!-- ШАБЛОН КАТЕГОРИИ (кликабельная ссылка) -->
+  <!-- ШАБЛОНЫ -->
   <template id="cafe-category-template">
-    <a class="cafe-category-container" role="button" tabindex="0"
-       style="pointer-events:auto;text-decoration:none;display:inline-flex"
-       data-id="">
-      <img class="cafe-category-icon" alt="" />
-      <div class="cafe-category-name"></div>
-    </a>
+    <a class="cafe-category-container" role="button" tabindex="0" data-id=""
+       style="display:inline-flex;text-decoration:none;pointer-events:auto"></a>
   </template>
 
-  <!-- ШАБЛОН КАРТОЧКИ БЛЮДА (кликабельная ссылка) -->
   <template id="cafe-item-template">
-    <a class="cafe-item-container" role="button" tabindex="0"
-       style="pointer-events:auto;text-decoration:none;display:inline-flex"
-       data-id="">
+    <a class="cafe-item-container" role="button" tabindex="0" data-id=""
+       style="display:inline-flex;text-decoration:none;pointer-events:auto">
       <img class="cafe-item-image" alt="" />
       <h6 class="cafe-item-name"></h6>
       <p class="small cafe-item-description"></p>
     </a>
   </template>
 
-  <!-- МИН-ПАТЧ, чтобы НИЧТО не съедало клики -->
+  <!-- Антиклик-оверлейные фиксы -->
   <style>
-    .cafe-item-container, .cafe-category-container { cursor:pointer; pointer-events:auto !important; }
-    .cafe-item-container *, .cafe-category-container * { pointer-events:none; } /* клики идут в ссылку-родителя */
+    .cafe-section-horizontal { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .cafe-item-container, .cafe-category-container { cursor:pointer; pointer-events:auto !important; position:relative; z-index:5; }
+    .cafe-item-container * , .cafe-category-container * { pointer-events:none; } /* клики идут в <a> */
     .shimmer, .skeleton, .overlay, .loading, .preloader { pointer-events:none !important; }
   </style>
 </section>
