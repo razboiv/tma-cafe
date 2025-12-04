@@ -9,16 +9,19 @@ export default class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
     this._onCheckout = null;
+    this._liveTimer = null;
   }
 
-  async load(params) {
-    // На странице корзины — не перехватываем MainButton глобальным хендлером
+  async load() {
+    // На странице корзины глобальный хук не должен перехватывать кнопку
     document.body.dataset.mainbutton = "checkout";
-    try { TelegramSDK.hideMainButton(); } catch {}
+    try { TelegramSDK.hideMainButton?.(); } catch {}
+    try { window.Telegram?.WebApp?.MainButton?.hide?.(); } catch {} // форс-скрытие
 
-    // Отрисуем корзину и повесим обработчики
     this.render();
-    this.bindControls();
+    // Поддерживаем «живой» UI (если количество меняется где-то ещё)
+    if (this._liveTimer) clearInterval(this._liveTimer);
+    this._liveTimer = setInterval(() => this.render(), 1500);
 
     // Кнопка Checkout
     const btn =
@@ -35,6 +38,8 @@ export default class CartPage extends Route {
 
   destroy() {
     document.body.dataset.mainbutton = "";
+    try { this._liveTimer && clearInterval(this._liveTimer); } catch {}
+    this._liveTimer = null;
 
     const btn =
       document.querySelector('[data-action="checkout"]') ||
@@ -47,10 +52,20 @@ export default class CartPage extends Route {
     super.destroy && super.destroy();
   }
 
-  // ---------- UI ----------
+  // ---------- helpers ----------
+
+  // Берём первый существующий селектор
+  _pick(root, list) {
+    for (const sel of list) {
+      const el = root.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
 
   render() {
     const items = (Cart.getItems && Cart.getItems()) || [];
+
     const list =
       document.querySelector("#cart-items") ||
       document.querySelector(".cart-items") ||
@@ -65,7 +80,6 @@ export default class CartPage extends Route {
       document.querySelector('[data-id="cart-total"]') ||
       document.querySelector(".cart-total");
 
-    // очистим
     if (list) list.innerHTML = "";
 
     if (!items.length) {
@@ -75,11 +89,9 @@ export default class CartPage extends Route {
     }
     if (emptyBlock) emptyBlock.style.display = "none";
 
-    // шаблон, если есть
-    const tplNode = document.querySelector("#cart-item-template");
-    const tplHtml = tplNode ? tplNode.innerHTML : null;
+    const tpl = document.querySelector("#cart-item-template");
+    const tplHtml = tpl ? tpl.innerHTML : null;
 
-    // рендер позиций
     for (const it of items) {
       const qty = Number(it.quantity ?? it.count ?? 0);
       const name = it.cafeItem?.name || "";
@@ -92,84 +104,83 @@ export default class CartPage extends Route {
         row.innerHTML = tplHtml;
         row = row.firstElementChild;
       } else {
-        // простой фолбэк, если в шаблоне нет template
+        // Фолбэк-верстка, если нет <template>
         row = document.createElement("div");
         row.className = "cart-item";
-        row.style.padding = "10px 0";
+        row.style.padding = "12px 0";
         row.innerHTML = `
           <div class="cart-item__line">
-            <div class="cart-item__title">${name}${variant ? `, ${variant}` : ""}</div>
-            <div class="cart-item__price">${toDisplayCost(cost * qty)}</div>
+            <div class="cart-item__title js-name"></div>
+            <div class="cart-item__price js-price"></div>
           </div>
+          <div class="cart-item__meta js-variant" style="opacity:.75;margin-bottom:6px;"></div>
           <div class="cart-item__qty">
             <button class="js-dec" aria-label="dec">−</button>
             <span class="js-qty">${qty}</span>
             <button class="js-inc" aria-label="inc">+</button>
-            <button class="js-remove" aria-label="remove">×</button>
+            <button class="js-remove" aria-label="remove" style="margin-left:8px">×</button>
           </div>
         `;
       }
 
-      // дата-атрибуты, чтобы знать что обновлять
+      // Заполняем тексты (пытаемся по нескольким селекторам)
+      const nameEl    = this._pick(row, [".js-name",".cart-item__title",".cart-item-title",".title",'[data-role="name"]']) || row;
+      const variantEl = this._pick(row, [".js-variant",".cart-item__variant",".variant",'[data-role="variant"]']);
+      const qtyEl     = this._pick(row, [".js-qty",".cart-item__qty .qty",".quantity",'[data-role="qty"]']);
+      const priceEl   = this._pick(row, [".js-price",".cart-item__price",".price",'[data-role="price"]']);
+
+      nameEl.textContent = name;
+      if (variantEl) variantEl.textContent = variant ? `Option: ${variant}` : "";
+      if (qtyEl) qtyEl.textContent = String(qty);
+      if (priceEl) priceEl.textContent = toDisplayCost(cost * qty);
+
+      // Дата-атрибуты для идентификации
       row.dataset.itemId = String(it.cafeItem?.id ?? "");
-      row.dataset.variantName = String(it.variant?.name ?? "");
-      row.querySelector(".js-qty")?.replaceWith(Object.assign(document.createElement("span"), {className:"js-qty", textContent:String(qty)}));
-      row.querySelector(".js-price")?.replaceWith(Object.assign(document.createElement("span"), {className:"js-price", textContent:toDisplayCost(cost * qty)}));
+      row.dataset.variantName = String(variant);
 
-      // кнопки +/-/remove
-      row.querySelector(".js-inc")?.addEventListener("click", () => this.changeQty(it, +1, row));
-      row.querySelector(".js-dec")?.addEventListener("click", () => this.changeQty(it, -1, row));
-      row.querySelector(".js-remove")?.addEventListener("click", () => this.removeItem(it, row));
+      // Кнопки +/-/remove (ищем по нескольким вариантам)
+      const btnInc = this._pick(row, [".js-inc",'[data-action="inc"]','.inc','button[aria-label="inc"]']);
+      const btnDec = this._pick(row, [".js-dec",'[data-action="dec"]','.dec','button[aria-label="dec"]']);
+      const btnRem = this._pick(row, [".js-remove",'[data-action="remove"]','.remove','button[aria-label="remove"]']);
 
-      if (list) list.appendChild(row);
+      btnInc && btnInc.addEventListener("click", () => this._changeQty(it, +1));
+      btnDec && btnDec.addEventListener("click", () => this._changeQty(it, -1));
+      btnRem && btnRem.addEventListener("click", () => this._remove(it));
+
+      list && list.appendChild(row);
     }
 
     // total
-    const total = items.reduce((s, it) => s + Number(it.variant?.cost || 0) * Number(it.quantity ?? it.count ?? 0), 0);
+    const total = items.reduce((s, x) => s + Number(x.variant?.cost || 0) * Number(x.quantity ?? x.count ?? 0), 0);
     if (totalNode) totalNode.textContent = toDisplayCost(total);
   }
 
-  bindControls() {
-    // Если корзина зависит от внешних событий — можно подписаться и перерисовывать.
-    // На всякий случай — простая «поддержка живой»: обновляем раз в 1.5 сек.
-    if (this._liveTimer) clearInterval(this._liveTimer);
-    this._liveTimer = setInterval(() => this.render(), 1500);
-  }
-
-  changeQty(item, delta, row) {
+  _changeQty(item, delta) {
     try {
-      // если есть методы в Cart — используем их
       if (typeof Cart.changeItemQuantity === "function") {
         Cart.changeItemQuantity(item, delta);
       } else {
-        // фолбэк: меняем и сохраняем сами (если есть save)
         const list = (Cart.getItems && Cart.getItems()) || [];
-        const target = list.find(
-          x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name
-        );
-        if (target) {
-          const q = Number(target.quantity ?? target.count ?? 0) + delta;
-          target.quantity = Math.max(0, q);
+        const t = list.find(x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name);
+        if (t) {
+          const q = Math.max(0, Number(t.quantity ?? t.count ?? 0) + delta);
+          t.quantity = q;
           if (typeof Cart.save === "function") Cart.save(list);
         }
       }
     } catch {}
-
-    // обновим UI
     this.render();
   }
 
-  removeItem(item, row) {
+  _remove(item) {
     try {
       if (typeof Cart.removeItem === "function") {
         Cart.removeItem(item);
       } else {
         const list = (Cart.getItems && Cart.getItems()) || [];
-        const idx = list.findIndex(
-          x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name
-        );
-        if (idx >= 0) {
-          list.splice(idx, 1);
+        const i = list.findIndex(x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name);
+        if (i >= 0) {
+          list.splice(i, 1);
           if (typeof Cart.save === "function") Cart.save(list);
         }
       }
