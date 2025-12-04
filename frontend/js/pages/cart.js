@@ -10,17 +10,24 @@ export default class CartPage extends Route {
     super("cart", "/pages/cart.html");
     this._onCheckout = null;
     this._liveTimer = null;
+    this._hideMBTimer = null;
   }
 
   async load() {
     // На странице корзины глобальный хук не должен перехватывать кнопку
     document.body.dataset.mainbutton = "checkout";
-    try { TelegramSDK.hideMainButton?.(); } catch {}
-    try { window.Telegram?.WebApp?.MainButton?.hide?.(); } catch {} // форс-скрытие
+
+    // Форс-скрытие MainButton + поддерживаем скрытым, пока страница открыта
+    const hideMB = () => {
+      try { TelegramSDK.hideMainButton?.(); } catch {}
+      try { window.Telegram?.WebApp?.MainButton?.hide?.(); } catch {}
+    };
+    hideMB();
+    this._hideMBTimer = setInterval(hideMB, 600);
 
     this.render();
-    // Поддерживаем «живой» UI (если количество меняется где-то ещё)
-    if (this._liveTimer) clearInterval(this._liveTimer);
+
+    // «Живое» обновление списка (на случай внешних изменений количества)
     this._liveTimer = setInterval(() => this.render(), 1500);
 
     // Кнопка Checkout
@@ -39,7 +46,9 @@ export default class CartPage extends Route {
   destroy() {
     document.body.dataset.mainbutton = "";
     try { this._liveTimer && clearInterval(this._liveTimer); } catch {}
+    try { this._hideMBTimer && clearInterval(this._hideMBTimer); } catch {}
     this._liveTimer = null;
+    this._hideMBTimer = null;
 
     const btn =
       document.querySelector('[data-action="checkout"]') ||
@@ -54,7 +63,6 @@ export default class CartPage extends Route {
 
   // ---------- helpers ----------
 
-  // Берём первый существующий селектор
   _pick(root, list) {
     for (const sel of list) {
       const el = root.querySelector(sel);
@@ -104,7 +112,6 @@ export default class CartPage extends Route {
         row.innerHTML = tplHtml;
         row = row.firstElementChild;
       } else {
-        // Фолбэк-верстка, если нет <template>
         row = document.createElement("div");
         row.className = "cart-item";
         row.style.padding = "12px 0";
@@ -123,7 +130,6 @@ export default class CartPage extends Route {
         `;
       }
 
-      // Заполняем тексты (пытаемся по нескольким селекторам)
       const nameEl    = this._pick(row, [".js-name",".cart-item__title",".cart-item-title",".title",'[data-role="name"]']) || row;
       const variantEl = this._pick(row, [".js-variant",".cart-item__variant",".variant",'[data-role="variant"]']);
       const qtyEl     = this._pick(row, [".js-qty",".cart-item__qty .qty",".quantity",'[data-role="qty"]']);
@@ -134,11 +140,9 @@ export default class CartPage extends Route {
       if (qtyEl) qtyEl.textContent = String(qty);
       if (priceEl) priceEl.textContent = toDisplayCost(cost * qty);
 
-      // Дата-атрибуты для идентификации
       row.dataset.itemId = String(it.cafeItem?.id ?? "");
       row.dataset.variantName = String(variant);
 
-      // Кнопки +/-/remove (ищем по нескольким вариантам)
       const btnInc = this._pick(row, [".js-inc",'[data-action="inc"]','.inc','button[aria-label="inc"]']);
       const btnDec = this._pick(row, [".js-dec",'[data-action="dec"]','.dec','button[aria-label="dec"]']);
       const btnRem = this._pick(row, [".js-remove",'[data-action="remove"]','.remove','button[aria-label="remove"]']);
@@ -150,7 +154,6 @@ export default class CartPage extends Route {
       list && list.appendChild(row);
     }
 
-    // total
     const total = items.reduce((s, x) => s + Number(x.variant?.cost || 0) * Number(x.quantity ?? x.count ?? 0), 0);
     if (totalNode) totalNode.textContent = toDisplayCost(total);
   }
@@ -187,8 +190,6 @@ export default class CartPage extends Route {
     } catch {}
     this.render();
   }
-
-  // ---------- Checkout ----------
 
   async #checkout(btn) {
     try {
