@@ -1,200 +1,190 @@
 // frontend/js/pages/details.js
-import { Route } from "../routing/route.js";
-import { navigateTo } from "../routing/router.js";
-import * as Requests from "../requests/requests.js";
+// Детальная карточка блюда: загрузка данных, варианты, qty, MainButton
+
 import TelegramSDK from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
-import { toDisplayCost } from "../utils/currency.js";
+import { Route } from "../routing/route.js";
+import { navigateTo } from "../routing/router.js";
 
-// ── утилиты ───────────────────────────────────────────────────────────────────
-const W   = () => window.Telegram?.WebApp;
-const $   = (s, r = document) => r.querySelector(s);
-const $$  = (s, r = document) => Array.from(r.querySelectorAll(s));
-const txt = (sel, v) => { const el = $(sel); if (el) el.textContent = v; return el; };
-const img = (sel, url) => {
-  const el = $(sel); if (!el) return;
-  if (url) { el.src = url; el.style.removeProperty("display"); }
-  else el.style.display = "none";
-};
-const showMB = (label, cb) => {
+// ---- helpers ---------------------------------------------------------------
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+const formatPrice = (n) => {
   try {
-    TelegramSDK.showMainButton?.(label, cb);
-    const w = W();
-    w?.MainButton?.setText?.(label);
-    w?.MainButton?.onClick?.(cb);
-    w?.onEvent?.("mainButtonClicked", cb);
-    w?.MainButton?.enable?.();
-    w?.MainButton?.show?.();
-  } catch {}
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  } catch {
+    return `$${Number(n).toFixed(2)}`;
+  }
 };
 
-// ── извлечение id из любых форм ───────────────────────────────────────────────
-function tryJsonId(s) {
+async function fetchDetails(id) {
+  const url = `/menu/details/${encodeURIComponent(id)}`;
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load details (${res.status})`);
+  return res.json();
+}
+
+function safeText(el, text) {
+  if (el) el.textContent = text ?? "";
+}
+
+function setActive(btn, on) {
+  if (!btn) return;
+  btn.classList.toggle("active", !!on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function getCartCount() {
   try {
-    const obj = JSON.parse(s);
-    if (obj && typeof obj === "object") {
-      if ("id"  in obj) return String(obj.id);
-      if ("dir" in obj) return String(obj.dir);
-    }
-  } catch {}
-  return null;
-}
-
-function readIdFromHash() {
-  const h   = location.hash || "";
-  const dec = decodeURIComponent(h);
-
-  // #/details/<что-то>
-  let m = dec.match(/#\/?details\/([^/?#]+)/i);
-  if (m) {
-    const raw = m[1];
-    return tryJsonId(raw) || raw;
-  }
-
-  // ?id=... / ?dir=...
-  m = dec.match(/[?&#](?:id|dir)=([^&#]+)/i);
-  if (m) return m[1];
-
-  // ?params=<json> / ?p=<json>
-  m = dec.match(/[?&#](?:params|p)=([^&#]+)/i);
-  if (m) {
-    const raw = m[1];
-    return tryJsonId(raw) || raw;
-  }
-
-  // запасной вариант — последний сегмент как json
-  const last = dec.split("/").pop();
-  const t = tryJsonId(last);
-  if (t) return t;
-
-  return null;
-}
-
-function normalizeId(params) {
-  // объект { id: 'burger-1' } или { dir: 'burger-1' }
-  if (params && typeof params === "object") {
-    if ("id"  in params) return String(params.id);
-    if ("dir" in params) return String(params.dir);
-  }
-  // строка — может быть json
-  if (typeof params === "string") {
-    const s  = decodeURIComponent(params);
-    const id = tryJsonId(s);
-    return id || s;
-  }
-  // dataset / hash
-  const ds = document.body?.dataset || {};
-  return ds.itemId || ds.dir || ds.id || readIdFromHash() || null;
-}
-
-// ── загрузка товара ───────────────────────────────────────────────────────────
-async function getItem(id) {
-  try {
-    if (typeof Requests.getMenuItem === "function") {
-      return await Requests.getMenuItem(id);
-    }
-  } catch {}
-  try {
-    const r = await fetch(`${location.origin}/menu/details/${encodeURIComponent(id)}`);
-    if (!r.ok) throw new Error(r.status);
-    return await r.json();
-  } catch (e) {
-    console.error("fetch details failed", e);
-    return null;
+    if (typeof Cart?.getPortionCount === "function") return Cart.getPortionCount();
+    if (typeof Cart?.getCount === "function") return Cart.getCount();
+    if (typeof Cart?.count === "function") return Cart.count();
+    if (typeof Cart?.items === "function") return Cart.items().length;
+    return 0;
+  } catch {
+    return 0;
   }
 }
 
-function removeSkeleton() {
-  $$(".shimmer,[data-skeleton],.skeleton").forEach(el => el.style.display = "none");
-  $$("[data-content],.details-content").forEach(el => el.style.removeProperty("display"));
+function addToCartUniversal(item, qty) {
+  // Пытаемся попасть в любой из распространённых API корзины
+  if (typeof Cart?.add === "function") return Cart.add(item, qty);
+  if (typeof Cart?.plus === "function") return Cart.plus(item, qty);
+  if (typeof Cart?.set === "function") return Cart.set(item, qty);
+  // Фолбэк: складываем примитивно
+  const list = JSON.parse(localStorage.getItem("__tmp_cart") || "[]");
+  list.push({ ...item, qty });
+  localStorage.setItem("__tmp_cart", JSON.stringify(list));
 }
 
-// ── страница Details ──────────────────────────────────────────────────────────
+// ---- страница --------------------------------------------------------------
+
 export default class DetailsPage extends Route {
-  constructor() { super("details", "/pages/details.html"); }
+  constructor() {
+    super("root", "/pages/details.html");
+  }
 
   async load(params) {
-    // чтобы наш persist-mb не перехватывал клик
-    document.body.dataset.mainbutton = "add";
+    TelegramSDK.expand?.();
 
-    const id = normalizeId(params);
-    console.log("[Details] normalized id =", id, "params =", params);
+    const id = (params?.id || "").toString();
+    console.log("[Details] open", id);
 
-    if (!id) return;                 // без id оставим скелет
+    const page = document; // шаблон уже отрендерен роутером
+    const els = {
+      coverWrap: $("#details-cover", page),
+      coverImg: $("#details-image", page),
+      title: $("#details-title", page),
+      desc: $("#details-desc", page),
+      grams: $("#details-grams", page),
+      price: $("#details-price", page),
 
-    this.item    = await getItem(id);
-    if (!this.item) return;
+      optSmall: $("#opt-small", page),
+      optLarge: $("#opt-large", page),
 
-    this.qty     = 1;
-    this.variant = this.item?.variants?.[0] || null;
+      qtyMinus: $("#qty-minus", page),
+      qtyPlus: $("#qty-plus", page),
+      qtyValue: $("#qty-value", page),
+    };
 
-    this.render();
+    // Состояние выбора
+    let data = null;
+    let selectedOption = "Small";
+    let qty = 1;
 
-    // показываем кнопку «ADD TO CART», переход в корзину — по нажатию.
-    showMB("ADD TO CART", () => this.addToCart());
-  }
+    // Изначально показываем кнопку добавления
+    document.body.dataset.mainbutton = "";
+    TelegramSDK.showMainButton?.("ADD TO CART", onAddToCart);
 
-  render() {
-    const it = this.item || {};
-    removeSkeleton();
+    // Загрузка данных
+    try {
+      data = await fetchDetails(id);
 
-    img ("#cafe-item-details-image", it.image || it.imageUrl || it.coverImage || "");
-    txt ("#cafe-item-details-name", it.name || "");
-    txt ("#cafe-item-details-description", it.description || "");
-    txt ("#cafe-item-details-section-title", "Price");
+      // Заполнение текста
+      safeText(els.title, data?.title || data?.name || "");
+      safeText(els.desc, data?.description || "");
+      safeText(els.grams, data?.weight ? `${data.weight}g` : (data?.portion || ""));
+      safeText(els.price, formatPrice(data?.price ?? data?.smallPrice ?? 0));
 
-    // варианты
-    const wrap = $("#cafe-item-details-variants");
-    if (wrap) {
-      wrap.innerHTML = "";
-      (it.variants || []).forEach((v, i) => {
-        const b = document.createElement("button");
-        b.className = "cafe-item-details-variant";
-        b.textContent = v.name || "";
-        if (i === 0) b.classList.add("active");
-        b.addEventListener("click", () => {
-          this.variant = v;
-          this.updatePrice();
-          $$(".cafe-item-details-variant", wrap).forEach(x => x.classList.remove("active"));
-          b.classList.add("active");
+      // Картинка
+      const imgUrl = data?.image || data?.coverImage || data?.photo || "";
+      if (els.coverImg && imgUrl) {
+        els.coverImg.style.opacity = "0";
+        els.coverImg.onload = () => (els.coverImg.style.opacity = "1");
+        els.coverImg.src = imgUrl;
+      } else if (els.coverWrap) {
+        els.coverWrap.style.display = "none";
+      }
+
+      // Варианты
+      if (els.optSmall) {
+        els.optSmall.addEventListener("click", () => {
+          selectedOption = "Small";
+          setActive(els.optSmall, true);
+          setActive(els.optLarge, false);
+          safeText(els.price, formatPrice(data?.smallPrice ?? data?.price ?? 0));
         });
-        wrap.appendChild(b);
+      }
+      if (els.optLarge) {
+        els.optLarge.addEventListener("click", () => {
+          selectedOption = "Large";
+          setActive(els.optSmall, false);
+          setActive(els.optLarge, true);
+          safeText(els.price, formatPrice(data?.largePrice ?? (data?.priceLarge ?? 0)));
+        });
+      }
+      // Активируем Small по умолчанию
+      setActive(els.optSmall, true);
+
+      // Количество
+      const syncQty = () => safeText(els.qtyValue, String(qty));
+      els.qtyMinus?.addEventListener("click", () => {
+        qty = Math.max(1, qty - 1);
+        syncQty();
       });
+      els.qtyPlus?.addEventListener("click", () => {
+        qty = Math.min(99, qty + 1);
+        syncQty();
+      });
+      syncQty();
+    } catch (e) {
+      console.error("Details load error:", e);
+      TelegramSDK.showAlert?.("Не удалось загрузить блюдо. Попробуйте позже.");
     }
 
-    // количество
-    txt("#cafe-item-details-quantity-value", String(this.qty));
-    $("#cafe-item-details-quantity-increase-button")?.addEventListener("click", () => {
-      this.qty = Math.min(99, this.qty + 1);
-      txt("#cafe-item-details-quantity-value", String(this.qty));
-      this.updatePrice();
-    });
-    $("#cafe-item-details-quantity-decrease-button")?.addEventListener("click", () => {
-      this.qty = Math.max(1, this.qty - 1);
-      txt("#cafe-item-details-quantity-value", String(this.qty));
-      this.updatePrice();
-    });
+    // --- handlers -----------------------------------------------------------
 
-    this.updatePrice();
+    function onAddToCart() {
+      if (!data) return;
+
+      const price =
+        selectedOption === "Large"
+          ? (data?.largePrice ?? data?.priceLarge ?? data?.price ?? 0)
+          : (data?.smallPrice ?? data?.price ?? 0);
+
+      const item = {
+        id: data?.id || id,
+        title: data?.title || data?.name || "",
+        image: data?.image || data?.coverImage || "",
+        option: selectedOption,
+        price,
+      };
+
+      addToCartUniversal(item, qty);
+
+      // Переключаем MainButton на «MY CART …»
+      const count = getCartCount() || qty;
+      const postfix = count === 1 ? "POSITION" : "POSITIONS";
+      document.body.dataset.mainbutton = "cart"; // наш persist-mb.js перехватит клик
+      TelegramSDK.showMainButton?.(`MY CART · ${count} ${postfix}`, () => navigateTo("cart"));
+    }
   }
 
-  updatePrice() {
-    const cost = Number(this.variant?.cost || 0) * Number(this.qty || 1);
-    txt("#cafe-item-details-selected-variant-price",  toDisplayCost(cost));
-    txt("#cafe-item-details-selected-variant-weight", this.variant?.weight || "");
-  }
-
-  addToCart() {
-    if (!this.item || !this.variant) return;
-    try { Cart.addItem(this.item, this.variant, this.qty); } catch {}
-
-    document.body.dataset.mainbutton = "cart"; // для persist-mb
-    const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
-    const label = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
-
-    showMB(label, () => {
-      if (window.navigateTo) navigateTo("cart");
-      else { location.hash = "#/cart"; window.handleLocation?.(); }
-    });
+  destroy() {
+    // Скрываем MainButton, когда уходим со страницы
+    document.body.dataset.mainbutton = "";
+    TelegramSDK.hideMainButton?.();
   }
 }
