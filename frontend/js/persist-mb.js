@@ -1,42 +1,36 @@
 // frontend/js/persist-mb.js
-// Читает document.body.dataset.mainbutton и НЕ навязывает своё.
-// Режимы: '' | 'cart' | 'add' | 'checkout'. Текст — в mainbuttonText.
+// Один раз вешаем MainButton, НИКУДА сами не навигируем.
+// Переход в корзину происходит ТОЛЬКО по клику по MainButton.
 
 (function persistMainButton() {
+  if (window.__MB_HOOKED__) return;
+  window.__MB_HOOKED__ = true;
+
   function goCart() {
-    if (window.navigateTo) window.navigateTo("cart");
-    else { location.hash = "#/cart"; window.handleLocation?.(); }
+    // Без автопереходов. Только по клику.
+    const target = "#/cart";
+    if (location.hash !== target) location.hash = target;
+    if (window.handleLocation) window.handleLocation();
   }
 
-  function apply() {
-    const W = window.Telegram?.WebApp;
-    if (!W) return;
-    const MB = W.MainButton;
-    const mode = document.body.dataset.mainbutton || "";
-    const text = document.body.dataset.mainbuttonText || "";
+  function hook() {
+    const W = window.Telegram && Telegram.WebApp;
+    if (!W || !W.MainButton) return;
 
-    // На странице корзины или в режиме checkout — скрываем
-    const onCart = /(^|#\/)cart/.test(location.hash);
-    if (onCart || mode === "checkout") { try { MB.hide?.(); } catch {} return; }
+    try { W.MainButton.offClick?.(); } catch {}
+    try { W.offEvent?.("mainButtonClicked"); } catch {}
 
-    if (mode === "cart" && text) {
-      try {
-        MB.setText?.(text);
-        MB.onClick?.(goCart);
-        W.onEvent?.("mainButtonClicked", goCart);
-        MB.enable?.(); MB.show?.();
-      } catch {}
-      return;
-    }
+    try { W.MainButton.onClick(goCart); } catch {}
+    try { W.onEvent?.("mainButtonClicked", goCart); } catch {}
 
-    if (mode === "add") {
-      try { MB.setText?.("ADD TO CART"); MB.enable?.(); MB.show?.(); } catch {}
-      return;
-    }
-
-    try { MB.hide?.(); } catch {}
+    try { W.MainButton.enable(); } catch {}
+    try { W.MainButton.show(); } catch {}
   }
 
-  window.addEventListener("load", apply);
-  setInterval(apply, 700); // просто поддерживаем текущее состояние
+  // Один запуск и больше ничего; без setInterval.
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    hook();
+  } else {
+    window.addEventListener("DOMContentLoaded", hook, { once: true });
+  }
 })();
