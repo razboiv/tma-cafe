@@ -14,7 +14,8 @@ function refreshMB() {
   if (n > 0) {
     document.body.dataset.mainbutton = "cart";
     TelegramSDK.showMainButton(`MY CART · ${positionsLabel(n)}`, () => {
-      location.hash = "#/cart";
+      const target = "#/cart";
+      if (location.hash !== target) location.hash = target;
       if (window.handleLocation) window.handleLocation();
     });
   } else {
@@ -30,7 +31,6 @@ function safeNavigate(nextHash) {
   if (!nextHash) return;
   if (navLock) return;
   navLock = true;
-  // Чуть откладываем, чтобы успели схлопнуться все события (pointerup/click)
   setTimeout(() => {
     if (location.hash !== nextHash) location.hash = nextHash;
     if (window.handleLocation) window.handleLocation();
@@ -69,17 +69,15 @@ export default class MainPage extends Route {
 
     refreshMB();
 
-    // Один делегированный обработчик в capture-режиме
+    // Один делегированный обработчик кликов, capture = true, без дублей
     const root = document.getElementById("content") || document.body;
     const onTap = (e) => {
-      // ищем ссылку карточки/категории
       const a = e.target.closest(".cafe-item-container[data-id], .cafe-category-container[data-id]");
       if (!a) return;
 
       const id = a.getAttribute("data-id");
       if (!id) return;
 
-      // блокируем дальнейшее распространение и дефолт
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
