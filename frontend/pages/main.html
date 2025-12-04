@@ -1,5 +1,5 @@
 <section>
-  <!-- КРУГЛЫЙ ЛОГОТИП -->
+  <!-- ЛОГО -->
   <div class="cafe-logo-container">
     <img id="cafe-logo" class="cafe-logo shimmer" src="icons/icon-transparent.svg" alt="" />
   </div>
@@ -7,7 +7,7 @@
   <!-- ОБЛОЖКА -->
   <img id="cafe-cover" class="cover shimmer" src="icons/icon-transparent.svg" alt="" />
 
-  <!-- ИНФО О КАФЕ -->
+  <!-- ИНФО -->
   <div id="cafe-info" class="cafe-info-container shimmer">
     <h1 id="cafe-name" class="shimmer">x</h1>
     <p id="cafe-kitchen-categories" class="cafe-kitchen-categories shimmer">x</p>
@@ -32,7 +32,6 @@
     <h3 id="cafe-section-categories-title" class="cafe-section-title shimmer">Categories</h3>
 
     <div id="cafe-categories" class="cafe-section-horizontal">
-      <!-- 5 скелетных плиток -->
       <div class="cafe-category-container shimmer"></div>
       <div class="cafe-category-container shimmer"></div>
       <div class="cafe-category-container shimmer"></div>
@@ -46,27 +45,37 @@
     <h3 id="cafe-section-popular-title" class="cafe-section-title shimmer">Popular</h3>
 
     <div id="cafe-popular" class="cafe-section-horizontal">
-      <!-- 3 скелетные карточки -->
       <div class="cafe-item-container shimmer"></div>
       <div class="cafe-item-container shimmer"></div>
       <div class="cafe-item-container shimmer"></div>
     </div>
   </div>
 
-  <!-- ШАБЛОН КАТЕГОРИИ -->
+  <!-- ШАБЛОН КАТЕГОРИИ (кликабельная ссылка) -->
   <template id="cafe-category-template">
-    <div class="cafe-category-container" role="button" tabindex="0" style="pointer-events:auto">
-      <img id="cafe-category-icon" class="cafe-category-icon" alt="" />
-      <div id="cafe-category-name" class="cafe-category-name"></div>
-    </div>
+    <a class="cafe-category-container" role="button" tabindex="0"
+       style="pointer-events:auto;text-decoration:none;display:inline-flex"
+       data-id="">
+      <img class="cafe-category-icon" alt="" />
+      <div class="cafe-category-name"></div>
+    </a>
   </template>
 
-  <!-- ШАБЛОН КАРТОЧКИ БЛЮДА -->
+  <!-- ШАБЛОН КАРТОЧКИ БЛЮДА (кликабельная ссылка) -->
   <template id="cafe-item-template">
-    <div class="cafe-item-container" role="button" tabindex="0" style="pointer-events:auto">
-      <img id="cafe-item-image" class="cafe-item-image" alt="" />
-      <h6 id="cafe-item-name" class="cafe-item-name"></h6>
-      <p id="cafe-item-description" class="small cafe-item-description"></p>
-    </div>
+    <a class="cafe-item-container" role="button" tabindex="0"
+       style="pointer-events:auto;text-decoration:none;display:inline-flex"
+       data-id="">
+      <img class="cafe-item-image" alt="" />
+      <h6 class="cafe-item-name"></h6>
+      <p class="small cafe-item-description"></p>
+    </a>
   </template>
+
+  <!-- МИН-ПАТЧ, чтобы НИЧТО не съедало клики -->
+  <style>
+    .cafe-item-container, .cafe-category-container { cursor:pointer; pointer-events:auto !important; }
+    .cafe-item-container *, .cafe-category-container * { pointer-events:none; } /* клики идут в ссылку-родителя */
+    .shimmer, .skeleton, .overlay, .loading, .preloader { pointer-events:none !important; }
+  </style>
 </section>
