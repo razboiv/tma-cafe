@@ -9,30 +9,37 @@ const getCount = () =>
     (s, x) => s + Number(x.quantity ?? x.count ?? 0), 0
   );
 
+function revealContent() {
+  // прячем любые «скелеты», показываем контент
+  document.querySelectorAll(".shimmer, .skeleton, [data-skeleton]").forEach(el => el.style.display = "none");
+  document.querySelectorAll("[data-content], .details-content").forEach(el => el.style.removeProperty("display"));
+}
+
 export default class DetailsPage extends Route {
   constructor() { super("details", "/pages/details.html"); }
 
   async load(params) {
     console.log("[DetailsPage] load", params);
 
-    // 1) Включаем режим "добавления"
+    // показываем «ADD TO CART», без мигания
     document.body.dataset.mainbutton = "add";
     document.body.dataset.mainbuttonText = "";
+
+    revealContent();
 
     const W = window.Telegram?.WebApp;
     const MB = W?.MainButton;
 
-    // Единая функция добавления — кликаем по локальной кнопке "+"
     const addCurrent = () => {
+      // кликаем по твоей локальной кнопке «+» — используем имеющуюся логику
       const plusBtn =
         document.querySelector('[data-action="inc"]') ||
         document.querySelector(".js-inc") ||
         document.querySelector('button[aria-label="inc"]') ||
         document.querySelector(".plus, .inc");
+      plusBtn?.click();
 
-      plusBtn?.click(); // используем твою существующую логику
-
-      // 2) Переключаем кнопку на "MY CART · N"
+      // переключаем на «MY CART · N»
       const n = getCount();
       const text = `MY CART · ${n} ${plural(n)}`;
       document.body.dataset.mainbutton = "cart";
@@ -46,14 +53,12 @@ export default class DetailsPage extends Route {
       } catch {}
     };
 
-    // Навешиваем обработчик (на случай, если persist не успеет поставить свой)
     try {
+      MB?.setText?.("ADD TO CART");
       MB?.onClick?.(addCurrent);
       W?.onEvent?.("mainButtonClicked", addCurrent);
-      MB?.setText?.("ADD TO CART"); MB?.enable?.(); MB?.show?.();
+      MB?.enable?.(); MB?.show?.();
     } catch {}
-
-    // Остальная логика деталки, разметка и т.п. — остаётся как была
   }
 
   #goCart() {
