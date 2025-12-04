@@ -1,7 +1,7 @@
 <section class="cart">
   <!-- Пустая корзина -->
   <div id="cart-empty" class="cart-empty">
-    <img class="cart-empty-icon" src="icons/icon-transparent.svg" alt="" />
+    <img class="cart-empty-icon" src="icons/icon-transparent.svg" alt="">
     <h2 class="cart-empty-title">Your cart is empty</h2>
     <p class="cart-empty-subtitle">It's time to order something delicious!</p>
   </div>
@@ -9,7 +9,7 @@
   <!-- Список позиций -->
   <div id="cart-items" class="cart-items"></div>
 
-  <!-- Итого + кнопка оплаты -->
+  <!-- Итог + Checkout -->
   <div class="cart-footer">
     <div class="cart-total-line">
       Total: <span id="cart-total">$0.00</span>
@@ -17,20 +17,50 @@
     <button id="checkout" class="btn btn-primary js-checkout">Checkout</button>
   </div>
 
-  <!-- Шаблон строки (если cart.js его найдёт — использует) -->
+  <!-- Шаблон строки корзины (использует cart.js) -->
   <template id="cart-item-template">
     <div class="cart-item">
-      <div class="cart-item__line">
-        <div class="cart-item__title js-name">Item</div>
-        <div class="cart-item__price js-price">$0.00</div>
-      </div>
-      <div class="cart-item__meta js-variant"></div>
-      <div class="cart-item__qty">
-        <button class="js-dec" aria-label="dec">−</button>
-        <span class="js-qty">1</span>
-        <button class="js-inc" aria-label="inc">+</button>
-        <button class="js-remove" aria-label="remove" style="margin-left:8px">×</button>
+      <img class="cart-item__img js-img" alt="">
+      <div class="cart-item__body">
+        <div class="cart-item__line">
+          <div class="cart-item__title js-name">Item</div>
+          <div class="cart-item__price js-price">$0.00</div>
+        </div>
+        <div class="cart-item__meta js-variant"></div>
+        <div class="cart-item__qty">
+          <button class="js-dec" aria-label="dec">−</button>
+          <span class="js-qty">1</span>
+          <button class="js-inc" aria-label="inc">+</button>
+          <button class="js-remove" aria-label="remove">×</button>
+        </div>
       </div>
     </div>
   </template>
+
+  <!-- Мини-стили под Telegram тёмную/светлую темы -->
+  <style>
+    .cart{padding:16px 18px 96px;color:var(--tg-theme-text-color,#fff);}
+    .cart-empty{padding:8px 0 20px;text-align:left;}
+    .cart-empty-icon{width:128px;height:128px;opacity:.2;display:block;margin:12px 0;}
+    .cart-empty-title{margin:6px 0 4px;font-weight:700}
+    .cart-empty-subtitle{opacity:.7}
+
+    .cart-items{display:flex;flex-direction:column;gap:12px}
+
+    .cart-item{display:flex;gap:12px;padding:12px;border-radius:12px;
+      background:rgba(255,255,255,.04);}
+    .cart-item__img{width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 64px}
+    .cart-item__body{flex:1;min-width:0}
+    .cart-item__line{display:flex;justify-content:space-between;gap:12px}
+    .cart-item__title{font-weight:600}
+    .cart-item__meta{opacity:.75;font-size:13px;margin:.25rem 0 .5rem}
+    .cart-item__qty{display:flex;align-items:center;gap:8px}
+    .cart-item__qty button{min-width:32px;height:32px;border-radius:10px;border:0;
+      background:rgba(255,255,255,.08);color:inherit}
+
+    .cart-footer{position:sticky;bottom:0;padding:16px 0 8px;background:transparent}
+    .cart-total-line{margin-bottom:12px;font-weight:600}
+    .btn{width:100%;padding:14px;border-radius:14px;border:0;font-weight:600}
+    .btn-primary{background:#8774e1;color:#fff}
+  </style>
 </section>
