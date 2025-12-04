@@ -3,17 +3,15 @@ import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getInfo, getCategories, getPopularMenu } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
-import { loadImage, replaceShimmerContent } from "../utils/dom.js";
+import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-// ===== MAIN BUTTON ("MY CART") =====
-function positionsLabel(n) {
-  return n === 1 ? "1 POSITION" : `${n} POSITIONS`;
-}
+// ===== MainButton =====
+function positionsLabel(n) { return n === 1 ? "1 POSITION" : `${n} POSITIONS`; }
 function refreshMB() {
   const n = Cart.getPortionCount ? Cart.getPortionCount() : 0;
   if (n > 0) {
-    document.body.dataset.mainbutton = "cart"; // для персист-хука
+    document.body.dataset.mainbutton = "cart";
     TelegramSDK.showMainButton(`MY CART · ${positionsLabel(n)}`, () => navigateTo("cart"));
   } else {
     document.body.dataset.mainbutton = "";
@@ -21,111 +19,145 @@ function refreshMB() {
   }
 }
 
-export default class MainPage extends Route {
-  constructor() {
-    super("root", "/pages/main.html");
+// ===== Надёжная навигация =====
+function goDetailsById(id) {
+  // 1) пробуем роутер
+  if (typeof navigateTo === "function") {
+    // передаём объект — твой details.js умеет это распарсить
+    try { return navigateTo("details", JSON.stringify({ id })); } catch {}
+    try { return navigateTo("details", { id }); } catch {}
   }
+  // 2) фолбэк: изменяем hash вручную (details.js умеет читать JSON в пути)
+  const json = encodeURIComponent(JSON.stringify({ id }));
+  const hash = `#/details/${json}`;
+  location.hash = hash;
+  if (window.handleLocation) window.handleLocation();
+}
 
-  async load(params) {
-    console.log("[MainPage] load", params);
-    TelegramSDK.expand();
+function goCategoryById(id) {
+  if (typeof navigateTo === "function") {
+    try { return navigateTo("category", JSON.stringify({ id })); } catch {}
+    try { return navigateTo("category", { id }); } catch {}
+  }
+  const json = encodeURIComponent(JSON.stringify({ id }));
+  const hash = `#/category/${json}`;
+  location.hash = hash;
+  if (window.handleLocation) window.handleLocation();
+}
+
+export default class MainPage extends Route {
+  constructor() { super("root", "/pages/main.html"); }
+
+  async load() {
+    console.log("[MainPage] load");
+    TelegramSDK.expand?.();
     refreshMB();
 
-    // Загружаем параллельно
     await Promise.allSettled([
       this.#loadInfo(),
       this.#loadCategories(),
       this.#loadPopular(),
     ]);
 
-    // на всякий случай ещё раз (вдруг корзина обновилась)
     refreshMB();
+
+    // Доп. защита: делегированный обработчик кликов по карточкам
+    this.#attachDelegatedClicks();
   }
 
-  // ------- Информация о кафе -------
+  // ---------- Info ----------
   async #loadInfo() {
     try {
       const info = await getInfo();
-      console.log("[MainPage] info", info);
-
-      if (info?.coverImage) {
-        loadImage($("#cafe-cover"), info.coverImage);
-        $("#cafe-cover").removeClass("shimmer");
-      }
-      if (info?.logoImage) {
-        loadImage($("#cafe-logo"), info.logoImage);
-        $("#cafe-logo").removeClass("shimmer");
-      }
+      if (info?.coverImage) { loadImage($("#cafe-cover"), info.coverImage); $("#cafe-cover").removeClass("shimmer"); }
+      if (info?.logoImage)  { loadImage($("#cafe-logo"), info.logoImage);   $("#cafe-logo").removeClass("shimmer"); }
       if (info?.name) $("#cafe-name").text(info.name).removeClass("shimmer");
-      if (info?.kitchenCategories)
-        $("#cafe-kitchen-categories").text(info.kitchenCategories).removeClass("shimmer");
+      if (info?.kitchenCategories) $("#cafe-kitchen-categories").text(info.kitchenCategories).removeClass("shimmer");
       if (info?.rating) $("#cafe-rating").text(info.rating);
       if (info?.cookingTime) $("#cafe-cooking-time").text(info.cookingTime);
       if (info?.status) $("#cafe-status").text(info.status);
-
       $("#cafe-info").removeClass("shimmer");
       $(".cafe-parameters-container").removeClass("shimmer");
     } catch (e) {
-      console.error("[MainPage] failed to load info", e);
+      console.error("[MainPage] info error", e);
     }
   }
 
-  // ------- Категории -------
+  // ---------- Categories ----------
   async #loadCategories() {
     try {
       const categories = await getCategories();
-      console.log("[MainPage] categories", categories);
-
       $("#cafe-section-categories-title").removeClass("shimmer");
-
-      // убираем скелеты полностью, чтобы не перекрывали клики
       const $wrap = $("#cafe-categories");
       $wrap.empty().removeClass("shimmer");
 
-      categories.forEach((category) => {
+      categories.forEach((c) => {
         const $tpl = $($("#cafe-category-template").html());
-        $tpl.attr("id", category.id);
-        $tpl.css("background-color", category.backgroundColor || "");
-        $tpl.find("#cafe-category-name").text(category.name || "");
-        if (category.icon) loadImage($tpl.find("#cafe-category-icon"), category.icon);
+        $tpl.attr("data-id", c.id);
+        $tpl.css("background-color", c.backgroundColor || "");
+        $tpl.find(".cafe-category-name").text(c.name || "");
+        if (c.icon) loadImage($tpl.find(".cafe-category-icon"), c.icon);
 
-        const go = () => navigateTo("category", JSON.stringify({ id: category.id }));
-        $tpl.on("click", go);
-        $tpl.on("keydown", (e) => (e.key === "Enter" || e.key === " ") && go());
+        // делаем ссылку «самодостаточной»
+        const href = `#/category/${encodeURIComponent(JSON.stringify({ id: c.id }))}`;
+        $tpl.attr("href", href);
+        $tpl.on("click", (e) => { e.preventDefault(); goCategoryById(c.id); });
+        $tpl.on("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goCategoryById(c.id); } });
 
         $wrap.append($tpl);
       });
     } catch (e) {
-      console.error("[MainPage] failed to load categories", e);
+      console.error("[MainPage] categories error", e);
     }
   }
 
-  // ------- Популярные блюда -------
+  // ---------- Popular ----------
   async #loadPopular() {
     try {
       const items = await getPopularMenu();
-      console.log("[MainPage] popular", items);
-
       $("#cafe-section-popular-title").removeClass("shimmer");
-
-      // убираем скелеты полностью, чтобы не перекрывали клики
       const $wrap = $("#cafe-popular");
       $wrap.empty().removeClass("shimmer");
 
-      items.forEach((item) => {
+      items.forEach((it) => {
         const $tpl = $($("#cafe-item-template").html());
-        $tpl.find("#cafe-item-name").text(item.name || "");
-        $tpl.find("#cafe-item-description").text(item.description || "");
-        if (item.image) loadImage($tpl.find("#cafe-item-image"), item.image);
+        $tpl.attr("data-id", it.id);
+        $tpl.find(".cafe-item-name").text(it.name || "");
+        $tpl.find(".cafe-item-description").text(it.description || "");
+        if (it.image) loadImage($tpl.find(".cafe-item-image"), it.image);
 
-        const go = () => navigateTo("details", JSON.stringify({ id: item.id }));
-        $tpl.on("click", go);
-        $tpl.on("keydown", (e) => (e.key === "Enter" || e.key === " ") && go());
+        const href = `#/details/${encodeURIComponent(JSON.stringify({ id: it.id }))}`;
+        $tpl.attr("href", href);
+        $tpl.on("click", (e) => { e.preventDefault(); goDetailsById(it.id); });
+        $tpl.on("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goDetailsById(it.id); } });
 
         $wrap.append($tpl);
       });
     } catch (e) {
-      console.error("[MainPage] failed to load popular menu", e);
+      console.error("[MainPage] popular error", e);
     }
+  }
+
+  // ---------- Delegated fallback ----------
+  #attachDelegatedClicks() {
+    const root = document.getElementById("content") || document.body;
+    if (!root) return;
+
+    if (root.__onCardClick) {
+      root.removeEventListener("click", root.__onCardClick);
+    }
+
+    root.__onCardClick = (e) => {
+      const a = e.target.closest(".cafe-item-container[data-id], .cafe-category-container[data-id]");
+      if (!a) return;
+      const id = a.getAttribute("data-id");
+      if (!id) return;
+
+      e.preventDefault();
+      if (a.classList.contains("cafe-item-container")) goDetailsById(id);
+      else goCategoryById(id);
+    };
+
+    root.addEventListener("click", root.__onCardClick, { passive: false });
   }
 }
