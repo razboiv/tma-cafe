@@ -1,57 +1,36 @@
-<section class="cart-section">
-  <!-- пустая корзина -->
+<section class="cart">
+  <!-- Пустая корзина -->
   <div id="cart-empty" class="cart-empty">
-    <img src="icons/logo-laurel.svg" alt="Logo"> class="cart-empty-icon" />
+    <img class="cart-empty-icon" src="icons/icon-transparent.svg" alt="" />
     <h2 class="cart-empty-title">Your cart is empty</h2>
-    <p class="cart-empty-subtitle">
-      It's time to order something delicious!
-    </p>
+    <p class="cart-empty-subtitle">It's time to order something delicious!</p>
   </div>
 
-  <!-- список позиций -->
+  <!-- Список позиций -->
   <div id="cart-items" class="cart-items"></div>
 
-  <!-- итоговая сумма -->
-  <div class="cart-total-container">
-    <span class="cart-total-label">Total:</span>
-    <span id="cart-total" class="cart-total-value">0</span>
+  <!-- Итого + кнопка оплаты -->
+  <div class="cart-footer">
+    <div class="cart-total-line">
+      Total: <span id="cart-total">$0.00</span>
+    </div>
+    <button id="checkout" class="btn btn-primary js-checkout">Checkout</button>
   </div>
 
-<!-- шаблон одной позиции -->
-<template id="cart-item-template">
-  <div class="cart-item">
-    <!-- Картинка товара -->
-    <div class="cart-item-image-container">
-      <img class="cart-item-image" src="icons/icon-transparent.svg" alt="" />
+  <!-- Шаблон строки (если cart.js его найдёт — использует) -->
+  <template id="cart-item-template">
+    <div class="cart-item">
+      <div class="cart-item__line">
+        <div class="cart-item__title js-name">Item</div>
+        <div class="cart-item__price js-price">$0.00</div>
+      </div>
+      <div class="cart-item__meta js-variant"></div>
+      <div class="cart-item__qty">
+        <button class="js-dec" aria-label="dec">−</button>
+        <span class="js-qty">1</span>
+        <button class="js-inc" aria-label="inc">+</button>
+        <button class="js-remove" aria-label="remove" style="margin-left:8px">×</button>
+      </div>
     </div>
-
-    <!-- Текстовая информация -->
-    <div class="cart-item-info">
-      <div class="cart-item-name">x</div>
-      <div class="cart-item-variant">x</div>
-      <div class="cart-item-weight">x</div>
-    </div>
-
-<!-- Кнопки - / + и количество -->
-<div class="cart-item-controls">
-  <button
-    type="button"
-    class="cart-btn cart-btn-dec cart-item-dec">
-    –
-  </button>
-
-  <div class="cart-qty-circle">
-    <span class="cart-qty-value">1</span>
-  </div>
-
-  <button
-    type="button"
-    class="cart-btn cart-btn-inc cart-item-inc">
-    +
-  </button>
-</div>
-
-
-
-
-
+  </template>
+</section>
