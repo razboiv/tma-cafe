@@ -1,95 +1,58 @@
-<section class="cafe-item-details">
+<!-- frontend/pages/details.html -->
+<section class="details-page">
 
-  <!-- Большая фотка -->
-  <img
-    id="details-image"
-    class="cafe-item-details-image shimmer"
-    src="icons/icon-transparent.svg"
-    alt=""
-  />
-
-  <!-- Блок с названием и весом -->
-  <div class="cafe-item-details-main">
-    <div class="cafe-item-details-header">
-      <h1 id="details-name" class="cafe-item-details-name shimmer">x</h1>
-      <span
-        id="details-selected-variant-weight"
-        class="cafe-item-details-weight shimmer"
-      >
-        x
-      </span>
-    </div>
-
-    <p
-      id="details-description"
-      class="cafe-item-details-description shimmer"
-    >
-      x
-    </p>
+  <!-- Картинка товара -->
+  <div class="details-cover">
+    <img id="cafe-item-details-image" alt="" style="width:100%;height:auto;border-radius:16px;display:none" />
+    <div class="shimmer" data-skeleton style="height:200px;border-radius:16px;"></div>
   </div>
 
-  <!-- Price -->
-  <section class="cafe-item-details-section">
-    <h2
-      id="details-section-title"
-      class="cafe-item-details-section-title shimmer"
-    >
-      Price
-    </h2>
+  <!-- Название -->
+  <h2 id="cafe-item-details-name" class="details-title" data-content style="margin:16px 0 8px;"></h2>
+  <div class="shimmer" data-skeleton style="height:24px;width:60%;border-radius:8px;"></div>
 
-    <div class="cafe-item-details-price-row">
+  <!-- Описание -->
+  <p id="cafe-item-details-description" class="details-desc" data-content style="opacity:.8;"></p>
+  <div class="shimmer" data-skeleton style="height:48px;border-radius:8px;"></div>
 
-    <!-- Quantity -->
-    <section class="cafe-item-details-section">
+  <!-- Блок цены / вариантов -->
+  <h3 id="cafe-item-details-section-title" data-content style="margin:16px 0 8px;">Price</h3>
+  <div class="shimmer" data-skeleton style="height:20px;width:120px;border-radius:8px;"></div>
 
-  <div class="cafe-item-details-quantity-selector-container">
-    <button
-      id="details-quantity-decrease-button"
-      class="cafe-item-details-quantity-button"
-      type="button"
-    >
-      -
-    </button>
+  <!-- Варианты -->
+  <div id="cafe-item-details-variants" class="details-variants" data-content style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+  <div class="shimmer" data-skeleton style="height:36px;border-radius:8px;"></div>
 
-    <div
-      id="details-quantity-value"
-      class="cafe-item-details-quantity-selector-value"
-    >
-      1
-    </div>
-
-    <button
-      id="details-quantity-increase-button"
-      class="cafe-item-details-quantity-button"
-      type="button"
-    >
-      +
-    </button>
+  <!-- Выбранный вариант: цена/вес -->
+  <div class="details-meta" data-content style="display:flex;gap:12px;margin:8px 0 16px;">
+    <span id="cafe-item-details-selected-variant-price" style="font-weight:600;"></span>
+    <span id="cafe-item-details-selected-variant-weight" style="opacity:.8;"></span>
   </div>
-</section>
-      
-      <!-- Кнопки вариантов -->
-      <div
-        id="details-variants"
-        class="cafe-item-details-variants shimmer"
-      >
-        <!-- сюда JS будет рендерить варианты -->
-      </div>
 
-      <!-- Итоговая цена выбранного варианта -->
-      <div
-        id="details-price-value"
-        class="cafe-item-details-price shimmer"
-      >
-        x
-      </div>
-    </div>
-  </section>
+  <!-- Количество -->
+  <div class="details-qty" data-content
+       style="display:flex;align-items:center;gap:12px;margin:16px 0 24px;">
+    <button id="cafe-item-details-quantity-decrease-button" class="btn-qty">−</button>
+    <div id="cafe-item-details-quantity-value" style="min-width:24px;text-align:center;">1</div>
+    <button id="cafe-item-details-quantity-increase-button" class="btn-qty">+</button>
+  </div>
 
-  <!-- Шаблон варианта (Small / Large) -->
-<template id="details-variant-template">
-  <button class="cafe-item-details-variant">
-    <span class="details-variant-name"></span>
-  </button>
-</template>
 </section>
+
+<style>
+  .btn-qty{
+    width:36px;height:36px;border-radius:18px;border:none;
+    background:rgba(255,255,255,.06);
+    color:inherit;font-size:18px;
+  }
+  .details-variants .cafe-item-details-variant{
+    padding:8px 12px;border-radius:10px;border:none;
+    background:rgba(255,255,255,.06);color:inherit
+  }
+  .details-variants .cafe-item-details-variant.active{
+    outline:2px solid rgba(135,116,225,.8);
+  }
+  .shimmer{background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.08),rgba(255,255,255,.04));background-size:200% 100%;animation:sh 1.2s infinite}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  [data-content]{display:block}
+</style>
