@@ -14,10 +14,8 @@ export default class CartPage extends Route {
   }
 
   async load() {
-    // На странице корзины глобальный хук не должен перехватывать кнопку
     document.body.dataset.mainbutton = "checkout";
 
-    // Форс-скрытие MainButton + поддерживаем скрытым, пока страница открыта
     const hideMB = () => {
       try { TelegramSDK.hideMainButton?.(); } catch {}
       try { window.Telegram?.WebApp?.MainButton?.hide?.(); } catch {}
@@ -26,11 +24,8 @@ export default class CartPage extends Route {
     this._hideMBTimer = setInterval(hideMB, 600);
 
     this.render();
-
-    // «Живое» обновление списка (на случай внешних изменений количества)
     this._liveTimer = setInterval(() => this.render(), 1500);
 
-    // Кнопка Checkout
     const btn =
       document.querySelector('[data-action="checkout"]') ||
       document.querySelector(".js-checkout") ||
@@ -47,8 +42,7 @@ export default class CartPage extends Route {
     document.body.dataset.mainbutton = "";
     try { this._liveTimer && clearInterval(this._liveTimer); } catch {}
     try { this._hideMBTimer && clearInterval(this._hideMBTimer); } catch {}
-    this._liveTimer = null;
-    this._hideMBTimer = null;
+    this._liveTimer = this._hideMBTimer = null;
 
     const btn =
       document.querySelector('[data-action="checkout"]') ||
@@ -61,13 +55,8 @@ export default class CartPage extends Route {
     super.destroy && super.destroy();
   }
 
-  // ---------- helpers ----------
-
   _pick(root, list) {
-    for (const sel of list) {
-      const el = root.querySelector(sel);
-      if (el) return el;
-    }
+    for (const sel of list) { const el = root.querySelector(sel); if (el) return el; }
     return null;
   }
 
@@ -102,9 +91,14 @@ export default class CartPage extends Route {
 
     for (const it of items) {
       const qty = Number(it.quantity ?? it.count ?? 0);
-      const name = it.cafeItem?.name || "";
-      const variant = it.variant?.name || "";
-      const cost = Number(it.variant?.cost || 0);
+      const name = it.cafeItem?.name || it.name || "";
+      const variant = it.variant?.name || it.option || "";
+      const cost = Number(it.variant?.cost || it.price || 0);
+      const imgUrl =
+        it.cafeItem?.imageUrl ||
+        it.cafeItem?.image ||
+        it.cafeItem?.coverImage ||
+        it.imageUrl || "";
 
       let row;
       if (tplHtml) {
@@ -114,33 +108,42 @@ export default class CartPage extends Route {
       } else {
         row = document.createElement("div");
         row.className = "cart-item";
-        row.style.padding = "12px 0";
+        row.style.cssText = "display:flex;gap:12px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04)";
         row.innerHTML = `
-          <div class="cart-item__line">
-            <div class="cart-item__title js-name"></div>
-            <div class="cart-item__price js-price"></div>
-          </div>
-          <div class="cart-item__meta js-variant" style="opacity:.75;margin-bottom:6px;"></div>
-          <div class="cart-item__qty">
-            <button class="js-dec" aria-label="dec">−</button>
-            <span class="js-qty">${qty}</span>
-            <button class="js-inc" aria-label="inc">+</button>
-            <button class="js-remove" aria-label="remove" style="margin-left:8px">×</button>
+          <img class="cart-item__img js-img" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 64px;display:${imgUrl ? "block" : "none"}" alt="">
+          <div style="flex:1;min-width:0">
+            <div class="cart-item__line" style="display:flex;justify-content:space-between;gap:12px">
+              <div class="cart-item__title js-name" style="font-weight:600"></div>
+              <div class="cart-item__price js-price"></div>
+            </div>
+            <div class="cart-item__meta js-variant" style="opacity:.75;font-size:13px;margin:.25rem 0 .5rem"></div>
+            <div class="cart-item__qty">
+              <button class="js-dec" aria-label="dec">−</button>
+              <span class="js-qty">${qty}</span>
+              <button class="js-inc" aria-label="inc">+</button>
+              <button class="js-remove" aria-label="remove" style="margin-left:8px">×</button>
+            </div>
           </div>
         `;
       }
 
-      const nameEl    = this._pick(row, [".js-name",".cart-item__title",".cart-item-title",".title",'[data-role="name"]']) || row;
+      // Тексты
+      const nameEl    = this._pick(row, [".js-name",".cart-item__title",".title",'[data-role="name"]']) || row;
       const variantEl = this._pick(row, [".js-variant",".cart-item__variant",".variant",'[data-role="variant"]']);
       const qtyEl     = this._pick(row, [".js-qty",".cart-item__qty .qty",".quantity",'[data-role="qty"]']);
       const priceEl   = this._pick(row, [".js-price",".cart-item__price",".price",'[data-role="price"]']);
+      const imgEl     = this._pick(row, [".js-img",".cart-item__img","img"]);
 
       nameEl.textContent = name;
       if (variantEl) variantEl.textContent = variant ? `Option: ${variant}` : "";
       if (qtyEl) qtyEl.textContent = String(qty);
       if (priceEl) priceEl.textContent = toDisplayCost(cost * qty);
+      if (imgEl) {
+        if (imgUrl) { imgEl.src = imgUrl; imgEl.style.display = "block"; }
+        else { imgEl.remove?.(); }
+      }
 
-      row.dataset.itemId = String(it.cafeItem?.id ?? "");
+      row.dataset.itemId = String(it.cafeItem?.id ?? it.id ?? "");
       row.dataset.variantName = String(variant);
 
       const btnInc = this._pick(row, [".js-inc",'[data-action="inc"]','.inc','button[aria-label="inc"]']);
@@ -154,7 +157,7 @@ export default class CartPage extends Route {
       list && list.appendChild(row);
     }
 
-    const total = items.reduce((s, x) => s + Number(x.variant?.cost || 0) * Number(x.quantity ?? x.count ?? 0), 0);
+    const total = items.reduce((s, x) => s + Number(x.variant?.cost || x.price || 0) * Number(x.quantity ?? x.count ?? 0), 0);
     if (totalNode) totalNode.textContent = toDisplayCost(total);
   }
 
@@ -164,7 +167,8 @@ export default class CartPage extends Route {
         Cart.changeItemQuantity(item, delta);
       } else {
         const list = (Cart.getItems && Cart.getItems()) || [];
-        const t = list.find(x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name);
+        const t = list.find(x => (x.cafeItem?.id ?? x.id) === (item.cafeItem?.id ?? item.id) &&
+                                  (x.variant?.name || "") === (item.variant?.name || ""));
         if (t) {
           const q = Math.max(0, Number(t.quantity ?? t.count ?? 0) + delta);
           t.quantity = q;
@@ -181,7 +185,8 @@ export default class CartPage extends Route {
         Cart.removeItem(item);
       } else {
         const list = (Cart.getItems && Cart.getItems()) || [];
-        const i = list.findIndex(x => x.cafeItem?.id === item.cafeItem?.id && x.variant?.name === item.variant?.name);
+        const i = list.findIndex(x => (x.cafeItem?.id ?? x.id) === (item.cafeItem?.id ?? item.id) &&
+                                      (x.variant?.name || "") === (item.variant?.name || ""));
         if (i >= 0) {
           list.splice(i, 1);
           if (typeof Cart.save === "function") Cart.save(list);
@@ -194,30 +199,23 @@ export default class CartPage extends Route {
   async #checkout(btn) {
     try {
       btn?.setAttribute("disabled", "disabled");
-
       const items = (Cart.getItems && Cart.getItems()) || [];
-      if (!items.length) {
-        (TelegramSDK.showAlert && TelegramSDK.showAlert("Cart is empty")) || alert("Cart is empty");
-        return;
-      }
+      if (!items.length) { (TelegramSDK.showAlert && TelegramSDK.showAlert("Cart is empty")) || alert("Cart is empty"); return; }
 
       const payload = {
-        _auth:
-          (TelegramSDK.getInitData && TelegramSDK.getInitData()) ||
-          (window.Telegram?.WebApp?.initData ?? ""),
+        _auth: (TelegramSDK.getInitData && TelegramSDK.getInitData()) || (window.Telegram?.WebApp?.initData ?? ""),
         cartItems: items.map((it) => ({
-          cafeItem: { id: it.cafeItem.id, name: it.cafeItem.name },
-          variant: { name: it.variant.name, cost: Number(it.variant.cost) },
+          cafeItem: { id: it.cafeItem?.id ?? it.id, name: it.cafeItem?.name ?? it.name },
+          variant:  { name: it.variant?.name ?? "", cost: Number(it.variant?.cost ?? it.price ?? 0) },
           quantity: Number(it.quantity ?? it.count ?? 0),
+          imageUrl: it.cafeItem?.imageUrl || it.cafeItem?.image || it.cafeItem?.coverImage || it.imageUrl || ""
         })),
       };
 
       const res = await createOrder(payload);
       if (!res || !res.invoiceUrl) throw new Error("No invoiceUrl in response");
 
-      if (typeof TelegramSDK.openInvoice === "function") {
-        TelegramSDK.openInvoice(res.invoiceUrl, (status) => console.log("invoice:", status));
-      } else if (window.Telegram?.WebApp?.openInvoice) {
+      if (window.Telegram?.WebApp?.openInvoice) {
         window.Telegram.WebApp.openInvoice(res.invoiceUrl, (status) => console.log("invoice:", status));
       } else {
         window.location.href = res.invoiceUrl;
