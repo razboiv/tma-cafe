@@ -2,140 +2,128 @@
 
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import { get } from "../requests/requests.js";
-import { TelegramSDK } from "../telegram/telegram.js";
+import { getMenuItem } from "../requests/requests.js"; // <- правильный экспорт
+import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-export class DetailsPage extends Route {
-  #item = null;
-  #variant = null;
-  #qty = 1;
+export default class DetailsPage extends Route {
+  constructor() { super("details", "/pages/details.html"); }
 
-  constructor() {
-    super("details", "/pages/details.html");
-  }
-
-  load(params) {
-    // Мы на странице товара — показываем режим "добавления" для персист-хука
+  async load(params) {
+    // режим «добавления», чтобы персист-хук не перехватывал кнопку
     document.body.dataset.mainbutton = "add";
-    TelegramSDK.showMainButton("ADD TO CART", () => this.#onAdd());
 
-    // начальное состояние
-    this.#qty = 1;
-
-    // подгружаем данные товара
     const id = params?.id;
-    if (!id) return;
+    if (!id) { console.error("[Details] no id"); return; }
 
-    get(`/menu/details/${id}`, (item) => {
-      this.#item = item || null;
-      if (!this.#item) return;
+    // тянем товар
+    const item = await this.#fetchItem(id);
+    if (!item) { console.error("[Details] item not found", id); return; }
 
-      this.#renderItem(this.#item);
-      this.#bindQuantityControls();
-      this.#buildVariants(this.#item.variants || []);
-    });
+    this.item = item;
+    this.qty = 1;
+    this.variant = item?.variants?.[0] ?? null;
+
+    this.#renderItem();
+
+    // показываем «ADD TO CART»
+    const onAdd = () => this.#addToCart();
+    try {
+      TelegramSDK.showMainButton("ADD TO CART", onAdd);
+      const W = window.Telegram?.WebApp;
+      W?.MainButton?.setText?.("ADD TO CART");
+      W?.MainButton?.onClick?.(onAdd);
+      W?.onEvent?.("mainButtonClicked", onAdd);
+      W?.MainButton?.enable?.(); W?.MainButton?.show?.();
+    } catch {}
   }
 
-  onClose() {
-    // при уходе со страницы товара — выключаем режим
-    document.body.dataset.mainbutton = "";
-  }
-
-  // ====== UI ======
-
-  #renderItem(item) {
-    // Картинка
-    const $img = $("#cafe-item-details-image");
-    if ($img.length) {
-      loadImage(item.image, $img);
-      $img.removeClass("shimmer");
+  async #fetchItem(id) {
+    try {
+      if (typeof getMenuItem === "function") return await getMenuItem(id);
+    } catch (e) { console.warn("getMenuItem failed, fallback to fetch", e); }
+    try {
+      const res = await fetch(`${location.origin}/menu/details/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(res.status);
+      return await res.json();
+    } catch (e) {
+      console.error("fetch details failed", e);
+      return null;
     }
+  }
 
-    // Название
-    $("#cafe-item-details-name").text(item.name || "").removeClass("shimmer");
+  #renderItem() {
+    const it = this.item;
 
-    // Описание
-    $("#cafe-item-details-description")
-      .text(item.description || "")
-      .removeClass("shimmer");
-
-    // Заголовок секции "Price"
+    // убираем скелеты и подставляем данные
+    $("#cafe-item-details-image").each((_, el) => {
+      loadImage(it.image, $(el));
+      $(el).removeClass("shimmer");
+    });
+    $("#cafe-item-details-name").text(it.name || "").removeClass("shimmer");
+    $("#cafe-item-details-description").text(it.description || "").removeClass("shimmer");
     $("#cafe-item-details-section-title").text("Price").removeClass("shimmer");
 
-    // Кол-во
-    $("#cafe-item-details-quantity-value").text(this.#qty);
-
-    // По умолчанию берём первый вариант (если есть)
-    if (Array.isArray(item.variants) && item.variants.length) {
-      this.#selectVariant(item.variants[0]);
-    }
-  }
-
-  #buildVariants(variants) {
-    const $container = $("#cafe-item-details-variants");
-    const tmpl = $("#cafe-item-details-variant-template").html() || "<button class=\"cafe-item-details-variant\"></button>";
-    $container.empty();
-
-    variants.forEach((v) => {
-      const $btn = $(tmpl);
-      $btn.text(v.name || "");
-      $btn.on("click", () => {
-        this.#selectVariant(v);
-
-        // Подсветка активного
-        $container.find(".cafe-item-details-variant").removeClass("active");
-        $btn.addClass("active");
+    // варианты
+    const $variants = $("#cafe-item-details-variants").removeClass("shimmer").empty();
+    (it.variants || []).forEach((v, i) => {
+      const $b = $('<button class="cafe-item-details-variant"></button>').text(v.name || "");
+      if (i === 0) $b.addClass("active");
+      $b.on("click", () => {
+        this.variant = v;
+        this.#updatePrice();
+        $variants.find(".active").removeClass("active");
+        $b.addClass("active");
       });
-      $container.append($btn);
+      $variants.append($b);
     });
 
-    // снять шимер
-    $container.removeClass("shimmer");
+    // количество
+    $("#cafe-item-details-quantity-value").text(this.qty);
+    $("#cafe-item-details-quantity-increase-button")
+      .off("click").on("click", () => {
+        this.qty = Math.min(99, this.qty + 1);
+        $("#cafe-item-details-quantity-value").text(this.qty);
+        this.#updatePrice();
+      });
+    $("#cafe-item-details-quantity-decrease-button")
+      .off("click").on("click", () => {
+        this.qty = Math.max(1, this.qty - 1);
+        $("#cafe-item-details-quantity-value").text(this.qty);
+        this.#updatePrice();
+      });
+
+    this.#updatePrice();
   }
 
-  #selectVariant(v) {
-    this.#variant = v;
-
-    // Цена и вес
-    const price = toDisplayCost(parseInt(v?.cost ?? "0", 10));
+  #updatePrice() {
+    const cost = Number(this.variant?.cost ?? 0) * Number(this.qty ?? 1);
     $("#cafe-item-details-selected-variant-price")
-      .text(price)
-      .removeClass("shimmer");
-
+      .text(toDisplayCost(cost)).removeClass("shimmer");
     $("#cafe-item-details-selected-variant-weight")
-      .text(v?.weight || "")
-      .removeClass("shimmer");
+      .text(this.variant?.weight || "").removeClass("shimmer");
   }
 
-  #bindQuantityControls() {
-    $("#cafe-item-details-quantity-increase-button").on("click", () => {
-      this.#qty = Math.min(99, this.#qty + 1);
-      $("#cafe-item-details-quantity-value").text(this.#qty);
-    });
+  #addToCart() {
+    if (!this.item || !this.variant) return;
 
-    $("#cafe-item-details-quantity-decrease-button").on("click", () => {
-      this.#qty = Math.max(1, this.#qty - 1);
-      $("#cafe-item-details-quantity-value").text(this.#qty);
-    });
-  }
+    // добавляем — без перехода
+    Cart.addItem(this.item, this.variant, this.qty);
 
-  // ====== Actions ======
-
-  #onAdd() {
-    if (!this.#item || !this.#variant) return;
-
-    // Добавляем в корзину (без перехода)
-    Cart.addItem(this.#item, this.#variant, this.#qty);
-
-    // Меняем режим: теперь главная кнопка — открыть корзину
+    // переключаем главную кнопку на «MY CART · N»
     document.body.dataset.mainbutton = "cart";
+    const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
+    const text = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
 
-    const count = Cart.getPortionCount();
-    const label = count === 1 ? "MY CART · 1 POSITION" : `MY CART · ${count} POSITIONS`;
-
-    TelegramSDK.showMainButton(label, () => navigateTo("cart"));
+    try {
+      const W = window.Telegram?.WebApp;
+      W?.MainButton?.setText?.(text);
+      W?.MainButton?.onClick?.(() => navigateTo("cart"));
+      W?.onEvent?.("mainButtonClicked", () => navigateTo("cart"));
+      W?.MainButton?.enable?.(); W?.MainButton?.show?.();
+      TelegramSDK.showMainButton(text, () => navigateTo("cart"));
+    } catch {}
   }
 }
