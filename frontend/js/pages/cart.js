@@ -14,16 +14,17 @@ export default class CartPage extends Route {
   }
 
   async load() {
+    // в корзине фиолетовой кнопки быть не должно
     document.body.dataset.mainbutton = "checkout";
-
     const hideMB = () => {
       try { TelegramSDK.hideMainButton?.(); } catch {}
       try { window.Telegram?.WebApp?.MainButton?.hide?.(); } catch {}
     };
     hideMB();
-    this._hideMBTimer = setInterval(hideMB, 600);
+    this._hideMBTimer = setInterval(hideMB, 700);
 
     this.render();
+    // периодически перерисовываем — чтобы кол-во/сумма обновлялись
     this._liveTimer = setInterval(() => this.render(), 1500);
 
     const btn =
@@ -55,13 +56,11 @@ export default class CartPage extends Route {
     super.destroy && super.destroy();
   }
 
-  _pick(root, list) {
-    for (const sel of list) { const el = root.querySelector(sel); if (el) return el; }
-    return null;
-  }
+  _pick(root, list) { for (const s of list) { const el = root.querySelector(s); if (el) return el; } return null; }
 
   render() {
-    const items = (Cart.getItems && Cart.getItems()) || [];
+    let items = (Cart.getItems && Cart.getItems()) || [];
+    if (!Array.isArray(items)) items = [];
 
     const list =
       document.querySelector("#cart-items") ||
@@ -106,6 +105,7 @@ export default class CartPage extends Route {
         row.innerHTML = tplHtml;
         row = row.firstElementChild;
       } else {
+        // запасная разметка, если нет шаблона
         row = document.createElement("div");
         row.className = "cart-item";
         row.style.cssText = "display:flex;gap:12px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04)";
@@ -127,7 +127,7 @@ export default class CartPage extends Route {
         `;
       }
 
-      // Тексты
+      // Заполняем
       const nameEl    = this._pick(row, [".js-name",".cart-item__title",".title",'[data-role="name"]']) || row;
       const variantEl = this._pick(row, [".js-variant",".cart-item__variant",".variant",'[data-role="variant"]']);
       const qtyEl     = this._pick(row, [".js-qty",".cart-item__qty .qty",".quantity",'[data-role="qty"]']);
@@ -143,13 +143,10 @@ export default class CartPage extends Route {
         else { imgEl.remove?.(); }
       }
 
-      row.dataset.itemId = String(it.cafeItem?.id ?? it.id ?? "");
-      row.dataset.variantName = String(variant);
-
+      // Действия
       const btnInc = this._pick(row, [".js-inc",'[data-action="inc"]','.inc','button[aria-label="inc"]']);
       const btnDec = this._pick(row, [".js-dec",'[data-action="dec"]','.dec','button[aria-label="dec"]']);
       const btnRem = this._pick(row, [".js-remove",'[data-action="remove"]','.remove','button[aria-label="remove"]']);
-
       btnInc && btnInc.addEventListener("click", () => this._changeQty(it, +1));
       btnDec && btnDec.addEventListener("click", () => this._changeQty(it, -1));
       btnRem && btnRem.addEventListener("click", () => this._remove(it));
