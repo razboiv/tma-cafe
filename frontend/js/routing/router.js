@@ -62,20 +62,19 @@ async function render(route, params, name) {
   const curr = document.getElementById("page-current");
   const next = document.getElementById("page-next");
 
+  // 1) Вставляем полученный HTML во временный контейнер
   const html = await getHtml(htmlPathOf(route, name));
   next.innerHTML = html;
 
-  next.style.display = "";
-  curr.style.display = "none";
+  // 2) Переносим узлы из next в curr (перемещаем, а не копируем)
+  //    так сохраняются все уже навешанные обработчики
+  curr.replaceChildren(...Array.from(next.childNodes));
+  next.innerHTML = "";
 
+  // 3) Запускаем логику страницы уже над итоговым DOM
   if (typeof route.load === "function") {
     await route.load(params);
   }
-
-  curr.innerHTML = next.innerHTML;
-  curr.style.display = "";
-  next.style.display = "none";
-  next.innerHTML = "";
 }
 
 export async function handleLocation() {
