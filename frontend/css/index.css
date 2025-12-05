@@ -884,3 +884,10 @@ p.small {
     line-height: 28px;
     color: white; /* или другой цвет */
 }
+
+.popular__list { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+.popular-card { position:relative; display:block; text-decoration:none; color:inherit; overflow:hidden; border-radius:16px; }
+.popular-card__img { width:100%; padding-top:70%; background-size:cover; background-position:center; }
+.popular-card__footer { display:flex; justify-content:space-between; padding:10px 12px; background:rgba(255,255,255,0.03); backdrop-filter: blur(2px); }
+.popular-card__name { font-weight:600; }
+.popular a { text-decoration:none; color:inherit; }
