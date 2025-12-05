@@ -1,42 +1,29 @@
 // frontend/js/persist-mb.js
-// Читает document.body.dataset.mainbutton и НЕ навязывает своё.
-// Режимы: '' | 'cart' | 'add' | 'checkout'. Текст — в mainbuttonText.
+// Показываем MY CART только когда страница пометит режимом 'cart'
 
-(function persistMainButton() {
-  function goCart() {
-    if (window.navigateTo) window.navigateTo("cart");
-    else { location.hash = "#/cart"; window.handleLocation?.(); }
+function goCart() {
+  if (window.navigateTo) {
+    window.navigateTo('cart');
+  } else {
+    location.hash = '#/cart';
+    if (window.handleLocation) window.handleLocation();
   }
+}
 
-  function apply() {
-    const W = window.Telegram?.WebApp;
-    if (!W) return;
-    const MB = W.MainButton;
-    const mode = document.body.dataset.mainbutton || "";
-    const text = document.body.dataset.mainbuttonText || "";
+function hook() {
+  const W  = window.Telegram && window.Telegram.WebApp;
+  const MB = W && W.MainButton;
+  if (!W || !MB) return;
 
-    // На странице корзины или в режиме checkout — скрываем
-    const onCart = /(^|#\/)cart/.test(location.hash);
-    if (onCart || mode === "checkout") { try { MB.hide?.(); } catch {} return; }
+  // ВАЖНО: не вмешиваемся, пока страница не попросит режим 'cart'
+  if (document.body.dataset.mainbutton !== 'cart') return;
 
-    if (mode === "cart" && text) {
-      try {
-        MB.setText?.(text);
-        MB.onClick?.(goCart);
-        W.onEvent?.("mainButtonClicked", goCart);
-        MB.enable?.(); MB.show?.();
-      } catch {}
-      return;
-    }
+  try { MB.onClick(goCart); } catch {}
+  try { W.onEvent && W.onEvent('mainButtonClicked', goCart); } catch {}
+  try { MB.enable(); MB.show(); } catch {}
+}
 
-    if (mode === "add") {
-      try { MB.setText?.("ADD TO CART"); MB.enable?.(); MB.show?.(); } catch {}
-      return;
-    }
-
-    try { MB.hide?.(); } catch {}
-  }
-
-  window.addEventListener("load", apply);
-  setInterval(apply, 700); // просто поддерживаем текущее состояние
-})();
+window.addEventListener('load', () => {
+  hook();
+  setInterval(hook, 800);
+});
