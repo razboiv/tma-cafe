@@ -1,75 +1,69 @@
-// минимальный и надёжный hash-роутер
+// Лёгкий роутер c кэшом HTML и ленивыми import()
 
-const $cur  = document.getElementById('page-current');
-const $next = document.getElementById('page-next');
-
-function parseHash() {
-  // "#/details?id=burger-1" -> { path:"details", params:{id:"burger-1"} }
-  const raw = (location.hash || '#/').replace(/^#\//, '');
-  const [path, query = ''] = raw.split('?');
-  const params = Object.fromEntries(new URLSearchParams(query));
-  return { path: path || '', params };
-}
-
-async function mount(html) {
-  // рендерим во "временную" страницу и затем свапаем — не будет миганий/пустоты
-  $next.innerHTML = html;
-  $next.style.display = '';
-  $cur.style.display = 'none';
-  $cur.innerHTML = $next.innerHTML;
-  $next.innerHTML = '';
-  $next.style.display = 'none';
-  $cur.style.display = '';
-}
-
-async function pageMain() {
-  const { default: MainPage } = await import('../pages/main.js');
-  const html = await MainPage();      // MainPage возвращает готовый HTML строки
-  await mount(html);
-}
-
-async function pageCategory(params) {
-  const { default: CategoryPage } = await import('../pages/category.js');
-  const html = await CategoryPage(params);
-  await mount(html);
-}
-
-async function pageDetails(params) {
-  const { default: DetailsPage } = await import('../pages/details.js');
-  const html = await DetailsPage(params);
-  await mount(html);
-}
-
-async function pageCart() {
-  const { default: CartPage } = await import('../pages/cart.js');
-  const html = await CartPage();
-  await mount(html);
-}
-
-const routes = {
-  '': pageMain,
-  'category': pageCategory,
-  'details': pageDetails,
-  'cart': pageCart,
+const pageSel = {
+  cur: "#page-current",
+  next: "#page-next",
 };
 
-export async function navigateTo(path, params = {}) {
-  const q = new URLSearchParams(params).toString();
-  const hash = `#/${path}${q ? `?${q}` : ''}`;
-  if (location.hash === hash) {
-    return handleLocation(); // уже тут — просто перерисуем
-  }
-  location.hash = hash;
+const cache = {};
+let current = "main";
+
+export function navigateTo(dest, params = null) {
+  const url = new URL(location.href);
+  url.hash = "";
+  url.search = "";
+  url.searchParams.set("dest", dest);
+  if (params) url.searchParams.set("params", encodeURIComponent(JSON.stringify(params)));
+  history.pushState({}, "", url.toString());
+  handleLocation();
 }
 
-export async function handleLocation() {
-  try {
-    const { path, params } = parseHash();
-    (routes[path] || routes['']) (params);
-  } catch (e) {
-    console.error('[router] fail', e);
-    await mount(`<div style="padding:16px">Unexpected error: ${e?.message || e}</div>`);
-  }
+export function handleLocation() {
+  const url = new URL(location.href);
+  const dest = url.searchParams.get("dest") || "main";
+  const params = url.searchParams.get("params");
+  const parsedParams = params ? JSON.parse(decodeURIComponent(params)) : null;
+  loadPage(dest, parsedParams);
 }
 
-window.addEventListener('hashchange', handleLocation);
+window.addEventListener("popstate", handleLocation);
+
+async function loadPage(dest, params) {
+  if (dest === current && !params) return;
+
+  const nextEl = document.querySelector(pageSel.next);
+  nextEl.innerHTML = await render(dest, params);
+
+  // простое переключение страниц (без анимаций, чтобы исключить «чёрные экраны»)
+  const curEl = document.querySelector(pageSel.cur);
+  curEl.style.display = "none";
+  nextEl.style.display = "";
+  curEl.innerHTML = nextEl.innerHTML;
+  nextEl.innerHTML = "";
+  nextEl.style.display = "none";
+  curEl.style.display = "";
+
+  current = dest;
+}
+
+async function render(dest, params) {
+  const key = JSON.stringify({ dest, params });
+  if (cache[key]) return cache[key];
+
+  let mod;
+  if (dest === "main") {
+    mod = await import("../pages/main.js?v=1");
+  } else if (dest === "category") {
+    mod = await import("../pages/category.js?v=1");
+  } else if (dest === "details") {
+    mod = await import("../pages/details.js?v=1");
+  } else if (dest === "cart") {
+    mod = await import("../pages/cart.js?v=1");
+  } else {
+    return `<div style="padding:16px">Unknown route: ${dest}</div>`;
+  }
+
+  const html = await mod.default(params || {});
+  cache[key] = html;
+  return html;
+}
