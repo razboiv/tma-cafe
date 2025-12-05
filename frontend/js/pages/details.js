@@ -1,174 +1,170 @@
 // frontend/js/pages/details.js
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import * as Requests from "../requests/requests.js";
-import TelegramSDK from "../telegram/telegram.js";
-import { Cart } from "../cart/cart.js";
-import { toDisplayCost } from "../utils/currency.js";
 
-// ── helpers ─────────────────────────────────────────────────────────
-const W   = () => window.Telegram?.WebApp;
-const $   = (s, r = document) => r.querySelector(s);
-const $$  = (s, r = document) => Array.from(r.querySelectorAll(s));
-const txt = (sel, v) => { const el = $(sel); if (el) el.textContent = v; return el; };
-const img = (sel, url) => {
-  const el = $(sel); if (!el) return;
-  if (url) { el.src = url; el.style.removeProperty("display"); }
-  else el.style.display = "none";
-};
-const showMB = (label, cb) => {
+// Простейший стор корзины (fallback). Если у тебя есть свой Cart — можешь использовать его.
+function readCart() {
+  try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; }
+}
+function writeCart(items) {
+  localStorage.setItem("cart", JSON.stringify(items));
+}
+function addToCart(item) {
+  const cart = readCart();
+  const key = `${item.id}:${item.variantId}`;
+  const found = cart.find(x => x.key === key);
+  if (found) found.qty += item.qty;
+  else cart.push({ key, ...item });
+  writeCart(cart);
+  return cart;
+}
+function cartCount() {
+  return readCart().reduce((s, x) => s + (x.qty || 0), 0);
+}
+
+// helpers для MainButton
+function setMBAddToCart(onClick) {
+  const MB = window.Telegram?.WebApp?.MainButton;
+  document.body.dataset.mainbutton = "add";
   try {
-    TelegramSDK.showMainButton?.(label, cb);
-    const w = W();
-    w?.MainButton?.setText?.(label);
-    w?.MainButton?.onClick?.(cb);
-    w?.onEvent?.("mainButtonClicked", cb);
-    w?.MainButton?.enable?.();
-    w?.MainButton?.show?.();
+    MB.setText("ADD TO CART");
+    MB.onClick(onClick);
+    MB.show();
   } catch {}
-};
-const goCart = () => {
-  if (window.navigateTo) navigateTo("cart");
-  else { location.hash = "#/cart"; window.handleLocation?.(); }
-};
+}
 
-function tryJsonId(s) {
+function setMBMyCart(count, onClick) {
+  const MB = window.Telegram?.WebApp?.MainButton;
+  document.body.dataset.mainbutton = "cart";
+  const suffix = count === 1 ? "POSITION" : "POSITIONS";
   try {
-    const o = JSON.parse(s);
-    if (o && typeof o === "object") {
-      if ("id"  in o) return String(o.id);
-      if ("dir" in o) return String(o.dir);
-    }
+    MB.setText(`MY CART · ${count} ${suffix}`);
+    MB.onClick(onClick);
+    MB.show();
   } catch {}
-  return null;
-}
-function readIdFromHash() {
-  const h = decodeURIComponent(location.hash || "");
-  let m = h.match(/#\/?details\/([^/?#]+)/i);
-  if (m) return tryJsonId(m[1]) || m[1];
-  m = h.match(/[?&#](?:id|dir)=([^&#]+)/i);
-  if (m) return m[1];
-  m = h.match(/[?&#](?:params|p)=([^&#]+)/i);
-  if (m) return tryJsonId(m[1]) || m[1];
-  const last = h.split("/").pop();
-  return tryJsonId(last) || null;
-}
-function normalizeId(params) {
-  if (params && typeof params === "object") {
-    if ("id"  in params) return String(params.id);
-    if ("dir" in params) return String(params.dir);
-  }
-  if (typeof params === "string") return tryJsonId(decodeURIComponent(params)) || params;
-  const ds = document.body?.dataset || {};
-  return ds.itemId || ds.dir || ds.id || readIdFromHash() || null;
 }
 
-async function getItem(id) {
-  try {
-    if (typeof Requests.getMenuItem === "function") {
-      return await Requests.getMenuItem(id);
-    }
-  } catch {}
-  try {
-    const r = await fetch(`${location.origin}/menu/details/${encodeURIComponent(id)}`);
-    if (!r.ok) throw new Error(r.status);
-    return await r.json();
-  } catch { return null; }
-}
-function removeSkeleton() {
-  $$(".shimmer,[data-skeleton],.skeleton").forEach(el => el.style.display = "none");
-  $$("[data-content],.details-content").forEach(el => el.style.removeProperty("display"));
-}
-
-// ── page ────────────────────────────────────────────────────────────
 export default class DetailsPage extends Route {
-  constructor() { super("details", "/pages/details.html"); }
+  constructor() {
+    super("root", "/pages/details.html");
+  }
 
   async load(params) {
-    this.id = normalizeId(params);
-    if (!this.id) return;
+    // 1) получаем товар (id пришёл из роутера)
+    const idRaw = params?.id || params?.["id"] || "";
+    const id = String(idRaw);
 
-    this.item = await getItem(this.id);
-    if (!this.item) return;
+    // <- подставь свою загрузку товара, если есть
+    // пример данных:
+    //   { id, name, description, image, variants:[{id:'small', name:'Small', price:11.99, weight:'200g'}, ...] }
+    const details = await this.fetchItem(id);
 
-    this.qty     = 1;
-    this.variant = this.item?.variants?.[0] || null;
+    // 2) рендер в разметку details.html
+    this.renderDetails(details);
 
-    this.addedKey = `added:${this.id}`;
+    // 3) подготовка состояния
+    let selectedVariant = details.variants?.[0];
+    let qty = 1;
 
-    this.render();
+    // клики по вариантам
+    const variantsRoot = document.getElementById("cafe-item-details-variants");
+    variantsRoot.querySelectorAll(".cafe-item-details-variant").forEach(btn => {
+      btn.addEventListener("click", () => {
+        variantsRoot.querySelectorAll(".cafe-item-details-variant").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        selectedVariant = details.variants.find(v => v.id === btn.dataset.id);
+        this.updateSelectedMeta(selectedVariant);
+      });
+    });
 
-    // если пользователь уже добавлял этот товар или корзина не пустая — показываем "MY CART"
-    const alreadyAdded = sessionStorage.getItem(this.addedKey) === "1";
-    const hasAny = (Cart.getPortionCount && Cart.getPortionCount() > 0);
-    if (alreadyAdded || hasAny) this.showCartButton();
-    else this.showAddButton();
-  }
+    // qty
+    document.getElementById("cafe-item-details-quantity-increase-button")
+      .addEventListener("click", () => {
+        qty = Math.min(99, qty + 1);
+        document.getElementById("cafe-item-details-quantity-value").textContent = qty;
+      });
+    document.getElementById("cafe-item-details-quantity-decrease-button")
+      .addEventListener("click", () => {
+        qty = Math.max(1, qty - 1);
+        document.getElementById("cafe-item-details-quantity-value").textContent = qty;
+      });
 
-  render() {
-    const it = this.item;
+    // 4) ADD TO CART → меняем кнопку на MY CART, но НЕ навигируем автоматически
+    setMBAddToCart(() => {
+      const cart = addToCart({
+        id: details.id,
+        name: details.name,
+        variantId: selectedVariant.id,
+        variantName: selectedVariant.name,
+        price: selectedVariant.price,
+        qty
+      });
+      const count = cart.reduce((s, x) => s + x.qty, 0);
+      setMBMyCart(count, () => navigateTo("cart"));
+    });
 
-    removeSkeleton();
-    img("#cafe-item-details-image", it.image || it.imageUrl || it.coverImage || "");
-    txt("#cafe-item-details-name", it.name || "");
-    txt("#cafe-item-details-description", it.description || "");
-    txt("#cafe-item-details-section-title", "Price");
-
-    const wrap = $("#cafe-item-details-variants");
-    if (wrap) {
-      wrap.innerHTML = "";
-      (it.variants || []).forEach((v, i) => {
-        const b = document.createElement("button");
-        b.className = "cafe-item-details-variant";
-        b.textContent = v.name || "";
-        if (i === 0) b.classList.add("active");
-        b.addEventListener("click", () => {
-          this.variant = v;
-          this.updatePrice();
-          $$(".cafe-item-details-variant", wrap).forEach(x => x.classList.remove("active"));
-          b.classList.add("active");
+    // если корзина уже не пустая — сразу показать MY CART, иначе ADD TO CART
+    const have = cartCount();
+    if (have > 0) {
+      setMBMyCart(have, () => navigateTo("cart"));
+    } else {
+      setMBAddToCart(() => {
+        const cart = addToCart({
+          id: details.id,
+          name: details.name,
+          variantId: selectedVariant.id,
+          variantName: selectedVariant.name,
+          price: selectedVariant.price,
+          qty
         });
-        wrap.appendChild(b);
+        const count = cart.reduce((s, x) => s + x.qty, 0);
+        setMBMyCart(count, () => navigateTo("cart"));
       });
     }
+  }
 
-    txt("#cafe-item-details-quantity-value", String(this.qty));
-    $("#cafe-item-details-quantity-increase-button")?.addEventListener("click", () => {
-      this.qty = Math.min(99, this.qty + 1);
-      txt("#cafe-item-details-quantity-value", String(this.qty));
-      this.updatePrice();
+  // ===== helpers =====
+
+  async fetchItem(id) {
+    // <- если есть свой API, замени этот фейк
+    // дергаем твой уже работающий бэкенд/кэш; здесь просто пример структуры
+    const resp = await fetch(`/menu/details/${encodeURIComponent(id)}`);
+    if (!resp.ok) throw new Error("details load failed");
+    return await resp.json();
+  }
+
+  renderDetails(d) {
+    // картинка
+    const img = document.getElementById("cafe-item-details-image");
+    img.src = d.image;
+    img.alt = d.name;
+    img.style.display = "block";
+    // скелет скрыть
+    document.querySelectorAll("[data-skeleton]").forEach(el => el.style.display = "none");
+    document.querySelectorAll("[data-content]").forEach(el => el.style.display = "");
+
+    // тексты
+    document.getElementById("cafe-item-details-name").textContent = d.name;
+    document.getElementById("cafe-item-details-description").textContent = d.description;
+    document.getElementById("cafe-item-details-section-title").textContent = "Price";
+
+    // варианты
+    const root = document.getElementById("cafe-item-details-variants");
+    root.innerHTML = "";
+    d.variants.forEach((v, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cafe-item-details-variant" + (i === 0 ? " active" : "");
+      b.dataset.id = v.id;
+      b.textContent = v.name;
+      root.appendChild(b);
     });
-    $("#cafe-item-details-quantity-decrease-button")?.addEventListener("click", () => {
-      this.qty = Math.max(1, this.qty - 1);
-      txt("#cafe-item-details-quantity-value", String(this.qty));
-      this.updatePrice();
-    });
 
-    this.updatePrice();
+    this.updateSelectedMeta(d.variants[0]);
   }
 
-  showAddButton() {
-    document.body.dataset.mainbutton = "add"; // persist-mb НЕ лезет
-    showMB("ADD TO CART", () => this.addToCart());
-  }
-
-  showCartButton() {
-    document.body.dataset.mainbutton = "cart"; // persist-mb вешает goCart (и мы тоже)
-    const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
-    const label = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
-    showMB(label, () => goCart());
-  }
-
-  updatePrice() {
-    const cost = Number(this.variant?.cost || 0) * Number(this.qty || 1);
-    txt("#cafe-item-details-selected-variant-price",  toDisplayCost(cost));
-    txt("#cafe-item-details-selected-variant-weight", this.variant?.weight || "");
-  }
-
-  addToCart() {
-    if (!this.item || !this.variant) return;
-    try { Cart.addItem(this.item, this.variant, this.qty); } catch {}
-    sessionStorage.setItem(this.addedKey, "1");
-    this.showCartButton(); // меняем кнопку, но НЕ переходим автоматически
+  updateSelectedMeta(v) {
+    document.getElementById("cafe-item-details-selected-variant-price").textContent = `$${v.price.toFixed(2)}`;
+    document.getElementById("cafe-item-details-selected-variant-weight").textContent = v.weight || "";
   }
 }
