@@ -91,7 +91,9 @@ export async function handleLocation() {
     // 2) теперь, когда DOM вставлен — вызываем load(params)
     //    ВАЖНО: раньше load() вызывался ДО вставки DOM — из-за этого «скелет» не менялся.
     if (conf.controller && typeof conf.controller.load === "function") {
-      await conf.controller.load(params || {});
+      const hasParams = params && Object.keys(params).length > 0;
+      const loadArg   = hasParams ? JSON.stringify(params) : undefined; // страницы как раньше получат строку
+      await conf.controller.load(loadArg);
     }
 
     // 3) обновляем текущий указатель
