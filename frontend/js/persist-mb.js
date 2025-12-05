@@ -1,29 +1,31 @@
 // frontend/js/persist-mb.js
-// Показываем MY CART только когда страница пометит режимом 'cart'
+// Универсальный хук к Telegram MainButton, который НИКОГДА
+// не переназначает кнопку на страницах с режимом "add".
 
-function goCart() {
-  if (window.navigateTo) {
-    window.navigateTo('cart');
-  } else {
-    location.hash = '#/cart';
-    if (window.handleLocation) window.handleLocation();
+(function () {
+  function goCart() {
+    if (window.navigateTo) window.navigateTo("cart");
+    else { location.hash = "#/cart"; window.handleLocation?.(); }
   }
-}
 
-function hook() {
-  const W  = window.Telegram && window.Telegram.WebApp;
-  const MB = W && W.MainButton;
-  if (!W || !MB) return;
+  function attach() {
+    const W  = window.Telegram?.WebApp;
+    const MB = W?.MainButton;
+    if (!W || !MB) return;
 
-  // ВАЖНО: не вмешиваемся, пока страница не попросит режим 'cart'
-  if (document.body.dataset.mainbutton !== 'cart') return;
+    const mode = document.body.dataset.mainbutton || ""; // "", "add", "cart"
 
-  try { MB.onClick(goCart); } catch {}
-  try { W.onEvent && W.onEvent('mainButtonClicked', goCart); } catch {}
-  try { MB.enable(); MB.show(); } catch {}
-}
+    // В режиме "cart" — гарантируем клик в корзину и показываем кнопку
+    if (mode === "cart") {
+      try { MB.onClick(goCart); } catch {}
+      try { W.onEvent?.("mainButtonClicked", goCart); } catch {}
+      try { MB.enable(); MB.show(); } catch {}
+      return;
+    }
 
-window.addEventListener('load', () => {
-  hook();
-  setInterval(hook, 800);
-});
+    // В любом другом режиме НИЧЕГО НЕ ДЕЛАЕМ и ничего не перехватываем.
+  }
+
+  window.addEventListener("load", attach);
+  setInterval(attach, 800); // поддерживаем хук «в живом» состоянии
+})();
