@@ -30,6 +30,20 @@ export default class CategoryPage extends Route {
             TelegramSDK.hideMainButton();
         }
 
+        // в начале CategoryPage.load(params)
+let p = params;
+if (typeof p === "string") {
+  try { p = JSON.parse(p); } catch { p = {}; }
+}
+p = p || {};
+
+// поддерживаем и старые, и новые ключи
+const categoryId = p.categoryId || p.id || p.slug;
+if (!categoryId) {
+  console.warn("[CategoryPage] no categoryId in params", p);
+  return;
+}
+
         // парсим id категории из params
         let categoryId = null;
         try {
