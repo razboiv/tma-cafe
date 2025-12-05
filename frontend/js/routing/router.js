@@ -1,116 +1,111 @@
 // frontend/js/routing/router.js
 
-import MainPage     from "../pages/main.js";
-import CategoryPage from "../pages/category.js";
-import DetailsPage  from "../pages/details.js";
-import CartPage     from "../pages/cart.js";
-import TelegramSDK  from "../telegram/telegram.js";
+import MainPage      from "../pages/main.js";
+import CategoryPage  from "../pages/category.js";
+import DetailsPage   from "../pages/details.js";
+import CartPage      from "../pages/cart.js";
+import TelegramSDK   from "../telegram/telegram.js";
 
-// Регистрируем маршруты
+// ---------- Конфиг роутов ----------
 const routes = {
-  main:     new MainPage(),
-  category: new CategoryPage(),
-  details:  new DetailsPage(),
-  cart:     new CartPage(),
+  main:     { name: "main",     template: "/pages/main.html",     controller: new MainPage() },
+  category: { name: "category", template: "/pages/category.html", controller: new CategoryPage() },
+  details:  { name: "details",  template: "/pages/details.html",  controller: new DetailsPage() },
+  cart:     { name: "cart",     template: "/pages/cart.html",     controller: new CartPage() },
 };
 
-// Кэш HTML
-const htmlCache = Object.create(null);
+// ---------- Кэш HTML ----------
+const htmlCache = new Map();
 
-let currentKey = "";
-let navigating = false;
+// ---------- DOM-узлы ----------
+const $root      = document.getElementById("content");
+const $pageA     = document.getElementById("page-current");
+const $pageB     = document.getElementById("page-next");
 
-// Берём путь к HTML. Если ни одно поле не задано — используем /pages/<name>.html
-function htmlPathOf(route, name) {
-  return (
-    route?.templatePath ||
-    route?.path ||
-    route?.template ||
-    route?.templateURL ||
-    route?.pagePath ||
-    `/pages/${name}.html`
-  );
-}
+let isNavigating = false;
+let current = { route: null, node: $pageA }; // какая страница сейчас показана
 
-// Разбор URL: поддерживаем #/route?x=1 и старый формат ?dest=route&x=1
-function parseUrl() {
-  if (location.hash) {
-    const raw = location.hash.replace(/^#\/?/, "");
-    const [name, qs] = raw.split("?");
-    const dest = (name || "main").trim();
-    const params = Object.fromEntries(new URLSearchParams(qs || "").entries());
-    return { dest, params };
-  }
-  const search = new URLSearchParams(location.search);
-  const dest = (search.get("dest") || "main").trim();
-  search.delete("dest");
-  const params = Object.fromEntries(search.entries());
-  return { dest, params };
-}
+function rAF() { return new Promise(res => requestAnimationFrame(res)); }
 
-async function getHtml(path) {
-  if (!path) throw new Error("HTML path is undefined");
-  if (htmlCache[path]) return htmlCache[path];
-  const r = await fetch(path, { cache: "no-cache" });
-  if (!r.ok) throw new Error(`HTML load failed: ${path}`);
-  const html = await r.text();
-  htmlCache[path] = html;
+// ---------- Загрузка HTML с кэшем ----------
+async function getTemplate(url) {
+  if (htmlCache.has(url)) return htmlCache.get(url);
+  const resp = await fetch(url, { cache: "no-cache" });
+  if (!resp.ok) throw new Error(`Failed to load template: ${url}`);
+  const html = await resp.text();
+  htmlCache.set(url, html);
   return html;
 }
 
-async function render(route, params, name) {
-  const curr = document.getElementById("page-current");
-  const next = document.getElementById("page-next");
+// ---------- Разбор хэша ----------
+function parseHash() {
+  // формат: #/route?key=value&...
+  const hash = (location.hash || "").replace(/^#\/?/, "");
+  const [rawRoute = "", rawQuery = ""] = hash.split("?");
+  const route = (rawRoute || "main").toLowerCase();
 
-  // 1) Вставляем полученный HTML во временный контейнер
-  const html = await getHtml(htmlPathOf(route, name));
-  next.innerHTML = html;
+  const params = {};
+  new URLSearchParams(rawQuery).forEach((v, k) => { params[k] = v; });
 
-  // 2) Переносим узлы из next в curr (перемещаем, а не копируем)
-  //    так сохраняются все уже навешанные обработчики
-  curr.replaceChildren(...Array.from(next.childNodes));
-  next.innerHTML = "";
-
-  // 3) Запускаем логику страницы уже над итоговым DOM
-  if (typeof route.load === "function") {
-    await route.load(params);
-  }
+  return { route, params };
 }
 
+// ---------- Переход ----------
+export async function navigateTo(route, params = {}) {
+  if (isNavigating) return;
+  if (!routes[route]) route = "main";
+
+  const qs = new URLSearchParams(params).toString();
+  const hash = `#/${route}${qs ? "?" + qs : ""}`;
+  if (location.hash === hash) {
+    // форсим хэндл, если кто-то зовёт navigateTo тем же маршрутом
+    return handleLocation();
+  }
+  location.hash = hash;
+}
+
+// ---------- Основной обработчик ----------
 export async function handleLocation() {
-  if (navigating) return;
-  navigating = true;
+  if (isNavigating) return;
+  isNavigating = true;
+
   try {
-    const { dest, params } = parseUrl();
-    const name = routes[dest] ? dest : "main";
-    const key = name + "?" + new URLSearchParams(params).toString();
-    if (key === currentKey) return;
+    const { route: routeName, params } = parseHash();
+    const conf = routes[routeName] || routes.main;
 
-    await render(routes[name], params, name);
-    currentKey = key;
+    // показать/скрыть кнопку "назад"
+    try {
+      TelegramSDK.setBackButtonVisible(routeName !== "main");
+    } catch {}
 
-    try { TelegramSDK.ready(); TelegramSDK.MainButton?.hideProgress?.(); } catch {}
+    // 1) берём HTML и кладём в page-next
+    const html = await getTemplate(conf.template);
+    const nextNode = current.node === $pageA ? $pageB : $pageA;
+    nextNode.innerHTML = html;
+    nextNode.style.display = "";
+    current.node.style.display = "none";
+
+    // небольшая пауза кадра, чтобы DOM реально появился
+    await rAF();
+
+    // 2) теперь, когда DOM вставлен — вызываем load(params)
+    //    ВАЖНО: раньше load() вызывался ДО вставки DOM — из-за этого «скелет» не менялся.
+    if (conf.controller && typeof conf.controller.load === "function") {
+      await conf.controller.load(params || {});
+    }
+
+    // 3) обновляем текущий указатель
+    current = { route: conf, node: nextNode };
   } catch (e) {
-    console.error(e);
+    console.error("[Router] handleLocation error:", e);
   } finally {
-    navigating = false;
+    isNavigating = false;
   }
 }
 
-export function navigateTo(dest, params = null) {
-  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  const nextHash = "#/" + dest + qs;
-  if (location.hash === nextHash) {
-    handleLocation();
-    return;
-  }
-  location.hash = nextHash; // вызовет hashchange → handleLocation
-}
-
-window.addEventListener("hashchange", handleLocation);
-
-// Экспортим и на window (удобно в консоли)
-window.navigateTo = navigateTo;
+// ---------- Инициализация ----------
+window.navigateTo = navigateTo;   // чтобы можно было звать из страниц
 window.handleLocation = handleLocation;
 
-export default { navigateTo, handleLocation };
+window.addEventListener("hashchange", handleLocation);
+window.addEventListener("load", handleLocation);
