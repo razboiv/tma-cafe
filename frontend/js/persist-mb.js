@@ -1,31 +1,25 @@
-// frontend/js/persist-mb.js
-// Универсальный хук к Telegram MainButton, который НИКОГДА
-// не переназначает кнопку на страницах с режимом "add".
+/* frontend/js/persist-mb.js
+   Держим MainButton «живым», но уважаем состояние страниц.
+   НИЧЕГО не назначаем: ни текст, ни onClick. */
 
 (function () {
-  function goCart() {
-    if (window.navigateTo) window.navigateTo("cart");
-    else { location.hash = "#/cart"; window.handleLocation?.(); }
-  }
+  const W  = window.Telegram && window.Telegram.WebApp;
+  if (!W) return;
+  const MB = W.MainButton;
 
-  function attach() {
-    const W  = window.Telegram?.WebApp;
-    const MB = W?.MainButton;
-    if (!W || !MB) return;
-
-    const mode = document.body.dataset.mainbutton || ""; // "", "add", "cart"
-
-    // В режиме "cart" — гарантируем клик в корзину и показываем кнопку
-    if (mode === "cart") {
-      try { MB.onClick(goCart); } catch {}
-      try { W.onEvent?.("mainButtonClicked", goCart); } catch {}
-      try { MB.enable(); MB.show(); } catch {}
+  function apply() {
+    // страница сама выставляет document.body.dataset.mainbutton
+    const mode = document.body?.dataset?.mainbutton || "";
+    if (!mode) {
+      try { MB.hide(); } catch {}
       return;
     }
-
-    // В любом другом режиме НИЧЕГО НЕ ДЕЛАЕМ и ничего не перехватываем.
+    try { MB.enable(); } catch {}
+    try { MB.show(); } catch {}
   }
 
-  window.addEventListener("load", attach);
-  setInterval(attach, 800); // поддерживаем хук «в живом» состоянии
+  // держим кнопку «в тонусе», но без собственного onClick
+  window.addEventListener("load", apply);
+  window.addEventListener("hashchange", apply);
+  setInterval(apply, 800);
 })();
