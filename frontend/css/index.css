@@ -1,3 +1,11 @@
+/* === Reset for links (чтоб не светились синим/фиолетовым) === */
+a { color: inherit; text-decoration: none; }
+
+/* на всякий случай делаем карточные ссылки блочными */
+.popular a,
+.popular-card a,
+.category-card a { display: block; }
+
 :root,
 :root.light {
     --bg-color: var(--tg-theme-bg-color, #FFFFFF);
