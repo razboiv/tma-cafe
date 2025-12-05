@@ -23,6 +23,26 @@ function getCartCount() {
   }
 }
 
+// фрагмент в load() главной страницы
+function readCart() { try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; } }
+function cartCount() { return readCart().reduce((s, x) => s + (x.qty || 0), 0); }
+
+const MB = window.Telegram?.WebApp?.MainButton;
+const count = cartCount();
+
+if (count > 0) {
+  const suffix = count === 1 ? "POSITION" : "POSITIONS";
+  document.body.dataset.mainbutton = "cart";
+  try {
+    MB.setText(`MY CART · ${count} ${suffix}`);
+    MB.onClick(() => navigateTo("cart"));
+    MB.show();
+  } catch {}
+} else {
+  document.body.dataset.mainbutton = "";
+  try { MB.hide(); } catch {}
+}
+
 function refreshMainButton(force = false) {
   const n = getCartCount();
   if (n > 0) {
