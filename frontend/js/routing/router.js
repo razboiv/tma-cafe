@@ -6,7 +6,7 @@ import DetailsPage  from "../pages/details.js";
 import CartPage     from "../pages/cart.js";
 import TelegramSDK  from "../telegram/telegram.js";
 
-// Регистрируем страницы
+// Регистрируем маршруты
 const routes = {
   main:     new MainPage(),
   category: new CategoryPage(),
@@ -14,28 +14,26 @@ const routes = {
   cart:     new CartPage(),
 };
 
-// Память для HTML шаблонов
+// Кэш HTML
 const htmlCache = Object.create(null);
 
-// Текущий ключ и флаг навигации
 let currentKey = "";
 let navigating = false;
 
-// Универсально достаём путь к HTML из экземпляра страницы
-function htmlPathOf(route) {
+// Берём путь к HTML. Если ни одно поле не задано — используем /pages/<name>.html
+function htmlPathOf(route, name) {
   return (
     route?.templatePath ||
     route?.path ||
     route?.template ||
     route?.templateURL ||
     route?.pagePath ||
-    null
+    `/pages/${name}.html`
   );
 }
 
-// Парсим текущее назначение (поддерживаем и #/..., и старое ?dest=...)
+// Разбор URL: поддерживаем #/route?x=1 и старый формат ?dest=route&x=1
 function parseUrl() {
-  // 1) hash (рекомендуемый формат): #/details?id=burger-1
   if (location.hash) {
     const raw = location.hash.replace(/^#\/?/, "");
     const [name, qs] = raw.split("?");
@@ -43,7 +41,6 @@ function parseUrl() {
     const params = Object.fromEntries(new URLSearchParams(qs || "").entries());
     return { dest, params };
   }
-  // 2) legacy search: ?dest=details&id=burger-1
   const search = new URLSearchParams(location.search);
   const dest = (search.get("dest") || "main").trim();
   search.delete("dest");
@@ -61,11 +58,11 @@ async function getHtml(path) {
   return html;
 }
 
-async function render(route, params) {
+async function render(route, params, name) {
   const curr = document.getElementById("page-current");
   const next = document.getElementById("page-next");
 
-  const html = await getHtml(htmlPathOf(route));
+  const html = await getHtml(htmlPathOf(route, name));
   next.innerHTML = html;
 
   next.style.display = "";
@@ -90,7 +87,7 @@ export async function handleLocation() {
     const key = name + "?" + new URLSearchParams(params).toString();
     if (key === currentKey) return;
 
-    await render(routes[name], params);
+    await render(routes[name], params, name);
     currentKey = key;
 
     try { TelegramSDK.ready(); TelegramSDK.MainButton?.hideProgress?.(); } catch {}
@@ -108,13 +105,12 @@ export function navigateTo(dest, params = null) {
     handleLocation();
     return;
   }
-  location.hash = nextHash; // триггерит hashchange → handleLocation
+  location.hash = nextHash; // вызовет hashchange → handleLocation
 }
 
-// Системные подписки
 window.addEventListener("hashchange", handleLocation);
 
-// Экспорт на всякий случай
+// Экспортим и на window (удобно в консоли)
 window.navigateTo = navigateTo;
 window.handleLocation = handleLocation;
 
