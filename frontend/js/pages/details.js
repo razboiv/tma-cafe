@@ -6,7 +6,7 @@ import TelegramSDK from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-// ── утилиты ───────────────────────────────────────────────────────────────────
+// ── helpers ─────────────────────────────────────────────────────────
 const W   = () => window.Telegram?.WebApp;
 const $   = (s, r = document) => r.querySelector(s);
 const $$  = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -27,67 +27,42 @@ const showMB = (label, cb) => {
     w?.MainButton?.show?.();
   } catch {}
 };
+const goCart = () => {
+  if (window.navigateTo) navigateTo("cart");
+  else { location.hash = "#/cart"; window.handleLocation?.(); }
+};
 
-// ── извлечение id из любых форм ───────────────────────────────────────────────
 function tryJsonId(s) {
   try {
-    const obj = JSON.parse(s);
-    if (obj && typeof obj === "object") {
-      if ("id"  in obj) return String(obj.id);
-      if ("dir" in obj) return String(obj.dir);
+    const o = JSON.parse(s);
+    if (o && typeof o === "object") {
+      if ("id"  in o) return String(o.id);
+      if ("dir" in o) return String(o.dir);
     }
   } catch {}
   return null;
 }
-
 function readIdFromHash() {
-  const h   = location.hash || "";
-  const dec = decodeURIComponent(h);
-
-  // #/details/<что-то>
-  let m = dec.match(/#\/?details\/([^/?#]+)/i);
-  if (m) {
-    const raw = m[1];
-    return tryJsonId(raw) || raw;
-  }
-
-  // ?id=... / ?dir=...
-  m = dec.match(/[?&#](?:id|dir)=([^&#]+)/i);
+  const h = decodeURIComponent(location.hash || "");
+  let m = h.match(/#\/?details\/([^/?#]+)/i);
+  if (m) return tryJsonId(m[1]) || m[1];
+  m = h.match(/[?&#](?:id|dir)=([^&#]+)/i);
   if (m) return m[1];
-
-  // ?params=<json> / ?p=<json>
-  m = dec.match(/[?&#](?:params|p)=([^&#]+)/i);
-  if (m) {
-    const raw = m[1];
-    return tryJsonId(raw) || raw;
-  }
-
-  // запасной вариант — последний сегмент как json
-  const last = dec.split("/").pop();
-  const t = tryJsonId(last);
-  if (t) return t;
-
-  return null;
+  m = h.match(/[?&#](?:params|p)=([^&#]+)/i);
+  if (m) return tryJsonId(m[1]) || m[1];
+  const last = h.split("/").pop();
+  return tryJsonId(last) || null;
 }
-
 function normalizeId(params) {
-  // объект { id: 'burger-1' } или { dir: 'burger-1' }
   if (params && typeof params === "object") {
     if ("id"  in params) return String(params.id);
     if ("dir" in params) return String(params.dir);
   }
-  // строка — может быть json
-  if (typeof params === "string") {
-    const s  = decodeURIComponent(params);
-    const id = tryJsonId(s);
-    return id || s;
-  }
-  // dataset / hash
+  if (typeof params === "string") return tryJsonId(decodeURIComponent(params)) || params;
   const ds = document.body?.dataset || {};
   return ds.itemId || ds.dir || ds.id || readIdFromHash() || null;
 }
 
-// ── загрузка товара ───────────────────────────────────────────────────────────
 async function getItem(id) {
   try {
     if (typeof Requests.getMenuItem === "function") {
@@ -98,52 +73,47 @@ async function getItem(id) {
     const r = await fetch(`${location.origin}/menu/details/${encodeURIComponent(id)}`);
     if (!r.ok) throw new Error(r.status);
     return await r.json();
-  } catch (e) {
-    console.error("fetch details failed", e);
-    return null;
-  }
+  } catch { return null; }
 }
-
 function removeSkeleton() {
   $$(".shimmer,[data-skeleton],.skeleton").forEach(el => el.style.display = "none");
   $$("[data-content],.details-content").forEach(el => el.style.removeProperty("display"));
 }
 
-// ── страница Details ──────────────────────────────────────────────────────────
+// ── page ────────────────────────────────────────────────────────────
 export default class DetailsPage extends Route {
   constructor() { super("details", "/pages/details.html"); }
 
   async load(params) {
-    // чтобы persist-mb не перехватывал клик на этом экране
-    document.body.dataset.mainbutton = "add";
+    this.id = normalizeId(params);
+    if (!this.id) return;
 
-    const id = normalizeId(params);
-    console.log("[Details] normalized id =", id, "params =", params);
-
-    if (!id) return;                 // без id оставим скелет
-
-    this.item    = await getItem(id);
+    this.item = await getItem(this.id);
     if (!this.item) return;
 
     this.qty     = 1;
     this.variant = this.item?.variants?.[0] || null;
 
+    this.addedKey = `added:${this.id}`;
+
     this.render();
 
-    // ← тот самый блок: показываем «ADD TO CART» и вешаем обработчик
-    showMB("ADD TO CART", () => this.addToCart());
+    // если пользователь уже добавлял этот товар или корзина не пустая — показываем "MY CART"
+    const alreadyAdded = sessionStorage.getItem(this.addedKey) === "1";
+    const hasAny = (Cart.getPortionCount && Cart.getPortionCount() > 0);
+    if (alreadyAdded || hasAny) this.showCartButton();
+    else this.showAddButton();
   }
 
   render() {
-    const it = this.item || {};
+    const it = this.item;
+
     removeSkeleton();
+    img("#cafe-item-details-image", it.image || it.imageUrl || it.coverImage || "");
+    txt("#cafe-item-details-name", it.name || "");
+    txt("#cafe-item-details-description", it.description || "");
+    txt("#cafe-item-details-section-title", "Price");
 
-    img ("#cafe-item-details-image", it.image || it.imageUrl || it.coverImage || "");
-    txt ("#cafe-item-details-name", it.name || "");
-    txt ("#cafe-item-details-description", it.description || "");
-    txt ("#cafe-item-details-section-title", "Price");
-
-    // варианты
     const wrap = $("#cafe-item-details-variants");
     if (wrap) {
       wrap.innerHTML = "";
@@ -162,7 +132,6 @@ export default class DetailsPage extends Route {
       });
     }
 
-    // количество
     txt("#cafe-item-details-quantity-value", String(this.qty));
     $("#cafe-item-details-quantity-increase-button")?.addEventListener("click", () => {
       this.qty = Math.min(99, this.qty + 1);
@@ -178,6 +147,18 @@ export default class DetailsPage extends Route {
     this.updatePrice();
   }
 
+  showAddButton() {
+    document.body.dataset.mainbutton = "add"; // persist-mb НЕ лезет
+    showMB("ADD TO CART", () => this.addToCart());
+  }
+
+  showCartButton() {
+    document.body.dataset.mainbutton = "cart"; // persist-mb вешает goCart (и мы тоже)
+    const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
+    const label = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
+    showMB(label, () => goCart());
+  }
+
   updatePrice() {
     const cost = Number(this.variant?.cost || 0) * Number(this.qty || 1);
     txt("#cafe-item-details-selected-variant-price",  toDisplayCost(cost));
@@ -187,15 +168,7 @@ export default class DetailsPage extends Route {
   addToCart() {
     if (!this.item || !this.variant) return;
     try { Cart.addItem(this.item, this.variant, this.qty); } catch {}
-
-    // переключаем перехватчик и подпись на кнопке на «корзинный» режим
-    document.body.dataset.mainbutton = "cart";
-    const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
-    const label = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
-
-    showMB(label, () => {
-      if (window.navigateTo) navigateTo("cart");
-      else { location.hash = "#/cart"; window.handleLocation?.(); }
-    });
+    sessionStorage.setItem(this.addedKey, "1");
+    this.showCartButton(); // меняем кнопку, но НЕ переходим автоматически
   }
 }
