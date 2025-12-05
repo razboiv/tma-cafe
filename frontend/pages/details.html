@@ -1,3 +1,42 @@
+<!-- frontend/pages/details.html -->
+<section class="details-page">
+
+  <!-- Cover -->
+  <div class="details-cover">
+    <img id="cafe-item-details-image" alt="" />
+    <div class="shimmer" data-skeleton></div>
+  </div>
+
+  <!-- Название слева — вес справа -->
+  <div class="title-row">
+    <h2 id="cafe-item-details-name" class="details-title" data-content></h2>
+    <div id="cafe-item-details-selected-variant-weight" class="details-weight" data-content></div>
+  </div>
+  <div class="shimmer" data-skeleton style="height:24px;width:60%"></div>
+
+  <!-- Описание -->
+  <p id="cafe-item-details-description" class="details-desc" data-content></p>
+  <div class="shimmer" data-skeleton style="height:48px"></div>
+
+  <!-- Price + варианты слева, цена справа -->
+  <div class="price-row">
+    <div class="price-left">
+      <div id="cafe-item-details-section-title" class="section-title" data-content>Price</div>
+      <div id="cafe-item-details-variants" class="details-variants" data-content></div>
+      <div class="shimmer" data-skeleton style="height:36px"></div>
+    </div>
+    <div id="cafe-item-details-selected-variant-price" class="price-value" data-content></div>
+  </div>
+
+  <!-- Количество по центру -->
+  <div class="qty-row" data-content>
+    <button id="cafe-item-details-quantity-decrease-button" class="btn-qty" aria-label="Decrease">−</button>
+    <div id="cafe-item-details-quantity-value" class="qty-value">1</div>
+    <button id="cafe-item-details-quantity-increase-button" class="btn-qty" aria-label="Increase">+</button>
+  </div>
+
+</section>
+
 <style>
   :root{
     --tg-accent: var(--tg-theme-button-color, #8774e1);
@@ -39,8 +78,5 @@
     background-size:200% 100%;animation:sh 1.2s infinite
   }
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-  /* ВАЖНО: не ломаем flex у блоков с data-content */
-  .details-page [data-content]{display:block}
-  .details-page .qty-row[data-content]{display:flex !important}
+  [data-content]{display:block}
 </style>
