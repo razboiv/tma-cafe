@@ -1,69 +1,222 @@
-// Лёгкий роутер c кэшом HTML и ленивыми import()
+// frontend/js/routing/router.js
 
-const pageSel = {
-  cur: "#page-current",
-  next: "#page-next",
-};
+import MainPage from "../pages/main.js";
+import CategoryPage from "../pages/category.js";
+import DetailsPage from "../pages/details.js";
+import CartPage from "../pages/cart.js";
+import TelegramSDK from "../telegram/telegram.js";
+import Snackbar from "../utils/snackbar.js";
 
-const cache = {};
-let current = "main";
+/**
+ * List of available routes (pages).
+ */
+const availableRoutes = [
+  new MainPage(),
+  new CategoryPage(),
+  new DetailsPage(),
+  new CartPage(),
+];
 
-export function navigateTo(dest, params = null) {
-  const url = new URL(location.href);
-  url.hash = "";
-  url.search = "";
-  url.searchParams.set("dest", dest);
-  if (params) url.searchParams.set("params", encodeURIComponent(JSON.stringify(params)));
-  history.pushState({}, "", url.toString());
-  handleLocation();
-}
+/**
+ * In-memory HTML cache.
+ */
+const pageContentCache = {};
 
-export function handleLocation() {
-  const url = new URL(location.href);
-  const dest = url.searchParams.get("dest") || "main";
-  const params = url.searchParams.get("params");
-  const parsedParams = params ? JSON.parse(decodeURIComponent(params)) : null;
-  loadPage(dest, parsedParams);
-}
+let currentRoute = null;
+let pageContentLoadRequest = null;
+let pendingAnimations = false;
+let animationRunning = false;
 
-window.addEventListener("popstate", handleLocation);
+/**
+ * Navigate to another page.
+ *
+ * @param {string} dest  destination route ("root", "category", "details", "cart")
+ * @param {*} params     params that will be encoded to URL
+ */
+export function navigateTo(dest, params) {
+  let url = `?dest=${dest}`;
 
-async function loadPage(dest, params) {
-  if (dest === current && !params) return;
-
-  const nextEl = document.querySelector(pageSel.next);
-  nextEl.innerHTML = await render(dest, params);
-
-  // простое переключение страниц (без анимаций, чтобы исключить «чёрные экраны»)
-  const curEl = document.querySelector(pageSel.cur);
-  curEl.style.display = "none";
-  nextEl.style.display = "";
-  curEl.innerHTML = nextEl.innerHTML;
-  nextEl.innerHTML = "";
-  nextEl.style.display = "none";
-  curEl.style.display = "";
-
-  current = dest;
-}
-
-async function render(dest, params) {
-  const key = JSON.stringify({ dest, params });
-  if (cache[key]) return cache[key];
-
-  let mod;
-  if (dest === "main") {
-    mod = await import("../pages/main.js?v=1");
-  } else if (dest === "category") {
-    mod = await import("../pages/category.js?v=1");
-  } else if (dest === "details") {
-    mod = await import("../pages/details.js?v=1");
-  } else if (dest === "cart") {
-    mod = await import("../pages/cart.js?v=1");
-  } else {
-    return `<div style="padding:16px">Unknown route: ${dest}</div>`;
+  if (params != null) {
+    url += "&params=" + encodeURIComponent(params);
   }
 
-  const html = await mod.default(params || {});
-  cache[key] = html;
-  return html;
+  // keep hash (Telegram can put something there)
+  window.history.pushState({}, "", url + window.location.hash);
+
+  handleLocation(false);
 }
+
+/**
+ * Router engine – detects which page to load.
+ *
+ * @param {boolean} reverse  run animation in reverse (back navigation)
+ */
+export function handleLocation(reverse) {
+  // close previous route if any
+  if (currentRoute != null) {
+    currentRoute.onClose();
+  }
+
+  const search = window.location.search;
+  const searchParams = new URLSearchParams(search);
+
+  const dest = searchParams.get("dest") || "root";
+  const encodedLoadParams = searchParams.get("params");
+
+  let loadParams = null;
+
+  if (encodedLoadParams != null) {
+    try {
+      loadParams = decodeURIComponent(encodedLoadParams);
+    } catch (e) {
+      console.error("Failed to decode params", e);
+    }
+  }
+
+  currentRoute = availableRoutes.find((r) => r.dest === dest);
+  if (!currentRoute) {
+    return;
+  }
+
+  // cancel previous request if any
+  if (pageContentLoadRequest != null) {
+    pageContentLoadRequest.abort();
+  }
+
+  // decide which container will be "next"
+  if ($("#page-current").contents().length > 0) {
+    pageContentLoadRequest = loadPage("#page-next", currentRoute.contentPath, () => {
+      pageContentLoadRequest = null;
+      currentRoute.load(loadParams);
+    });
+    animatePageChange(reverse);
+  } else {
+    pageContentLoadRequest = loadPage("#page-current", currentRoute.contentPath, () => {
+      pageContentLoadRequest = null;
+      currentRoute.load(loadParams);
+    });
+  }
+
+  if (currentRoute.dest !== "root") {
+    TelegramSDK.showBackButton(() => history.back());
+  } else {
+    TelegramSDK.hideBackButton();
+  }
+}
+
+/**
+ * Load page content (HTML). Can be loaded from cache or from server.
+ *
+ * @param {string} pageContainerSelector
+ * @param {string} pagePath
+ * @param {Function} onSuccess
+ * @returns {jqXHR|null}
+ */
+function loadPage(pageContainerSelector, pagePath, onSuccess) {
+  const container = $(pageContainerSelector);
+  const page = pageContentCache[pagePath];
+
+  if (page != null) {
+    container.html(page);
+    onSuccess();
+    return null;
+  }
+
+  return $.ajax({
+    url: pagePath,
+    success: (pageHtml) => {
+      pageContentCache[pagePath] = pageHtml;
+      container.html(pageHtml);
+      onSuccess();
+    },
+  });
+}
+
+/**
+ * Run navigation animations for outgoing and ingoing pages.
+ *
+ * @param {boolean} reverse
+ */
+function animatePageChange(reverse) {
+  animationRunning = true;
+
+  const currentPageZIndex = reverse ? "2" : "1";
+  const currentPageLeftTo = reverse ? "100vw" : "-25vw";
+  const nextPageZIndex = reverse ? "1" : "2";
+  const nextPageLeftFrom = reverse ? "-25vw" : "100vw";
+
+  $("#page-current")
+    .css({
+      transform: "",
+      "z-index": currentPageZIndex,
+    })
+    .transition({ x: currentPageLeftTo }, 325);
+
+  $("#page-next")
+    .css({
+      display: "",
+      transform: `translate(${nextPageLeftFrom}, 0px)`,
+      "z-index": nextPageZIndex,
+    })
+    .transition({ x: "0px" }, 325, () => {
+      animationRunning = false;
+      restorePagesInitialState();
+
+      if (pendingAnimations) {
+        pendingAnimations = false;
+        handleLocation(reverse);
+      }
+    });
+}
+
+/**
+ * Reset containers after animation.
+ */
+function restorePagesInitialState() {
+  const currentPage = $("#page-current");
+  const nextPage = $("#page-next");
+
+  currentPage
+    .attr("id", "page-next")
+    .css({
+      display: "none",
+      "z-index": "1",
+    })
+    .empty();
+
+  nextPage
+    .attr("id", "page-current")
+    .css({
+      display: "",
+      transform: "",
+      "z-index": "2",
+    });
+}
+
+/**
+ * Show snackbar on top of the page content.
+ *
+ * @param {string} text   Snackbar text
+ * @param {string} style  "success" | "warning" | "error" | anything
+ */
+export function showSnackbar(text, style) {
+  const colorVariable =
+    style === "success"
+      ? "--success-color"
+      : style === "warning"
+      ? "--warning-color"
+      : style === "error"
+      ? "--error-color"
+      : "--accent-color";
+
+  Snackbar.showSnackbar("content", text, {
+    "background-color": `var(${colorVariable})`,
+  });
+
+  TelegramSDK.notificationOccured(style);
+}
+
+/**
+ * Handle browser back button.
+ */
+window.onpopstate = () => handleLocation(true);
