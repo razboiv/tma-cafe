@@ -114,7 +114,7 @@ export default class DetailsPage extends Route {
   constructor() { super("details", "/pages/details.html"); }
 
   async load(params) {
-    // чтобы наш persist-mb не перехватывал клик
+    // чтобы persist-mb не перехватывал клик на этом экране
     document.body.dataset.mainbutton = "add";
 
     const id = normalizeId(params);
@@ -130,7 +130,7 @@ export default class DetailsPage extends Route {
 
     this.render();
 
-    // показываем кнопку «ADD TO CART», переход в корзину — по нажатию.
+    // ← тот самый блок: показываем «ADD TO CART» и вешаем обработчик
     showMB("ADD TO CART", () => this.addToCart());
   }
 
@@ -188,7 +188,8 @@ export default class DetailsPage extends Route {
     if (!this.item || !this.variant) return;
     try { Cart.addItem(this.item, this.variant, this.qty); } catch {}
 
-    document.body.dataset.mainbutton = "cart"; // для persist-mb
+    // переключаем перехватчик и подпись на кнопке на «корзинный» режим
+    document.body.dataset.mainbutton = "cart";
     const n = (Cart.getPortionCount && Cart.getPortionCount()) || 1;
     const label = n === 1 ? "MY CART · 1 POSITION" : `MY CART · ${n} POSITIONS`;
 
