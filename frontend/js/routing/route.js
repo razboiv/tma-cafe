@@ -2,13 +2,14 @@
 class Route {
   /**
    * @param {string} name     "main" | "category" | "details" | "cart"
-   * @param {string} htmlPath путь к HTML, напр. "/pages/main.html"
+   * @param {string} htmlPath Абсолютный путь к HTML, напр. "/pages/main.html"
    */
   constructor(name, htmlPath) {
     this.name = name;
     this.htmlPath = htmlPath;
     this.node = null;
   }
+
   async beforeEnter() {}
   async afterEnter() {}
   async beforeLeave() {}
