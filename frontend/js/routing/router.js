@@ -6,13 +6,14 @@ import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
 
 const routes = [
-  new MainPage(),      // name: "main"
-  new CategoryPage(),  // name: "category"
-  new DetailsPage(),   // name: "details"
-  new CartPage(),      // name: "cart"
+  new MainPage(),
+  new CategoryPage(),
+  new DetailsPage(),
+  new CartPage(),
 ];
 
-// кэш HTML по пути файла
+window.__routes = routes; // для быстрой диагностики в консоли
+
 const htmlCache = new Map();
 
 function qs(s) {
@@ -39,12 +40,8 @@ function findRoute(name) {
 }
 
 async function getHtml(route) {
-  const path = route.htmlPath || route.html || route.templateUrl || route.template;
-  if (!path) throw new Error(`[Router] HTML path is undefined for route "${route?.name}"`);
-  if (htmlCache.has(path)) return htmlCache.get(path);
-  const html = await route.fetchHtml();
-  htmlCache.set(path, html);
-  return html;
+  const html = await route.fetchHtml();   // весь контроль пути внутри Route
+  return htmlCache.get(route.htmlPath) || (htmlCache.set(route.htmlPath, html), html);
 }
 
 function getContainers() {
@@ -68,9 +65,8 @@ function getContainers() {
 
 export async function navigateTo(dest, params) {
   const encoded = params ? encodeURIComponent(JSON.stringify(params)) : "";
-  const query = `?dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`;
-  // Для надёжности дублируем в hash
-  history.pushState(null, "", query + `#dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`);
+  const q = `?dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`;
+  history.pushState(null, "", q + `#dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`);
   await handleLocation();
 }
 
@@ -86,13 +82,13 @@ export async function handleLocation() {
 
     await route.beforeEnter?.(params);
 
-    // простой swap без анимаций (иначе «залипают» клики)
+    // простой swap (без сложных анимаций)
     const tmpId = current.id;
     current.style.display = "none";
     current.id = next.id;
     next.id = tmpId;
 
-    const newCurrent = document.getElementById("page-current");
+    document.getElementById("page-current"); // актуальный контейнер
     await route.load?.(params);
     await route.afterEnter?.(params);
   } catch (e) {
@@ -102,7 +98,6 @@ export async function handleLocation() {
 
 window.addEventListener("popstate", handleLocation);
 
-// первый запуск
 export function bootRouter() {
   getContainers();
   return handleLocation();
