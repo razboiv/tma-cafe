@@ -1,128 +1,68 @@
 // frontend/js/pages/category.js
 
-import { Route } from "../routing/route.js";
+import Route from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
+import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
 export default class CategoryPage extends Route {
   constructor() {
     super("category", "/pages/category.html");
-    this._clickHandler = null; // чтобы не плодить обработчики
   }
 
   async load(params) {
     console.log("[CategoryPage] load", params);
     TelegramSDK.expand();
 
-    // 1) Кнопка внизу: показываем, если в корзине что-то есть
-    this.#syncMainButton();
+    // 1) Главная кнопка
+    this.updateMainButton();
 
-    // 2) Разбираем params надёжно
-    const parsed = this.#parseParams(params);
-    const categoryId = parsed.id || parsed.categoryId || null;
+    // 2) Валидируем параметры
+    const categoryId = params && typeof params === "object" ? params.id : null;
     if (!categoryId) {
-      console.error("[CategoryPage] no category id in params:", params);
-      this.#renderError("Category not found");
+      console.error("[CategoryPage] no valid id in params:", params);
       return;
     }
 
-    // 3) Точки монтирования
-    const root = document.getElementById("cafe-category");
-    const tpl = document.getElementById("cafe-item-template");
-    if (!root || !tpl) {
-      console.error("[CategoryPage] mount points not found in DOM");
-      return;
-    }
+    // 3) Грузим блюда категории
+    const list = await getMenuCategory(categoryId);
+    // ожидаем, что category.html содержит контейнер с id="category-list"
+    const html = (list || []).map(item => {
+      return `
+        <div class="menu-card" data-item-id="${item.id}">
+          <div class="menu-card__cover">
+            <img src="${item.photo || ''}" alt="">
+          </div>
+          <div class="menu-card__title">${item.name || ""}</div>
+          <div class="menu-card__subtitle">${item.short || ""}</div>
+        </div>
+      `;
+    }).join("");
 
-    // 4) Грузим список блюд
-    let items = [];
-    try {
-      items = await getMenuCategory(categoryId);
-    } catch (err) {
-      console.error("[CategoryPage] fetch error:", err);
-      this.#renderError("Failed to load menu");
-      return;
-    }
+    replaceShimmerContent("#category-list", html);
 
-    // 5) Убираем скелеты и рисуем карточки
-    root.innerHTML = "";
-
-    if (!items || items.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "small muted";
-      empty.textContent = "No items in this category yet.";
-      root.appendChild(empty);
-    } else {
-      const frag = document.createDocumentFragment();
-
-      items.forEach((item) => {
-        const node = tpl.content.cloneNode(true);
-
-        const card = node.querySelector(".cafe-item-container");
-        const img  = node.querySelector("[data-role='image']");
-        const name = node.querySelector("[data-role='name']");
-        const desc = node.querySelector("[data-role='desc']");
-
-        // безопасно расставляем данные
-        if (card) card.dataset.id = item.id;
-        if (img)  img.src = item.photo || item.coverImage || "";
-        if (name) name.textContent = item.name ?? "";
-        if (desc) desc.textContent = item.description ?? "";
-
-        frag.appendChild(node);
+    // 4) Навигация в карточку товара
+    document.querySelectorAll('[data-item-id]').forEach($el => {
+      $el.addEventListener("click", () => {
+        const id = $el.getAttribute("data-item-id");
+        if (id) navigateTo("details", { id });
       });
-
-      root.appendChild(frag);
-    }
-
-    // 6) Один делегированный обработчик на контейнер
-    if (this._clickHandler) {
-      root.removeEventListener("click", this._clickHandler);
-    }
-    this._clickHandler = (e) => {
-      const card = e.target.closest(".cafe-item-container");
-      if (!card) return;
-      const id = card.dataset.id;
-      if (!id) return;
-      navigateTo("details", { id });
-    };
-    root.addEventListener("click", this._clickHandler);
+    });
   }
 
-  // ——— helpers ———
-
-  #parseParams(params) {
-    if (!params) return {};
-    if (typeof params === "object") return params;
-    try {
-      return JSON.parse(params);
-    } catch {
-      // иногда прилетает что-то вроде "[object Object]"
-      return {};
-    }
-  }
-
-  #syncMainButton() {
-    const portionCount = Cart.getPortionCount?.() ?? 0;
-    if (portionCount > 0) {
+  updateMainButton() {
+    const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
+    if (count > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${portionCount} POSITION${portionCount > 1 ? "S" : ""}`,
-        () => navigateTo("cart")
+        `MY CART · ${count} POSITIONS`,
+        () => navigateTo("cart"),
       );
+      document.body.dataset.mainbutton = "cart";
     } else {
       TelegramSDK.hideMainButton();
+      document.body.dataset.mainbutton = "";
     }
-  }
-
-  #renderError(text) {
-    const root = document.getElementById("cafe-category");
-    if (!root) return;
-    root.innerHTML = "";
-    const div = document.createElement("div");
-    div.className = "small muted";
-    div.textContent = text;
-    root.appendChild(div);
   }
 }
