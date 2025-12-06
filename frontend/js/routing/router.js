@@ -1,113 +1,68 @@
 // frontend/js/routing/router.js
 
-import MainPage      from "../pages/main.js";
-import CategoryPage  from "../pages/category.js";
-import DetailsPage   from "../pages/details.js";
-import CartPage      from "../pages/cart.js";
-import TelegramSDK   from "../telegram/telegram.js";
+import MainPage from "../pages/main.js";
+import CategoryPage from "../pages/category.js";
+import DetailsPage from "../pages/details.js";
+import CartPage from "../pages/cart.js";
 
-// ---------- Конфиг роутов ----------
 const routes = {
-  main:     { name: "main",     template: "/pages/main.html",     controller: new MainPage() },
-  category: { name: "category", template: "/pages/category.html", controller: new CategoryPage() },
-  details:  { name: "details",  template: "/pages/details.html",  controller: new DetailsPage() },
-  cart:     { name: "cart",     template: "/pages/cart.html",     controller: new CartPage() },
+  main: new MainPage(),
+  category: new CategoryPage(),
+  details: new DetailsPage(),
+  cart: new CartPage(),
 };
 
-// ---------- Кэш HTML ----------
-const htmlCache = new Map();
+function parseHash(hash) {
+  // #/details?p=%7B%22id%22%3A%22burger-1%22%7D
+  let dest = "main";
+  let params = null;
 
-// ---------- DOM-узлы ----------
-const $root      = document.getElementById("content");
-const $pageA     = document.getElementById("page-current");
-const $pageB     = document.getElementById("page-next");
+  if (hash && hash.startsWith("#/")) {
+    const withoutHash = hash.slice(2);            // details?p=...
+    const [path, query] = withoutHash.split("?");
+    dest = path || "main";
 
-let isNavigating = false;
-let current = { route: null, node: $pageA }; // какая страница сейчас показана
-
-function rAF() { return new Promise(res => requestAnimationFrame(res)); }
-
-// ---------- Загрузка HTML с кэшем ----------
-async function getTemplate(url) {
-  if (htmlCache.has(url)) return htmlCache.get(url);
-  const resp = await fetch(url, { cache: "no-cache" });
-  if (!resp.ok) throw new Error(`Failed to load template: ${url}`);
-  const html = await resp.text();
-  htmlCache.set(url, html);
-  return html;
-}
-
-// ---------- Разбор хэша ----------
-function parseHash() {
-  // формат: #/route?key=value&...
-  const hash = (location.hash || "").replace(/^#\/?/, "");
-  const [rawRoute = "", rawQuery = ""] = hash.split("?");
-  const route = (rawRoute || "main").toLowerCase();
-
-  const params = {};
-  new URLSearchParams(rawQuery).forEach((v, k) => { params[k] = v; });
-
-  return { route, params };
-}
-
-// ---------- Переход ----------
-export async function navigateTo(route, params = {}) {
-  if (isNavigating) return;
-  if (!routes[route]) route = "main";
-
-  const qs = new URLSearchParams(params).toString();
-  const hash = `#/${route}${qs ? "?" + qs : ""}`;
-  if (location.hash === hash) {
-    // форсим хэндл, если кто-то зовёт navigateTo тем же маршрутом
-    return handleLocation();
+    if (query && query.startsWith("p=")) {
+      const raw = query.slice(2);
+      try { params = JSON.parse(decodeURIComponent(raw)); }
+      catch (_) { params = null; }
+    }
   }
-  location.hash = hash;
+  return { dest, params };
 }
 
-// ---------- Основной обработчик ----------
+export function navigateTo(dest, params = null, replace = false) {
+  const q = params ? `?p=${encodeURIComponent(JSON.stringify(params))}` : "";
+  const nextHash = `#/${dest}${q}`;
+  if (replace) window.location.replace(nextHash);
+  else window.location.hash = nextHash;
+}
+
 export async function handleLocation() {
-  if (isNavigating) return;
-  isNavigating = true;
+  const { dest, params } = parseHash(window.location.hash);
+
+  const route = routes[dest] || routes.main;
 
   try {
-    const { route: routeName, params } = parseHash();
-    const conf = routes[routeName] || routes.main;
+    // грузим шаблон страницы (route.templatePath) в #page-current
+    const container = document.getElementById("page-current");
+    if (!container) throw new Error("No #page-current container");
 
-    // показать/скрыть кнопку "назад"
-    try {
-      TelegramSDK.setBackButtonVisible(routeName !== "main");
-    } catch {}
+    const res = await fetch(route.templatePath, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTML load failed: ${route.templatePath}`);
+    container.innerHTML = await res.text();
 
-    // 1) берём HTML и кладём в page-next
-    const html = await getTemplate(conf.template);
-    const nextNode = current.node === $pageA ? $pageB : $pageA;
-    nextNode.innerHTML = html;
-    nextNode.style.display = "";
-    current.node.style.display = "none";
-
-    // небольшая пауза кадра, чтобы DOM реально появился
-    await rAF();
-
-    // 2) теперь, когда DOM вставлен — вызываем load(params)
-    //    ВАЖНО: раньше load() вызывался ДО вставки DOM — из-за этого «скелет» не менялся.
-    if (conf.controller && typeof conf.controller.load === "function") {
-      const hasParams = params && Object.keys(params).length > 0;
-      const loadArg   = hasParams ? JSON.stringify(params) : undefined; // страницы как раньше получат строку
-      await conf.controller.load(loadArg);
-    }
-
-    // 3) обновляем текущий указатель
-    current = { route: conf, node: nextNode };
+    await route.load(params || null);
   } catch (e) {
     console.error("[Router] handleLocation error:", e);
-  } finally {
-    isNavigating = false;
   }
 }
 
-// ---------- Инициализация ----------
-window.navigateTo = navigateTo;   // чтобы можно было звать из страниц
+// слушаем смену hash
+window.addEventListener("hashchange", handleLocation);
+
+// удобные шорткаты для вызовов из других модулей/консоли
+window.navigateTo = navigateTo;
 window.handleLocation = handleLocation;
 
-window.addEventListener("hashchange", handleLocation);
-window.addEventListener("load", handleLocation);
+export default { navigateTo, handleLocation };
