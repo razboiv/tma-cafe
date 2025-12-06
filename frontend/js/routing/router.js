@@ -1,18 +1,20 @@
 // frontend/js/routing/router.js
-// Простой надёжный роутер для TMA: понимает оба формата хэша,
-// сам знает пути к HTML, лениво импортирует JS-страницы.
+// Надёжный роутер с ленивыми импортами и встроенными путями к HTML.
+// Поддерживает хэши вида: "#/main?p=..." и "#/?dest=main&params=...".
 
 import TelegramSDK from "../telegram/telegram.js";
 
-// Карта доступных маршрутов: HTML путь + ленивый импорт JS
+console.log("[ROUTER] v10 loaded");
+
+// Карта маршрутов: относительные пути (без начального /)
 const ROUTES = {
-  main:     { html: "/pages/main.html",     js: () => import("../pages/main.js"),     inst: null },
-  category: { html: "/pages/category.html", js: () => import("../pages/category.js"), inst: null },
-  details:  { html: "/pages/details.html",  js: () => import("../pages/details.js"),  inst: null },
-  cart:     { html: "/pages/cart.html",     js: () => import("../pages/cart.js"),     inst: null },
+  main:     { html: "pages/main.html",     js: () => import("../pages/main.js"),     inst: null },
+  category: { html: "pages/category.html", js: () => import("../pages/category.js"), inst: null },
+  details:  { html: "pages/details.html",  js: () => import("../pages/details.js"),  inst: null },
+  cart:     { html: "pages/cart.html",     js: () => import("../pages/cart.js"),     inst: null },
 };
 
-// Простой кэш HTML
+// Кэш HTML
 const htmlCache = Object.create(null);
 async function getHtml(path) {
   if (!path) throw new Error("HTML path is undefined");
@@ -24,13 +26,11 @@ async function getHtml(path) {
   return t;
 }
 
-// Разбор #hash — поддерживаем:
-// 1) "#/main?p=%7B...%7D"
-// 2) "#/?dest=main&params=%7B...%7D"
+// Разбор hash
 function parseHash() {
   const h = location.hash || "";
 
-  // стиль "#/dest?..."
+  // "#/dest?..."
   let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);
   if (m) {
     const dest = decodeURIComponent(m[1] || "main");
@@ -41,7 +41,7 @@ function parseHash() {
     return { dest, params: p };
   }
 
-  // стиль "#/?dest=...&params=..."
+  // "#/?dest=...&params=..."
   const q = h.includes("?") ? h.slice(h.indexOf("?") + 1) : "";
   const sp = new URLSearchParams(q);
   const dest = sp.get("dest") || "main";
@@ -51,19 +51,18 @@ function parseHash() {
   return { dest, params: p };
 }
 
-// Ленивая инициализация страницы
+// Ленивая инициализация класса страницы
 async function ensureInstance(name) {
   const meta = ROUTES[name];
   if (!meta) return null;
   if (meta.inst) return meta.inst;
-  // default-экспорт класса страницы
   const mod = await meta.js();
   const Page = mod.default || mod[name];
   meta.inst = new Page();
   return meta.inst;
 }
 
-// Рендер страницы: меняем page-current <-> page-next
+// Рендер: свапаем page-current <-> page-next
 async function render(name, params) {
   const meta = ROUTES[name];
   if (!meta) throw new Error(`Route meta not found: ${name}`);
@@ -77,11 +76,11 @@ async function render(name, params) {
   next.style.display = "";
   curr.style.display = "none";
 
-  // свап id
+  // swap id
   curr.id = "page-next";
   next.id = "page-current";
 
-  // гарантия наличия page-next
+  // убедимся, что page-next снова есть
   if (!document.getElementById("page-next")) {
     const d = document.createElement("div");
     d.id = "page-next";
@@ -91,12 +90,10 @@ async function render(name, params) {
   }
 
   const page = await ensureInstance(name);
-  if (page && typeof page.load === "function") {
-    await page.load(params || null);
-  }
+  if (page?.load) await page.load(params || null);
 }
 
-// Публичный переход
+// Переход
 export function navigateTo(dest, params = null) {
   let hash = `#/${encodeURIComponent(dest)}`;
   if (params) {
@@ -106,14 +103,14 @@ export function navigateTo(dest, params = null) {
   else location.hash = hash;
 }
 
-// Основной обработчик
+// Обработчик
 export async function handleLocation() {
   try {
     const { dest, params } = parseHash();
     const name = dest || "main";
 
     if (!ROUTES[name]) {
-      console.warn("[Router] Unknown route, fallback → main:", name);
+      console.warn("[Router] Unknown route → fallback main:", name);
       return navigateTo("main");
     }
 
@@ -128,7 +125,7 @@ export async function handleLocation() {
   }
 }
 
-// Инициализация на старте
+// Старт
 export function bootRouter() {
   if (!location.hash || location.hash === "#/" || location.hash === "#") {
     navigateTo("main");
