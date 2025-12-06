@@ -35,6 +35,5 @@ class Route {
     this.node = container;
   }
 }
-
 export { Route };
 export default Route;
