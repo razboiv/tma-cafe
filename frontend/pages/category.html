@@ -1,40 +1,22 @@
-<section>
-    <div id="cafe-category" class="cafe-section-vertical">
-        <div class="cafe-item-container">
-            <img id="cafe-item-image" class="cafe-item-image shimmer" src="icons/icon-transparent.svg"></img>
-            <h6 id="cafe-item-name" class="cafe-item-name shimmer"></h6>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 90%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 100%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 75%;"></p>
-        </div>
-        <div class="cafe-item-container">
-            <img id="cafe-item-image" class="cafe-item-image shimmer" src="icons/icon-transparent.svg"></img>
-            <h6 id="cafe-item-name" class="cafe-item-name shimmer"></h6>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 90%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 100%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 75%;"></p>
-        </div>
-        <div class="cafe-item-container">
-            <img id="cafe-item-image" class="cafe-item-image shimmer" src="icons/icon-transparent.svg"></img>
-            <h6 id="cafe-item-name" class="cafe-item-name shimmer"></h6>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 90%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 100%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 75%;"></p>
-        </div>
-        <div class="cafe-item-container">
-            <img id="cafe-item-image" class="cafe-item-image shimmer" src="icons/icon-transparent.svg"></img>
-            <h6 id="cafe-item-name" class="cafe-item-name shimmer"></h6>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 90%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 100%;"></p>
-            <p id="cafe-item-description" class="small cafe-item-description shimmer" style="min-width: 75%;"></p>
-        </div>
-    </div>
+<!-- frontend/pages/category.html -->
+<section class="category-page">
 
-    <template id="cafe-item-template">
-        <div class="cafe-item-container">
-            <img id="cafe-item-image" class="cafe-item-image"/>
-            <h6 id="cafe-item-name" class="cafe-item-name"></h6>
-            <p id="cafe-item-description" class="small cafe-item-description"></p>
-        </div>
-    </template>
+  <!-- Контейнер, в котором сначала скелеты, потом — реальные карточки -->
+  <div id="cafe-category" class="cafe-section-vertical">
+    <!-- 4 скелета (любой стиль) -->
+    <div class="cafe-item-container shimmer" data-skeleton></div>
+    <div class="cafe-item-container shimmer" data-skeleton></div>
+    <div class="cafe-item-container shimmer" data-skeleton></div>
+    <div class="cafe-item-container shimmer" data-skeleton></div>
+  </div>
+
+  <!-- Шаблон одной карточки (ВАЖНО: без повторяющихся id!) -->
+  <template id="cafe-item-template">
+    <article class="cafe-item-container" data-id="">
+      <img data-role="image" class="cafe-item-image" alt="">
+      <h6 data-role="name"  class="cafe-item-name"></h6>
+      <p  data-role="desc"  class="small cafe-item-description"></p>
+    </article>
+  </template>
+
 </section>
