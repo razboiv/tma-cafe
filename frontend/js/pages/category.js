@@ -1,5 +1,4 @@
 // frontend/js/pages/category.js
-
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
@@ -7,9 +6,6 @@ import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-/**
- * Страница категории: список блюд из выбранной категории.
- */
 export default class CategoryPage extends Route {
   constructor() {
     super("category", "/pages/category.html");
@@ -19,72 +15,67 @@ export default class CategoryPage extends Route {
     console.log("[CategoryPage] load", params);
     TelegramSDK.expand();
 
-    // Показ / скрытие основной кнопки внизу
-    const portionCount = Cart.getPortionCount();
-    if (portionCount > 0) {
-      TelegramSDK.showMainButton(
-        `MY CART · ${portionCount} POSITION${portionCount === 1 ? "" : "S"}`,
-        () => navigateTo("cart"),
-      );
+    // основной MainButton
+    const count = Cart.getPortionCount();
+    if (count > 0) {
+      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () => navigateTo("cart"));
     } else {
       TelegramSDK.hideMainButton();
     }
 
-    // Нормализуем params
-    let p = params;
-    if (typeof p === "string") {
-      try { p = JSON.parse(p); } catch { p = {}; }
+    // --- парсим id категории из params (строка/объект) ---
+    let categoryId = null;
+    try {
+      if (typeof params === "string") {
+        const p = JSON.parse(params || "{}");
+        categoryId = p.id || p.categoryId || null;
+      } else if (params && typeof params === "object") {
+        categoryId = params.id || params.categoryId || null;
+      }
+    } catch (e) {
+      console.error("[CategoryPage] parse params error:", e);
     }
-    p = p || {};
 
-    // Принимаем несколько возможных ключей
-    const categoryId = p.categoryId || p.id || p.slug;
     if (!categoryId) {
-      console.warn("[CategoryPage] no categoryId in params", p);
+      console.warn("[CategoryPage] no category id in params:", params);
+      navigateTo("root");
       return;
     }
 
-    // Загружаем блюда категории
+    // --- грузим блюда и рендерим ---
     try {
-      const menu = await getMenuCategory(categoryId);
-      console.log("[CategoryPage] menu loaded", menu);
-      this.#fillMenu(menu, categoryId);
-    } catch (err) {
-      console.error("[CategoryPage] failed to load menu", err);
-    }
-  }
+      const items = await getMenuCategory(categoryId);
 
-  // Заполняем список карточек
-  #fillMenu(menuItems, categoryId) {
-    replaceShimmerContent(
-      "#cafe-category",
-      "#cafe-item-template",
-      ".cafe-item-image",
-      menuItems,
-      (template, item) => {
-        // Тексты
-        template.find(".cafe-item-name").text(item.name ?? "");
-        template.find(".cafe-item-description").text(item.description ?? "");
+      const list =
+        document.querySelector('[data-role="category-list"]') ||
+        document.getElementById("category-list");
 
-        // Картинка
-        const imgEl = template.find(".cafe-item-image");
-        const imageUrl = item.imageUrl || item.image;
-        if (imageUrl) {
-          imgEl.attr("src", imageUrl);
-          imgEl.removeClass("shimmer");
-        } else {
-          imgEl.attr("src", "icons/icon-transparent.svg");
-        }
+      if (list && Array.isArray(items)) {
+        replaceShimmerContent(
+          list,
+          items
+            .map(
+              (m) => `
+              <article class="menu-card" data-id="${m.id}">
+                <img class="menu-card__img" src="${m.photo}" alt="${m.name}">
+                <h3 class="menu-card__title">${m.name}</h3>
+                <p class="menu-card__desc">${m.description || ""}</p>
+              </article>`
+            )
+            .join("")
+        );
 
-        // Переход на детали товара (передаём id и categoryId)
-        template.on("click", () => {
-          const nextParams = JSON.stringify({
-            id: item.id,
-            categoryId,
-          });
-          navigateTo("details", nextParams);
-        });
+        list.addEventListener(
+          "click",
+          (ev) => {
+            const card = ev.target.closest("[data-id]");
+            if (card) navigateTo("details", { id: card.getAttribute("data-id") });
+          },
+          { once: true }
+        );
       }
-    );
+    } catch (e) {
+      console.error("[CategoryPage] load error:", e);
+    }
   }
 }
