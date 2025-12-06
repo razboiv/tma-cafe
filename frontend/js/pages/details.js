@@ -2,110 +2,132 @@
 
 import Route from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import { getMenuItem } from "../requests/requests.js";
+import { getMenuItem } from "../requests/requests.js";        // функция должна вернуть товар по id
 import TelegramSDK from "../telegram/telegram.js";
+import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
+/**
+ * Карточка товара: сначала кнопка "ADD TO CART".
+ * После добавления — "MY CART · N POSITIONS".
+ * Переход в корзину — только по нажатию на кнопку "MY CART".
+ */
 export default class DetailsPage extends Route {
   constructor() {
     super("details", "/pages/details.html");
+    this.item = null;
+    this.qty = 1;
+    this.size = "small";
   }
 
   async load(params) {
     console.log("[Details] load", params);
     TelegramSDK.expand();
 
-    // Скажем перманентному хуку «не лезь, здесь кастомная кнопка»
-    document.body.dataset.mainbutton = "custom";
+    const id = params && params.id ? params.id : null;
+    if (!id) {
+      console.error("[Details] no id in params:", params);
+      return;
+    }
 
-    // ---- id блюда ----
-    let id = null;
+    // 1) Грузим товар
+    this.item = await getMenuItem(id);
+
+    // 2) Рендерим разметку карточки (ожидается, что в details.html есть #details-root)
+    replaceShimmerContent("#details-root", this.render());
+
+    // 3) Привязываем события (размер/количество)
+    this.bindControls();
+
+    // 4) Показать кнопку "ADD TO CART"
+    this.showAddButton();
+  }
+
+  render() {
+    const p = (this.item?.portions || [])[0] || {};
+    const price = p.price || this.item?.price || 0;
+    const weight = p.weight || this.item?.weight || "";
+
+    return `
+      <div class="details__cover">
+        <img src="${this.item?.photo || ""}" alt="">
+      </div>
+
+      <h1 class="details__title">${this.item?.name || ""}</h1>
+      <div class="details__desc">${this.item?.description || ""}</div>
+
+      <div class="details__price-row">
+        <div class="details__price-label">Price</div>
+        <div class="details__weight">${weight}</div>
+      </div>
+
+      <div class="details__size">
+        <button class="size-btn is-active" data-size="small">Small</button>
+        <button class="size-btn" data-size="large">Large</button>
+      </div>
+
+      <div class="details__price">
+        $${price.toFixed ? price.toFixed(2) : price}
+      </div>
+
+      <div class="details__qty">
+        <button class="qty-btn" data-act="dec">−</button>
+        <span id="details-qty">1</span>
+        <button class="qty-btn" data-act="inc">+</button>
+      </div>
+    `;
+  }
+
+  bindControls() {
+    // выбор размера
+    document.querySelectorAll(".size-btn").forEach($b => {
+      $b.addEventListener("click", () => {
+        document.querySelectorAll(".size-btn").forEach(x => x.classList.remove("is-active"));
+        $b.classList.add("is-active");
+        this.size = $b.dataset.size || "small";
+      });
+    });
+
+    // количество
+    const $qty = document.getElementById("details-qty");
+    const clamp = (v) => Math.max(1, Math.min(50, v));
+
+    document.querySelectorAll(".qty-btn").forEach($b => {
+      $b.addEventListener("click", () => {
+        const act = $b.dataset.act;
+        this.qty = clamp(this.qty + (act === "inc" ? 1 : -1));
+        if ($qty) $qty.textContent = String(this.qty);
+      });
+    });
+  }
+
+  showAddButton() {
+    document.body.dataset.mainbutton = "add";
+    TelegramSDK.showMainButton("ADD TO CART", () => this.handleAddToCart());
+  }
+
+  showCartButton() {
+    const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
+    document.body.dataset.mainbutton = "cart";
+    TelegramSDK.showMainButton(
+      `MY CART · ${count} POSITIONS`,
+      () => navigateTo("cart")
+    );
+  }
+
+  handleAddToCart() {
     try {
-      if (typeof params === "string") {
-        id = JSON.parse(params || "{}").id ?? null;
-      } else if (params && typeof params === "object") {
-        id = params.id ?? null;
+      // минимально возможная совместимость с твоим Cart-модулем:
+      // предполагаем метод add(id, size, qty)
+      if (typeof Cart.add === "function") {
+        Cart.add(this.item?.id, this.size, this.qty);
+      } else if (typeof Cart.addItem === "function") {
+        Cart.addItem(this.item, { size: this.size, qty: this.qty });
       }
     } catch (e) {
-      console.error("[Details] bad params:", e, params);
+      console.error("[Details] add to cart failed:", e);
     }
-    if (!id) return;
-
-    // ---- данные блюда ----
-    let item = null;
-    try { item = await getMenuItem(id); } catch (e) { console.error(e); }
-    if (!item) return;
-
-    const $ = (s) => document.querySelector(s);
-
-    const name = item.name || item.title || "Untitled";
-    const img  = item.photo || item.image || item.coverImage || "icons/icon-transparent.svg";
-    const desc = item.description || item.ingredients || "";
-
-    const priceSmall = item?.price?.small ?? item.priceSmall ?? item.price ?? 0;
-    const priceLarge = item?.price?.large ?? item.priceLarge ?? null;
-
-    $(".details__title") && ($(".details__title").textContent = name);
-    $(".details__desc")  && ($(".details__desc").textContent  = desc);
-    const imgEl = $(".details__cover img");
-    if (imgEl) imgEl.src = img;
-
-    // ---- опции размера ----
-    let option = "small";
-    const priceEl = $(".details__price");
-    const updatePrice = () => {
-      const p = option === "large" && priceLarge != null ? priceLarge : priceSmall;
-      if (priceEl) priceEl.textContent = `$${p}`;
-    };
-    updatePrice();
-
-    const optS = document.getElementById("opt-small");
-    const optL = document.getElementById("opt-large");
-    optS?.addEventListener("click", () => {
-      option = "small";
-      optS.classList.add("active");
-      optL?.classList.remove("active");
-      updatePrice();
-    });
-    optL?.addEventListener("click", () => {
-      option = "large";
-      optL.classList.add("active");
-      optS?.classList.remove("active");
-      updatePrice();
-    });
-
-    // ---- количество ----
-    let qty = 1;
-    const qtyEl = document.getElementById("qty");
-    const syncQty = () => { if (qtyEl) qtyEl.textContent = String(qty); };
-    document.getElementById("qty-dec")?.addEventListener("click", () => {
-      qty = Math.max(1, qty - 1); syncQty();
-    });
-    document.getElementById("qty-inc")?.addEventListener("click", () => {
-      qty += 1; syncQty();
-    });
-    syncQty();
-
-    // ---- кнопка: сначала ADD TO CART, потом MY CART ----
-    const switchToCartButton = () => {
-      const count = Cart.getPortionCount();
-      const label = `MY CART · ${count} POSITION${count > 1 ? "S" : ""}`;
-      TelegramSDK.showMainButton(label, () => navigateTo("cart"));
-      // возвращаем управление перманентному хуку
-      document.body.dataset.mainbutton = "cart";
-    };
-
-    TelegramSDK.showMainButton("ADD TO CART", () => {
-      const chosenPrice = option === "large" && priceLarge != null ? priceLarge : priceSmall;
-      Cart.add({
-        id,
-        name,
-        option,
-        qty,
-        price: chosenPrice,
-        image: img,
-      });
-      switchToCartButton();
-    });
+    // после добавления — просто меняем кнопку, НИКУДА НЕ ПЕРЕХОДИМ
+    this.showCartButton();
   }
 }
