@@ -1,9 +1,9 @@
+// frontend/js/index.js
 import TelegramSDK from "./telegram/telegram.js";
 import { handleLocation, navigateTo } from "./routing/router.js";
 
-window.navigateTo   = navigateTo;
+// Делаем функции видимыми (удобно для отладки)
+window.navigateTo = navigateTo;
 window.handleLocation = handleLocation;
 
-TelegramSDK.ready();
-TelegramSDK.expand();
-handleLocation();
+// 1) Г
