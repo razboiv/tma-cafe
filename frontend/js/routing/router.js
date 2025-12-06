@@ -1,89 +1,141 @@
 // frontend/js/routing/router.js
+// Универсальный роутер: понимает и "#/main?p=..." и "#/?dest=main&params=..."
+// Грузит HTML из /pages, затем вызывает page.load(params)
+
 import MainPage     from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
 import DetailsPage  from "../pages/details.js";
 import CartPage     from "../pages/cart.js";
+import TelegramSDK  from "../telegram/telegram.js";
 
-// Список страниц. Важно: в конструкторах страниц должны быть корректные name и htmlPath:
-//   super("main", "/pages/main.html")
-//   super("category", "/pages/category.html")
-//   super("details", "/pages/details.html")
-//   super("cart", "/pages/cart.html")
-const routes = [
-  new MainPage(),
-  new CategoryPage(),
-  new DetailsPage(),
-  new CartPage(),
-];
+// Регистр доступных маршрутов
+const routes = {
+  main:     new MainPage(),
+  category: new CategoryPage(),
+  details:  new DetailsPage(),
+  cart:     new CartPage(),
+};
 
-const routesByName = new Map(routes.map(r => [r.name, r]));
-let currentRoute = null;
+// Определяем путь к HTML фрагменту
+function htmlPathOf(route, name) {
+  if (!route) return null;
+  if (route.htmlPath) return route.htmlPath;       // если у страницы явно задан htmlPath
+  if (route.html)     return route.html;           // или html
+  if (typeof route.getHtmlPath === "function")     // или метод
+    return route.getHtmlPath();
+  return `/pages/${name}.html`;                    // дефолт по соглашению
+}
 
+// Кэш HTML
+const htmlCache = Object.create(null);
+async function getHtml(path) {
+  if (!path) throw new Error("HTML path is undefined");
+  if (htmlCache[path]) return htmlCache[path];
+  const r = await fetch(path, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`HTML load failed: ${path}`);
+  const html = await r.text();
+  htmlCache[path] = html;
+  return html;
+}
+
+// Разбор хэша: поддерживаем два стиля
 function parseHash() {
-  const raw = location.hash || "";
-  const q = raw.startsWith("#") ? raw.slice(1) : raw; // "?dest=...&params=..."
-  const sp = new URLSearchParams(q);
+  const h = location.hash || "";
 
-  const dest = sp.get("dest") || "main";
-  let params = null;
-
-  const p = sp.get("params");
-  if (p) {
-    try {
-      params = JSON.parse(p);
-    } catch (e) {
-      console.warn("[Router] bad params JSON, ignored:", p, e);
-    }
+  // Стиль "#/dest?p=%7B...%7D"
+  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);
+  if (m) {
+    const dest = decodeURIComponent(m[1] || "main");
+    const search = new URLSearchParams(m[2] || "");
+    let params = search.get("p");
+    if (params) { try { params = JSON.parse(decodeURIComponent(params)); } catch { params = null; } }
+    else params = null;
+    return { dest, params };
   }
+
+  // Стиль "#/?dest=main&params=%7B...%7D"
+  const q  = h.includes("?") ? h.substring(h.indexOf("?") + 1) : "";
+  const sp = new URLSearchParams(q);
+  const dest = sp.get("dest") || "main";
+  let params = sp.get("params");
+  if (params) { try { params = JSON.parse(decodeURIComponent(params)); } catch { params = null; } }
+  else params = null;
   return { dest, params };
 }
 
-export function navigateTo(dest, params) {
-  const sp = new URLSearchParams();
-  sp.set("dest", dest);
-  if (params != null) sp.set("params", JSON.stringify(params));
-  location.hash = `?${sp.toString()}`;
+async function render(route, params, name) {
+  const curr = document.getElementById("page-current");
+  const next = document.getElementById("page-next");
+
+  const html = await getHtml(htmlPathOf(route, name));
+  next.innerHTML = html;
+
+  next.style.display = "";
+  curr.style.display = "none";
+
+  // свап id
+  curr.id = "page-next";
+  next.id = "page-current";
+
+  // на всякий случай гарантируем наличие page-next
+  if (!document.getElementById("page-next")) {
+    const frag = document.createElement("div");
+    frag.id = "page-next";
+    frag.className = "page";
+    frag.style.display = "none";
+    (document.getElementById("content") || document.body).appendChild(frag);
+  }
+
+  if (route && typeof route.load === "function") {
+    await route.load(params || null);
+  }
 }
 
-async function fetchHtml(path) {
-  const res = await fetch(path, { cache: "no-cache" });
-  if (!res.ok) throw new Error(`HTML load failed: ${path} (${res.status})`);
-  return await res.text();
+// Публичная навигация
+export function navigateTo(dest, params = null) {
+  let hash = `#/${encodeURIComponent(dest)}`;
+  if (params) {
+    try { hash += `?p=${encodeURIComponent(JSON.stringify(params))}`; } catch {}
+  }
+  if (location.hash === hash) handleLocation();
+  else location.hash = hash;
 }
 
 export async function handleLocation() {
   try {
-    // если первый запуск без hash — уйдём на main
-    if (!location.hash) {
-      navigateTo("main");
-      return;
-    }
-
     const { dest, params } = parseHash();
-    const route = routesByName.get(dest) || routesByName.get("main");
+    const name  = dest || "main";
+    const route = routes[name];
 
-    if (!route) throw new Error(`Route not found (dest="${dest}")`);
-    if (!route.htmlPath) throw new Error(`Route "${route.name}" has no htmlPath`);
-
-    const container =
-      document.getElementById("page-current") ||
-      document.getElementById("content") ||
-      document.body;
-
-    const html = await fetchHtml(route.htmlPath);
-    container.innerHTML = html;
-
-    currentRoute = route;
-    if (typeof route.load === "function") {
-      await route.load(params);
+    if (!route) {
+      console.error("[Router] Route not found, fallback to main. dest=", name, "available=", Object.keys(routes));
+      return navigateTo("main");
     }
-  } catch (err) {
-    console.error("[Router] handleLocation error:", err);
+
+    // Телеграм обвязка
+    TelegramSDK.ready();
+    TelegramSDK.expand();
+    TelegramSDK.hideMainButton();
+    TelegramSDK.hideSecondaryButton();
+
+    await render(route, params, name);
+  } catch (e) {
+    console.error("[Router] handleLocation error:", e);
   }
 }
 
-// реагируем на смену hash
-window.addEventListener("hashchange", handleLocation);
+// Инициализация роутера
+export function bootRouter() {
+  if (!location.hash || location.hash === "#/" || location.hash === "#") {
+    navigateTo("main");
+  } else {
+    handleLocation();
+  }
+}
 
-// экспорт по умолчанию — удобно, если где-то импортом по умолчанию тянут
-export default { navigateTo, handleLocation };
+// На окно — для удобства отладки
+window.navigateTo = navigateTo;
+window.handleLocation = handleLocation;
+window.bootRouter   = bootRouter;
+
+export default { navigateTo, handleLocation, bootRouter };
