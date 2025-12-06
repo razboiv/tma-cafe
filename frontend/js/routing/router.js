@@ -5,14 +5,16 @@ import CategoryPage from "../pages/category.js";
 import DetailsPage from "../pages/details.js";
 import CartPage from "../pages/cart.js";
 
+console.log("[ROUTER] r7 loaded");           // маркер версии
+window.__ROUTER_VER = "r7";
+
 const routes = [
   new MainPage(),
   new CategoryPage(),
   new DetailsPage(),
   new CartPage(),
 ];
-
-window.__routes = routes; // для быстрой диагностики в консоли
+window.__routes = routes; // для быстрой диагностики
 
 const htmlCache = new Map();
 
@@ -40,8 +42,11 @@ function findRoute(name) {
 }
 
 async function getHtml(route) {
-  const html = await route.fetchHtml();   // весь контроль пути внутри Route
-  return htmlCache.get(route.htmlPath) || (htmlCache.set(route.htmlPath, html), html);
+  // ВСЕГДА идём через fetchHtml() — тут не может быть undefined
+  const html =
+    htmlCache.get(route.htmlPath) || (await route.fetchHtml());
+  if (!htmlCache.has(route.htmlPath)) htmlCache.set(route.htmlPath, html);
+  return html;
 }
 
 function getContainers() {
@@ -82,13 +87,12 @@ export async function handleLocation() {
 
     await route.beforeEnter?.(params);
 
-    // простой swap (без сложных анимаций)
+    // простой swap
     const tmpId = current.id;
     current.style.display = "none";
     current.id = next.id;
     next.id = tmpId;
 
-    document.getElementById("page-current"); // актуальный контейнер
     await route.load?.(params);
     await route.afterEnter?.(params);
   } catch (e) {
