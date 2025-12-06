@@ -1,9 +1,11 @@
+// frontend/js/index.js
 import TelegramSDK from "./telegram/telegram.js";
-import { handleLocation, navigateTo } from "./routing/router.js";
+import { bootRouter, handleLocation } from "./routing/router.js";
 
-window.navigateTo = navigateTo;
-window.handleLocation = handleLocation;
-
+// Телеграм UI
 TelegramSDK.ready();
 TelegramSDK.expand();
-handleLocation();
+
+// Роутер
+bootRouter();
+window.addEventListener("hashchange", handleLocation);
