@@ -1,89 +1,109 @@
 // frontend/js/routing/router.js
-
-import MainPage    from "../pages/main.js";
+import Route from "./route.js";
+import MainPage from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
-import DetailsPage  from "../pages/details.js";
-import CartPage     from "../pages/cart.js";
-import TelegramSDK  from "../telegram/telegram.js";
+import DetailsPage from "../pages/details.js";
+import CartPage from "../pages/cart.js";
 
 const routes = [
-  new MainPage(),
-  new CategoryPage(),
-  new DetailsPage(),
-  new CartPage(),
+  new MainPage(),      // name: "main"
+  new CategoryPage(),  // name: "category"
+  new DetailsPage(),   // name: "details"
+  new CartPage(),      // name: "cart"
 ];
 
-// Утилита: безопасно парсим params из URL
-function parseParams(raw) {
-  if (!raw) return null;
-  try {
-    const dec = decodeURIComponent(raw);
-    // Если это похоже на JSON — парсим
-    if (/^[\[{]/.test(dec)) return JSON.parse(dec);
-    return dec;
-  } catch {
-    return raw;
-  }
+// кэш HTML по пути файла
+const htmlCache = new Map();
+
+function qs(s) {
+  if (!s) return new URLSearchParams();
+  return s.startsWith("?") || s.startsWith("#")
+    ? new URLSearchParams(s.slice(1))
+    : new URLSearchParams(s);
 }
 
-export function navigateTo(dest, params) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("dest", dest);
-  if (params !== undefined && params !== null) {
-    const val = typeof params === "string" ? params : JSON.stringify(params);
-    url.searchParams.set("params", val);
-  } else {
-    url.searchParams.delete("params");
+function getUrlState() {
+  const search = qs(location.search);
+  const hash = qs(location.hash);
+  const dest = search.get("dest") || hash.get("dest") || "main";
+  const rawParams = search.get("params") || hash.get("params");
+  let params = null;
+  if (rawParams) {
+    try { params = JSON.parse(decodeURIComponent(rawParams)); } catch { params = null; }
   }
-  history.pushState({}, "", url);
-  return handleLocation();
+  return { dest, params };
+}
+
+function findRoute(name) {
+  return routes.find(r => r.name === name) || routes.find(r => r.name === "main");
+}
+
+async function getHtml(route) {
+  const path = route.htmlPath || route.html || route.templateUrl || route.template;
+  if (!path) throw new Error(`[Router] HTML path is undefined for route "${route?.name}"`);
+  if (htmlCache.has(path)) return htmlCache.get(path);
+  const html = await route.fetchHtml();
+  htmlCache.set(path, html);
+  return html;
+}
+
+function getContainers() {
+  const content = document.getElementById("content");
+  let current = document.getElementById("page-current");
+  let next = document.getElementById("page-next");
+  if (!content) throw new Error("#content not found in index.html");
+  if (!current || !next) {
+    current = document.createElement("div");
+    next = document.createElement("div");
+    current.id = "page-current";
+    next.id = "page-next";
+    current.className = next.className = "page";
+    next.style.display = "none";
+    content.innerHTML = "";
+    content.appendChild(current);
+    content.appendChild(next);
+  }
+  return { current, next };
+}
+
+export async function navigateTo(dest, params) {
+  const encoded = params ? encodeURIComponent(JSON.stringify(params)) : "";
+  const query = `?dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`;
+  // Для надёжности дублируем в hash
+  history.pushState(null, "", query + `#dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`);
+  await handleLocation();
 }
 
 export async function handleLocation() {
-  const url = new URL(window.location.href);
-  const dest = url.searchParams.get("dest") || "main";
-  const params = parseParams(url.searchParams.get("params"));
-
-  const route = routes.find(r => r?.name === dest);
-  if (!route) {
-    console.error(`[Router] route "${dest}" not found → fallback to "main"`);
-    url.searchParams.set("dest", "main");
-    history.replaceState({}, "", url);
-    return handleLocation();
-  }
-
-  // подстрахуемся на любые имена поля-шаблона
-  const htmlPath = route.htmlPath || route.html || route.templateUrl || route.template;
-  if (!htmlPath) {
-    console.error(`[Router] HTML path is undefined for route "${dest}"`);
-    throw new Error("HTML load failed: undefined");
-  }
+  const { current, next } = getContainers();
+  const { dest, params } = getUrlState();
+  const route = findRoute(dest);
 
   try {
-    const res = await fetch(htmlPath, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`fetch ${htmlPath} -> ${res.status}`);
-    const html = await res.text();
+    const html = await getHtml(route);
+    next.innerHTML = html;
+    next.style.display = "block";
 
-    const host = document.getElementById("page-current");
-    if (!host) throw new Error("#page-current not found");
-    host.innerHTML = html;
+    await route.beforeEnter?.(params);
 
-    // загрузка страницы
-    if (typeof route.load === "function") {
-      await route.load(params);
-    }
+    // простой swap без анимаций (иначе «залипают» клики)
+    const tmpId = current.id;
+    current.style.display = "none";
+    current.id = next.id;
+    next.id = tmpId;
 
-    TelegramSDK.expand();
+    const newCurrent = document.getElementById("page-current");
+    await route.load?.(params);
+    await route.afterEnter?.(params);
   } catch (e) {
     console.error("[Router] handleLocation error:", e);
-    const host = document.getElementById("page-current");
-    if (host) {
-      host.innerHTML = `<div style="padding:24px;color:#fff">
-        Failed to load page.<br>${e?.message || e}
-      </div>`;
-    }
   }
 }
 
-// навигация по кнопке «назад» браузера
 window.addEventListener("popstate", handleLocation);
+
+// первый запуск
+export function bootRouter() {
+  getContainers();
+  return handleLocation();
+}
