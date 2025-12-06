@@ -1,108 +1,89 @@
 // frontend/js/routing/router.js
-import Route from "./route.js";
-import MainPage from "../pages/main.js";
+import MainPage     from "../pages/main.js";
 import CategoryPage from "../pages/category.js";
-import DetailsPage from "../pages/details.js";
-import CartPage from "../pages/cart.js";
+import DetailsPage  from "../pages/details.js";
+import CartPage     from "../pages/cart.js";
 
-console.log("[ROUTER] r7 loaded");           // маркер версии
-window.__ROUTER_VER = "r7";
-
+// Список страниц. Важно: в конструкторах страниц должны быть корректные name и htmlPath:
+//   super("main", "/pages/main.html")
+//   super("category", "/pages/category.html")
+//   super("details", "/pages/details.html")
+//   super("cart", "/pages/cart.html")
 const routes = [
   new MainPage(),
   new CategoryPage(),
   new DetailsPage(),
   new CartPage(),
 ];
-window.__routes = routes; // для быстрой диагностики
 
-const htmlCache = new Map();
+const routesByName = new Map(routes.map(r => [r.name, r]));
+let currentRoute = null;
 
-function qs(s) {
-  if (!s) return new URLSearchParams();
-  return s.startsWith("?") || s.startsWith("#")
-    ? new URLSearchParams(s.slice(1))
-    : new URLSearchParams(s);
-}
+function parseHash() {
+  const raw = location.hash || "";
+  const q = raw.startsWith("#") ? raw.slice(1) : raw; // "?dest=...&params=..."
+  const sp = new URLSearchParams(q);
 
-function getUrlState() {
-  const search = qs(location.search);
-  const hash = qs(location.hash);
-  const dest = search.get("dest") || hash.get("dest") || "main";
-  const rawParams = search.get("params") || hash.get("params");
+  const dest = sp.get("dest") || "main";
   let params = null;
-  if (rawParams) {
-    try { params = JSON.parse(decodeURIComponent(rawParams)); } catch { params = null; }
+
+  const p = sp.get("params");
+  if (p) {
+    try {
+      params = JSON.parse(p);
+    } catch (e) {
+      console.warn("[Router] bad params JSON, ignored:", p, e);
+    }
   }
   return { dest, params };
 }
 
-function findRoute(name) {
-  return routes.find(r => r.name === name) || routes.find(r => r.name === "main");
+export function navigateTo(dest, params) {
+  const sp = new URLSearchParams();
+  sp.set("dest", dest);
+  if (params != null) sp.set("params", JSON.stringify(params));
+  location.hash = `?${sp.toString()}`;
 }
 
-async function getHtml(route) {
-  // ВСЕГДА идём через fetchHtml() — тут не может быть undefined
-  const html =
-    htmlCache.get(route.htmlPath) || (await route.fetchHtml());
-  if (!htmlCache.has(route.htmlPath)) htmlCache.set(route.htmlPath, html);
-  return html;
-}
-
-function getContainers() {
-  const content = document.getElementById("content");
-  let current = document.getElementById("page-current");
-  let next = document.getElementById("page-next");
-  if (!content) throw new Error("#content not found in index.html");
-  if (!current || !next) {
-    current = document.createElement("div");
-    next = document.createElement("div");
-    current.id = "page-current";
-    next.id = "page-next";
-    current.className = next.className = "page";
-    next.style.display = "none";
-    content.innerHTML = "";
-    content.appendChild(current);
-    content.appendChild(next);
-  }
-  return { current, next };
-}
-
-export async function navigateTo(dest, params) {
-  const encoded = params ? encodeURIComponent(JSON.stringify(params)) : "";
-  const q = `?dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`;
-  history.pushState(null, "", q + `#dest=${encodeURIComponent(dest)}${encoded ? `&params=${encoded}` : ""}`);
-  await handleLocation();
+async function fetchHtml(path) {
+  const res = await fetch(path, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`HTML load failed: ${path} (${res.status})`);
+  return await res.text();
 }
 
 export async function handleLocation() {
-  const { current, next } = getContainers();
-  const { dest, params } = getUrlState();
-  const route = findRoute(dest);
-
   try {
-    const html = await getHtml(route);
-    next.innerHTML = html;
-    next.style.display = "block";
+    // если первый запуск без hash — уйдём на main
+    if (!location.hash) {
+      navigateTo("main");
+      return;
+    }
 
-    await route.beforeEnter?.(params);
+    const { dest, params } = parseHash();
+    const route = routesByName.get(dest) || routesByName.get("main");
 
-    // простой swap
-    const tmpId = current.id;
-    current.style.display = "none";
-    current.id = next.id;
-    next.id = tmpId;
+    if (!route) throw new Error(`Route not found (dest="${dest}")`);
+    if (!route.htmlPath) throw new Error(`Route "${route.name}" has no htmlPath`);
 
-    await route.load?.(params);
-    await route.afterEnter?.(params);
-  } catch (e) {
-    console.error("[Router] handleLocation error:", e);
+    const container =
+      document.getElementById("page-current") ||
+      document.getElementById("content") ||
+      document.body;
+
+    const html = await fetchHtml(route.htmlPath);
+    container.innerHTML = html;
+
+    currentRoute = route;
+    if (typeof route.load === "function") {
+      await route.load(params);
+    }
+  } catch (err) {
+    console.error("[Router] handleLocation error:", err);
   }
 }
 
-window.addEventListener("popstate", handleLocation);
+// реагируем на смену hash
+window.addEventListener("hashchange", handleLocation);
 
-export function bootRouter() {
-  getContainers();
-  return handleLocation();
-}
+// экспорт по умолчанию — удобно, если где-то импортом по умолчанию тянут
+export default { navigateTo, handleLocation };
