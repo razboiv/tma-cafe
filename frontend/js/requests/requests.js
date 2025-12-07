@@ -1,7 +1,7 @@
 // frontend/js/requests/requests.js
 
 // Базовый URL бэкенда на Render.
-const API_BASE = "https://tma-cafe-backend.onrender.com".replace(/\/+$/, "");
+const API_BASE = "web-production-razboiv.up.railway.app".replace(/\/+$/, "");
 
 // Собираем полный URL.
 function url(path) {
