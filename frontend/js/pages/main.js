@@ -24,6 +24,7 @@ function getCartCount() {
 }
 
 // фрагмент в load() главной страницы
+TelegramSDK.hideBackButton();
 function readCart() { try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; } }
 function cartCount() { return readCart().reduce((s, x) => s + (x.qty || 0), 0); }
 
