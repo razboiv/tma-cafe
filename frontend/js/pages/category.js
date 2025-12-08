@@ -6,14 +6,14 @@ import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-export default class CategoryPage extends Route {
+export class Page extends Route {
   constructor() {
     super("category", "/pages/category.html");
     this._onBack = this._onBack.bind(this);
   }
 
   _onBack() {
-    window.history.back();
+    try { window.history.back(); } catch { navigateTo("root"); }
   }
 
   #cartCount() {
@@ -28,17 +28,19 @@ export default class CategoryPage extends Route {
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
 
-    // main button (корзина)
     const count = this.#cartCount();
     if (count > 0) {
-      TelegramSDK.showMainButton(`MY CART · ${count === 1 ? "1 POSITION" : `${count} POSITIONS`}`, () => navigateTo("cart"));
+      TelegramSDK.showMainButton(
+        `MY CART · ${count === 1 ? "1 POSITION" : `${count} POSITIONS`}`,
+        () => navigateTo("cart")
+      );
       document.body.dataset.mainbutton = "cart";
     } else {
       TelegramSDK.hideMainButton();
       document.body.dataset.mainbutton = "";
     }
 
-    // === ключевое: снимаем shimmer до рендера ===
+    // снять shimmer заранее, чтобы не перекрывал карточки
     const $container = $("#cafe-category");
     $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
 
@@ -65,11 +67,10 @@ export default class CategoryPage extends Route {
         }
       );
 
-      // и после — на всякий случай ещё раз
+      // на всякий случай ещё раз убираем любые оставшиеся шимер-классы
       $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
     } catch (e) {
       console.error("[CategoryPage] failed to load category menu:", e);
-      // на фейле тоже уберём скелетон, чтобы не висел серым
       $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
     }
   }
@@ -79,3 +80,6 @@ export default class CategoryPage extends Route {
     try { TelegramSDK.offBackButton?.(this._onBack); } catch {}
   }
 }
+
+// для совместимости, если где-то импортируется default
+export default Page;
