@@ -6,7 +6,6 @@ import TelegramSDK from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-// простой helper: убрать скелетоны и показать контент
 function revealContent() {
   document.querySelectorAll("[data-skeleton]").forEach(n => n.remove());
   document.querySelectorAll("[data-content]").forEach(n => (n.style.display = ""));
@@ -16,6 +15,7 @@ export default class DetailsPage extends Route {
   #item = null;
   #variant = null;
   #qty = 1;
+  #backCategoryId = null;
 
   constructor() {
     super("details", "/pages/details.html");
@@ -25,16 +25,27 @@ export default class DetailsPage extends Route {
     console.log("[DetailsPage] load", params);
     TelegramSDK.expand();
 
-    // params может быть строкой
+    // параметры могут прийти строкой
     let p = {};
     try { p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {}); }
     catch { p = params || {}; }
 
     const id = p?.id ? String(p.id) : "";
+    this.#backCategoryId = p?.categoryId || p?.category || p?.cat || null;
+
     if (!id) {
       console.error("[DetailsPage] no item id in params:", params);
       return;
     }
+
+    // Показать «Назад»: в категорию, если знаем; иначе на главную
+    TelegramSDK.showBackButton(() => {
+      if (this.#backCategoryId) {
+        navigateTo("category", { id: this.#backCategoryId });
+      } else {
+        navigateTo("root");
+      }
+    });
 
     const item = await getMenuItem(id);
     if (!item) {
@@ -57,14 +68,11 @@ export default class DetailsPage extends Route {
     // изображение
     const img = document.getElementById("cafe-item-details-image");
     const cover = img?.closest(".details-cover");
-    img.onload = () => {
-      img.style.display = "block";
-      cover?.querySelectorAll("[data-skeleton]").forEach(n => n.remove());
-    };
+    img.onload = () => { img.style.display = "block"; cover?.querySelectorAll("[data-skeleton]").forEach(n => n.remove()); };
     img.onerror = () => { img.style.display = "none"; };
     img.src = (it.image || it.photo || "").trim();
 
-    // текстовые поля
+    // базовые поля
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ""; };
     setText("cafe-item-details-name", it.name);
     setText("cafe-item-details-description", it.description || it.short);
@@ -78,10 +86,7 @@ export default class DetailsPage extends Route {
         b.className = "cafe-item-details-variant";
         b.dataset.variantId = String(v.id);
         b.textContent = v.name || v.id;
-        b.addEventListener("click", () => {
-          this.#variant = v;
-          this.#updateVariantUI();
-        });
+        b.addEventListener("click", () => { this.#variant = v; this.#updateVariantUI(); });
         box.appendChild(b);
       });
     }
@@ -96,7 +101,7 @@ export default class DetailsPage extends Route {
     const price = Number(v?.cost || v?.price || 0);
     const weight = v?.weight || "";
 
-    // подсветка активного варианта (класс .active)
+    // подсветка активной «пилюли»
     const selectedId = String(v?.id || "");
     document
       .querySelectorAll("#cafe-item-details-variants .cafe-item-details-variant")
