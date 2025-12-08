@@ -1,9 +1,9 @@
 // frontend/js/routing/router.js
 import TelegramSDK from "../telegram/telegram.js";
 
-console.log("[ROUTER] v12 loaded");
+console.log("[ROUTER] v13 loaded");
 
-// Карта маршрутов (пути проверь: они должны соответствовать твоей структуре)
+// Карта маршрутов
 const ROUTES = {
   main:     { html: "pages/main.html",     module: "../pages/main.js",     inst: null },
   category: { html: "pages/category.html", module: "../pages/category.js", inst: null },
@@ -11,7 +11,7 @@ const ROUTES = {
   cart:     { html: "pages/cart.html",     module: "../pages/cart.js",     inst: null },
 };
 
-// --- HTML cache -------------------------------------------------------------
+// Кэш HTML
 const htmlCache = Object.create(null);
 async function getHtml(path) {
   if (!path) throw new Error("HTML path is undefined");
@@ -23,11 +23,12 @@ async function getHtml(path) {
   return text;
 }
 
-// --- Hash parsing -----------------------------------------------------------
+// Разбор hash
 function parseHash() {
   const h = location.hash || "";
 
-  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);        // "#/dest?..."
+  // "#/dest?..."
+  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);
   if (m) {
     const dest = decodeURIComponent(m[1] || "main");
     const sp = new URLSearchParams(m[2] || "");
@@ -47,49 +48,65 @@ function parseHash() {
   return { dest, params: p };
 }
 
-// --- Универсальная загрузка инстанса страницы ------------------------------
+// Универсальная загрузка инстанса страницы
 async function loadPageInstance(modulePath) {
   const sep = modulePath.includes("?") ? "&" : "?";
-  const url = `${modulePath}${sep}v=${Date.now()}`;  // cache-buster
+  const url = `${modulePath}${sep}v=${Date.now()}`; // cache-buster
 
   const mod = await import(url);
 
-  // 1) Класс Page (named)
-  if (typeof mod.Page === "function") {
-    try { return new mod.Page(); } catch {}
+  // Собираем все потенциальные кандидаты
+  const candPool = new Set();
+
+  function pushIf(v) { if (v != null) candPool.add(v); }
+
+  pushIf(mod.Page);
+  pushIf(mod.default);
+  pushIf(mod.createPage);
+
+  // все named-экспорты
+  Object.values(mod).forEach(pushIf);
+  // вложенные внутри default
+  if (mod.default && typeof mod.default === "object") {
+    Object.values(mod.default).forEach(pushIf);
   }
-  // 2) Класс по default
-  if (typeof mod.default === "function") {
-    try { return new mod.default(); } catch {}
-  }
-  // 3) Фабрика createPage()
-  if (typeof mod.createPage === "function") {
-    try {
-      const inst = mod.createPage();
-      if (inst && typeof inst.load === "function") return inst;
-    } catch {}
-  }
-  // 4) Объект с load()
-  if (mod.default && typeof mod.default.load === "function") {
-    return mod.default;
-  }
-  if (typeof mod.load === "function") {
-    return { load: mod.load };
-  }
-  // 5) Любая экспортированная функция/класс с прототипом load
-  const anyFn = Object.values(mod).find(v => typeof v === "function");
-  if (anyFn) {
-    try {
-      const cand = new anyFn();
-      if (cand && typeof cand.load === "function") return cand;
-    } catch {}
+
+  // Функция проверки/создания инстанса
+  const tryMake = (x) => {
+    // объект с load()
+    if (x && typeof x === "object" && typeof x.load === "function") return x;
+
+    // класс/функция с прототипом load()
+    if (typeof x === "function") {
+      // 1) если прототип уже содержит load — это то, что надо
+      if (x.prototype && typeof x.prototype.load === "function") {
+        try { return new x(); } catch {}
+      }
+      // 2) фабрика — попробуем вызвать без аргументов
+      try {
+        const r = x();
+        if (r && typeof r.load === "function") return r;
+      } catch {}
+    }
+    return null;
+  };
+
+  // Приоритет: Page, default, всё остальное
+  const ordered = [];
+  if (mod.Page) ordered.push(mod.Page);
+  if (mod.default) ordered.push(mod.default);
+  candPool.forEach(v => { if (!ordered.includes(v)) ordered.push(v); });
+
+  for (const c of ordered) {
+    const inst = tryMake(c);
+    if (inst) return inst;
   }
 
   console.warn("[Router] Could not resolve Page from module, using Noop:", mod);
-  return { async load() {} }; // безопасный заглушечный инстанс
+  return { async load() {} }; // безопасная заглушка
 }
 
-// --- Ленивая инициализация --------------------------------------------------
+// Ленивая инициализация
 async function ensureInstance(name) {
   const meta = ROUTES[name];
   if (!meta) return null;
@@ -98,7 +115,7 @@ async function ensureInstance(name) {
   return meta.inst;
 }
 
-// --- Рендер -----------------------------------------------------------------
+// Рендер
 async function render(name, params) {
   const meta = ROUTES[name];
   if (!meta) throw new Error(`Route meta not found: ${name}`);
@@ -116,7 +133,7 @@ async function render(name, params) {
   curr.id = "page-next";
   next.id = "page-current";
 
-  // восстановить page-next, если исчез
+  // восстановить page-next, если вдруг пропал
   if (!document.getElementById("page-next")) {
     const d = document.createElement("div");
     d.id = "page-next";
@@ -131,7 +148,7 @@ async function render(name, params) {
   }
 }
 
-// --- Навигация --------------------------------------------------------------
+// Навигация
 export function navigateTo(dest, params = null) {
   let hash = `#/${encodeURIComponent(dest)}`;
   if (params) {
@@ -141,7 +158,7 @@ export function navigateTo(dest, params = null) {
   else location.hash = hash;
 }
 
-// --- Обработчик переходов ---------------------------------------------------
+// Обработчик переходов
 export async function handleLocation() {
   try {
     const { dest, params } = parseHash();
@@ -163,7 +180,7 @@ export async function handleLocation() {
   }
 }
 
-// --- Старт ------------------------------------------------------------------
+// Старт
 export function bootRouter() {
   if (!location.hash || location.hash === "#/" || location.hash === "#") {
     navigateTo("main");
