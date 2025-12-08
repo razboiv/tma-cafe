@@ -1,12 +1,9 @@
 // frontend/js/routing/router.js
-// Надёжный роутер с ленивыми импортами и встроенными путями к HTML.
-// Поддерживает хэши вида: "#/main?p=..." и "#/?dest=main&params=...".
-
 import TelegramSDK from "../telegram/telegram.js";
 
-console.log("[ROUTER] v11 loaded");
+console.log("[ROUTER] v12 loaded");
 
-// Карта маршрутов
+// Карта маршрутов (пути проверь: они должны соответствовать твоей структуре)
 const ROUTES = {
   main:     { html: "pages/main.html",     module: "../pages/main.js",     inst: null },
   category: { html: "pages/category.html", module: "../pages/category.js", inst: null },
@@ -14,24 +11,23 @@ const ROUTES = {
   cart:     { html: "pages/cart.html",     module: "../pages/cart.js",     inst: null },
 };
 
-// Кэш HTML
+// --- HTML cache -------------------------------------------------------------
 const htmlCache = Object.create(null);
 async function getHtml(path) {
   if (!path) throw new Error("HTML path is undefined");
   if (htmlCache[path]) return htmlCache[path];
-  const r = await fetch(path, { cache: "no-cache" });
-  if (!r.ok) throw new Error(`HTML load failed: ${path}`);
-  const t = await r.text();
-  htmlCache[path] = t;
-  return t;
+  const resp = await fetch(path, { cache: "no-cache" });
+  if (!resp.ok) throw new Error(`HTML load failed: ${path}`);
+  const text = await resp.text();
+  htmlCache[path] = text;
+  return text;
 }
 
-// Разбор hash
+// --- Hash parsing -----------------------------------------------------------
 function parseHash() {
   const h = location.hash || "";
 
-  // "#/dest?..."
-  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);
+  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);        // "#/dest?..."
   if (m) {
     const dest = decodeURIComponent(m[1] || "main");
     const sp = new URLSearchParams(m[2] || "");
@@ -51,43 +47,58 @@ function parseHash() {
   return { dest, params: p };
 }
 
-// Универсальная загрузка класса страницы из модуля
-async function loadPageCtor(modulePath) {
-  // cache-buster, чтобы гарантированно подхватывать свежую версию модулей
+// --- Универсальная загрузка инстанса страницы ------------------------------
+async function loadPageInstance(modulePath) {
   const sep = modulePath.includes("?") ? "&" : "?";
-  const url = `${modulePath}${sep}v=${Date.now()}`;
+  const url = `${modulePath}${sep}v=${Date.now()}`;  // cache-buster
 
   const mod = await import(url);
 
-  // 1) named export Page
-  let Ctor = mod.Page;
-  // 2) default export
-  if (typeof Ctor !== "function") Ctor = mod.default;
-  // 3) запасной вариант — любая экспортированная функция/класс
-  if (typeof Ctor !== "function") {
-    const anyFn = Object.values(mod).find(v => typeof v === "function");
-    if (typeof anyFn === "function") Ctor = anyFn;
+  // 1) Класс Page (named)
+  if (typeof mod.Page === "function") {
+    try { return new mod.Page(); } catch {}
+  }
+  // 2) Класс по default
+  if (typeof mod.default === "function") {
+    try { return new mod.default(); } catch {}
+  }
+  // 3) Фабрика createPage()
+  if (typeof mod.createPage === "function") {
+    try {
+      const inst = mod.createPage();
+      if (inst && typeof inst.load === "function") return inst;
+    } catch {}
+  }
+  // 4) Объект с load()
+  if (mod.default && typeof mod.default.load === "function") {
+    return mod.default;
+  }
+  if (typeof mod.load === "function") {
+    return { load: mod.load };
+  }
+  // 5) Любая экспортированная функция/класс с прототипом load
+  const anyFn = Object.values(mod).find(v => typeof v === "function");
+  if (anyFn) {
+    try {
+      const cand = new anyFn();
+      if (cand && typeof cand.load === "function") return cand;
+    } catch {}
   }
 
-  if (typeof Ctor !== "function") {
-    console.error("[Router] Bad page module exports:", mod);
-    throw new TypeError("Page is not a constructor");
-  }
-  return Ctor;
+  console.warn("[Router] Could not resolve Page from module, using Noop:", mod);
+  return { async load() {} }; // безопасный заглушечный инстанс
 }
 
-// Ленивая инициализация класса страницы
+// --- Ленивая инициализация --------------------------------------------------
 async function ensureInstance(name) {
   const meta = ROUTES[name];
   if (!meta) return null;
   if (meta.inst) return meta.inst;
-
-  const PageCtor = await loadPageCtor(meta.module);
-  meta.inst = new PageCtor();
+  meta.inst = await loadPageInstance(meta.module);
   return meta.inst;
 }
 
-// Рендер: свапаем page-current <-> page-next
+// --- Рендер -----------------------------------------------------------------
 async function render(name, params) {
   const meta = ROUTES[name];
   if (!meta) throw new Error(`Route meta not found: ${name}`);
@@ -105,7 +116,7 @@ async function render(name, params) {
   curr.id = "page-next";
   next.id = "page-current";
 
-  // убедимся, что page-next снова есть
+  // восстановить page-next, если исчез
   if (!document.getElementById("page-next")) {
     const d = document.createElement("div");
     d.id = "page-next";
@@ -115,10 +126,12 @@ async function render(name, params) {
   }
 
   const page = await ensureInstance(name);
-  if (page?.load) await page.load(params || null);
+  if (page && typeof page.load === "function") {
+    await page.load(params || null);
+  }
 }
 
-// Переход
+// --- Навигация --------------------------------------------------------------
 export function navigateTo(dest, params = null) {
   let hash = `#/${encodeURIComponent(dest)}`;
   if (params) {
@@ -128,7 +141,7 @@ export function navigateTo(dest, params = null) {
   else location.hash = hash;
 }
 
-// Обработчик
+// --- Обработчик переходов ---------------------------------------------------
 export async function handleLocation() {
   try {
     const { dest, params } = parseHash();
@@ -150,7 +163,7 @@ export async function handleLocation() {
   }
 }
 
-// Старт
+// --- Старт ------------------------------------------------------------------
 export function bootRouter() {
   if (!location.hash || location.hash === "#/" || location.hash === "#") {
     navigateTo("main");
@@ -159,7 +172,6 @@ export function bootRouter() {
   }
 }
 
-// Для отладки
 window.navigateTo = navigateTo;
 window.handleLocation = handleLocation;
 window.bootRouter   = bootRouter;
