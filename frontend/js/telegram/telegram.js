@@ -1,97 +1,83 @@
-// Надёжная обёртка над Telegram.WebApp: двойная подписка на клик MainButton.
-
+// frontend/js/telegram/telegram.js
+/**
+ * Wrapper for simplifying usage of Telegram.WebApp class and its methods.
+ */
 export class TelegramSDK {
-  static #readyDone = false;
-  static #mbHandler = null;   // единый обработчик (обёртка)
-  static #mbLastTs = 0;       // анти-дубль
-  static #bbHandler = null;
+  static #mainButtonClickCallback;
+  static #secondaryButtonClickCallback;
+  static #backButtonClickCallback;
 
-  // ---- базовое ----
-  static ready() {
-    const W = window.Telegram?.WebApp;
-    if (!this.#readyDone && W) {
-      try { W.ready(); } catch {}
-      this.#readyDone = true;
-    }
+  static getInitData() {
+    return (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
   }
-  static expand() { try { window.Telegram?.WebApp?.expand(); } catch {} }
-  static close()  { try { window.Telegram?.WebApp?.close(); }  catch {} }
-  static getInitData() { return window.Telegram?.WebApp?.initData || ""; }
 
-  // ---- MainButton ----
-  static showMainButton(text = "MY CART", onClick) {
-    const W = window.Telegram?.WebApp;
-    const MB = W?.MainButton;
-    if (!W || !MB) return;
-    this.ready();
+  // -------- MainButton --------
+  static showMainButton(text, onClick) {
+    Telegram.WebApp.MainButton
+      .setParams({ text, is_active: true, is_visible: true })
+      .offClick(this.#mainButtonClickCallback)
+      .onClick(onClick)
+      .show();
+    this.#mainButtonClickCallback = onClick;
+  }
 
-    // снять старые обработчики
-    if (this.#mbHandler) {
-      try { MB.offClick(this.#mbHandler); } catch {}
-      try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
-    }
-
-    // обёртка + защита от двойного вызова
-    this.#mbHandler = () => {
-      const now = Date.now();
-      if (now - this.#mbLastTs < 200) return; // гасим возможный дубль
-      this.#mbLastTs = now;
-      try { onClick?.(); } catch (e) { console.error(e); }
-    };
-
-    // применяем параметры и гарантируем видимость/активность
-    try { MB.setParams({ text, is_visible: true, is_active: true }); } catch {}
-    try { MB.enable(); } catch {}
-    try { MB.show(); } catch {}
-
-    // двойная подписка — какой-то канал точно сработает
-    try { MB.onClick(this.#mbHandler); } catch {}
-    try { W.onEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
+  static setMainButtonLoading(isLoading) {
+    if (!Telegram.WebApp.MainButton) return;
+    if (isLoading) Telegram.WebApp.MainButton.showProgress(false);
+    else Telegram.WebApp.MainButton.hideProgress();
   }
 
   static hideMainButton() {
-    const W = window.Telegram?.WebApp;
-    const MB = W?.MainButton;
-    if (!MB) return;
-
-    if (this.#mbHandler) {
-      try { MB.offClick(this.#mbHandler); } catch {}
-      try { W.offEvent?.("mainButtonClicked", this.#mbHandler); } catch {}
-      this.#mbHandler = null;
-    }
-    try { MB.hide(); } catch {}
+    if (Telegram.WebApp.MainButton) Telegram.WebApp.MainButton.hide();
   }
 
-  // ---- BackButton ----
-  static showBackButton(onClick) {
-    const W = window.Telegram?.WebApp;
-    const BB = W?.BackButton;
-    if (!BB) return;
-    this.ready();
+  // -------- SecondaryButton (новое) --------
+  static showSecondaryButton(text, onClick) {
+    const SB = Telegram?.WebApp?.SecondaryButton;
+    if (!SB) return; // на старых клиентах просто ничего не делаем
+    SB.setParams({ text, is_visible: true, is_active: true })
+      .offClick(this.#secondaryButtonClickCallback)
+      .onClick(onClick)
+      .show();
+    this.#secondaryButtonClickCallback = onClick;
+  }
 
-    if (this.#bbHandler) {
-      try { BB.offClick(this.#bbHandler); } catch {}
-    }
-    this.#bbHandler = () => { try { onClick?.(); } catch (e) { console.error(e); } };
-    try { BB.show(); } catch {}
-    try { BB.onClick(this.#bbHandler); } catch {}
+  static setSecondaryButtonLoading(isLoading) {
+    const SB = Telegram?.WebApp?.SecondaryButton;
+    if (!SB) return;
+    if (isLoading) SB.showProgress(false);
+    else SB.hideProgress();
+  }
+
+  static hideSecondaryButton() {
+    const SB = Telegram?.WebApp?.SecondaryButton;
+    if (!SB) return;
+    SB.offClick(this.#secondaryButtonClickCallback);
+    SB.hide();
+  }
+
+  // -------- BackButton --------
+  static showBackButton(onClick) {
+    Telegram.WebApp.BackButton
+      .offClick(this.#backButtonClickCallback)
+      .onClick(onClick)
+      .show();
+    this.#backButtonClickCallback = onClick;
   }
 
   static hideBackButton() {
-    const BB = window.Telegram?.WebApp?.BackButton;
-    if (!BB) return;
-    if (this.#bbHandler) {
-      try { BB.offClick(this.#bbHandler); } catch {}
-      this.#bbHandler = null;
-    }
-    try { BB.hide(); } catch {}
+    Telegram.WebApp.BackButton.hide();
   }
 
-  // ---- утилиты ----
-  static sendData(data)    { try { window.Telegram?.WebApp?.sendData?.(data); } catch {} }
-  static openInvoice(u,cb) { try { window.Telegram?.WebApp?.openInvoice?.(u, cb); } catch {} }
-  static showAlert(t)      { try { window.Telegram?.WebApp?.showAlert?.(t); } catch {} }
-  static showConfirm(t)    { try { return window.Telegram?.WebApp?.showConfirm?.(t); } catch {} return Promise.resolve(false); }
+  // -------- Misc --------
+  static notificationOccured(style) {
+    try { Telegram.WebApp.HapticFeedback?.notificationOccurred?.(style); } catch (_) {}
+  }
+
+  static openInvoice(url, callback) { Telegram.WebApp.openInvoice(url, callback); }
+  static expand() { Telegram.WebApp.expand(); }
+  static close() { Telegram.WebApp.close(); }
+  static sendData(data) { try { Telegram.WebApp.sendData(data); } catch (_) {} }
 }
 
 export default TelegramSDK;
