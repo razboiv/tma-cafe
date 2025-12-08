@@ -7,7 +7,7 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-/* === Popular cache across route re-renders === */
+/* === Popular cache === */
 const POPULAR_CACHE_KEY = "tma-popular-cache-v1";
 function getPopularCache() {
   try { return JSON.parse(sessionStorage.getItem(POPULAR_CACHE_KEY) || "null"); }
@@ -17,13 +17,13 @@ function setPopularCache(items) {
   try { sessionStorage.setItem(POPULAR_CACHE_KEY, JSON.stringify(items)); } catch {}
 }
 
-/* === Helper for main button text === */
+/* === helpers === */
 function pluralizePositions(n) {
   n = Number(n) || 0;
   return n === 1 ? "1 POSITION" : `${n} POSITIONS`;
 }
 
-/* === Рендер Popular из кэша (возвращает true, если отрисовали) === */
+/* === рендер Popular из кэша, если главная в DOM === */
 function renderPopularFromCacheIfMainPresent() {
   const container = document.querySelector("#cafe-popular");
   if (!container) return false;
@@ -31,10 +31,9 @@ function renderPopularFromCacheIfMainPresent() {
   const cached = getPopularCache();
   if (!Array.isArray(cached) || cached.length === 0) return false;
 
-  // уже заполнено — выходим
+  // уже есть контент — не дублируем
   if (container.dataset.filled === "1" && container.children.length > 0) return true;
 
-  // снять shimmer с заголовка
   const title = document.querySelector("#cafe-section-popular-title");
   if (title) title.classList.remove("shimmer");
 
@@ -43,14 +42,14 @@ function renderPopularFromCacheIfMainPresent() {
     "#cafe-item-template",
     "#cafe-item-image",
     cached,
-    (template, item) => {
-      template.find("#cafe-item-name").text(item?.name ?? "");
-      template.find("#cafe-item-description").text(item?.description ?? "");
+    (tpl, item) => {
+      tpl.find("#cafe-item-name").text(item?.name ?? "");
+      tpl.find("#cafe-item-description").text(item?.description ?? "");
 
-      const img = template.find("#cafe-item-image");
+      const img = tpl.find("#cafe-item-image");
       if (item?.image) loadImage(img, item.image);
 
-      template.on("click", () => {
+      tpl.on("click", () => {
         const params = JSON.stringify({
           id: item?.id,
           categoryId: item?.categoryId || undefined,
@@ -64,42 +63,23 @@ function renderPopularFromCacheIfMainPresent() {
   return true;
 }
 
-/* === Дождаться появления main.html и дорисовать Popular из кэша === */
-function waitAndRenderPopularFromCache(maxMs = 3000) {
-  const start = Date.now();
-
-  // 1) моментальная попытка на ближайшем тике
-  requestAnimationFrame(() => {
-    if (renderPopularFromCacheIfMainPresent()) return;
-
-    // 2) MutationObserver — ждём вставку #cafe-popular
-    const observer = new MutationObserver(() => {
-      if (renderPopularFromCacheIfMainPresent()) {
-        observer.disconnect();
-      }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    // 3) таймаут на всякий случай
-    const tick = () => {
-      if (renderPopularFromCacheIfMainPresent()) {
-        observer.disconnect();
-        return;
-      }
-      if (Date.now() - start >= maxMs) {
-        observer.disconnect();
-        return;
-      }
-      setTimeout(tick, 50);
-    };
-    setTimeout(tick, 50);
-  });
+/* === Постоянная «страховка»: следим за изменениями DOM и подрисовываем Popular из кэша === */
+let lastEnsureTs = 0;
+function ensurePopularFromCacheDebounced() {
+  const now = Date.now();
+  if (now - lastEnsureTs < 80) return; // лёгкий троттлинг
+  lastEnsureTs = now;
+  requestAnimationFrame(() => { renderPopularFromCacheIfMainPresent(); });
 }
 
-/* === Глобальные хуки: при возврате — гарантированно дорисуем Popular из cache === */
-window.addEventListener("popstate", () => waitAndRenderPopularFromCache());
-try { window.Telegram?.WebApp?.onEvent?.("back_button_pressed", () => waitAndRenderPopularFromCache()); } catch {}
+// запускаем observer один раз на всё WebView
+const __popularObserver = new MutationObserver(ensurePopularFromCacheDebounced);
+__popularObserver.observe(document.documentElement || document.body, {
+  childList: true,
+  subtree: true,
+});
+// первая попытка на случай, если уже стоим на главной
+ensurePopularFromCacheDebounced();
 
 /* === Main page === */
 export default class MainPage extends Route {
@@ -113,14 +93,13 @@ export default class MainPage extends Route {
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
 
-    // мгновенно попробовать показать Popular из кэша,
-    // а если DOM вставится позже — сработает waitAndRenderPopularFromCache()
-    waitAndRenderPopularFromCache();
+    // мгновенно попробовать показать Popular из кэша
+    ensurePopularFromCacheDebounced();
 
-    // кнопка корзины
+    // нижняя кнопка корзины
     this.updateMainButton();
 
-    // параллельно загрузим данные и перерисуем
+    // параллельно загружаем и перерисовываем
     await Promise.allSettled([
       this.loadCafeInfo(),
       this.loadCategories(),
@@ -128,7 +107,7 @@ export default class MainPage extends Route {
     ]);
   }
 
-  /* ----- Кнопка корзины ----- */
+  /* ----- кнопка корзины ----- */
   updateMainButton() {
     const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
     if (count > 0) {
@@ -140,7 +119,7 @@ export default class MainPage extends Route {
     }
   }
 
-  /* ----- Информация о кафе ----- */
+  /* ----- инфо о кафе ----- */
   async loadCafeInfo() {
     try {
       const info = await getInfo();
@@ -166,7 +145,7 @@ export default class MainPage extends Route {
     }
   }
 
-  /* ----- Категории ----- */
+  /* ----- категории ----- */
   async loadCategories() {
     try {
       const categories = await getCategories();
@@ -178,15 +157,15 @@ export default class MainPage extends Route {
         "#cafe-category-template",
         "#cafe-category-icon",
         Array.isArray(categories) ? categories : [],
-        (template, category) => {
-          template.attr("id", category.id);
-          template.css("background-color", category.backgroundColor || "");
-          template.find("#cafe-category-name").text(category.name ?? "");
+        (tpl, category) => {
+          tpl.attr("id", category.id);
+          tpl.css("background-color", category.backgroundColor || "");
+          tpl.find("#cafe-category-name").text(category.name ?? "");
 
-          const img = template.find("#cafe-category-icon");
+          const img = tpl.find("#cafe-category-icon");
           if (category.icon) loadImage(img, category.icon);
 
-          template.on("click", () => {
+          tpl.on("click", () => {
             const params = JSON.stringify({ id: category.id });
             navigateTo("category", params);
           });
@@ -206,14 +185,14 @@ export default class MainPage extends Route {
       "#cafe-item-template",
       "#cafe-item-image",
       Array.isArray(items) ? items : [],
-      (template, item) => {
-        template.find("#cafe-item-name").text(item?.name ?? "");
-        template.find("#cafe-item-description").text(item?.description ?? "");
+      (tpl, item) => {
+        tpl.find("#cafe-item-name").text(item?.name ?? "");
+        tpl.find("#cafe-item-description").text(item?.description ?? "");
 
-        const img = template.find("#cafe-item-image");
+        const img = tpl.find("#cafe-item-image");
         if (item?.image) loadImage(img, item.image);
 
-        template.on("click", () => {
+        tpl.on("click", () => {
           const params = JSON.stringify({
             id: item?.id,
             categoryId: item?.categoryId || undefined,
