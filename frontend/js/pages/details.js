@@ -23,7 +23,6 @@ export default class DetailsPage extends Route {
 
   async load(params) {
     console.log("[DetailsPage] load", params);
-    TelegramSDK.expand();
 
     // параметры могут прийти строкой
     let p = {};
@@ -31,27 +30,18 @@ export default class DetailsPage extends Route {
     catch { p = params || {}; }
 
     const id = p?.id ? String(p.id) : "";
-    this.#backCategoryId = p?.categoryId || p?.category || p?.cat || null;
+    this.#backCategoryId = p?.categoryId || null;
 
-    if (!id) {
-      console.error("[DetailsPage] no item id in params:", params);
-      return;
-    }
+    if (!id) { console.error("[DetailsPage] no item id in params:", params); return; }
 
-    // Показать «Назад»: в категорию, если знаем; иначе на главную
+    // «Назад»: в категорию, если знаем; иначе на главную
     TelegramSDK.showBackButton(() => {
-      if (this.#backCategoryId) {
-        navigateTo("category", { id: this.#backCategoryId });
-      } else {
-        navigateTo("root");
-      }
+      if (this.#backCategoryId) navigateTo("category", { id: this.#backCategoryId });
+      else navigateTo("root");
     });
 
     const item = await getMenuItem(id);
-    if (!item) {
-      console.error("[DetailsPage] item not found:", id);
-      return;
-    }
+    if (!item) { console.error("[DetailsPage] item not found:", id); return; }
 
     this.#item = item;
     this.#variant = Array.isArray(item.variants) && item.variants.length ? item.variants[0] : null;
@@ -65,19 +55,16 @@ export default class DetailsPage extends Route {
   #render() {
     const it = this.#item;
 
-    // изображение
     const img = document.getElementById("cafe-item-details-image");
     const cover = img?.closest(".details-cover");
     img.onload = () => { img.style.display = "block"; cover?.querySelectorAll("[data-skeleton]").forEach(n => n.remove()); };
     img.onerror = () => { img.style.display = "none"; };
     img.src = (it.image || it.photo || "").trim();
 
-    // базовые поля
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ""; };
     setText("cafe-item-details-name", it.name);
     setText("cafe-item-details-description", it.description || it.short);
 
-    // варианты
     const box = document.getElementById("cafe-item-details-variants");
     box.innerHTML = "";
     if (Array.isArray(it.variants)) {
@@ -101,13 +88,11 @@ export default class DetailsPage extends Route {
     const price = Number(v?.cost || v?.price || 0);
     const weight = v?.weight || "";
 
-    // подсветка активной «пилюли»
     const selectedId = String(v?.id || "");
     document
       .querySelectorAll("#cafe-item-details-variants .cafe-item-details-variant")
       .forEach(btn => btn.classList.toggle("active", btn.dataset.variantId === selectedId));
 
-    // цена и вес
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ""; };
     setText("cafe-item-details-selected-variant-price", toDisplayCost(price));
     setText("cafe-item-details-selected-variant-weight", weight);
