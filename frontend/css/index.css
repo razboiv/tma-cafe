@@ -921,3 +921,42 @@ p.small {
 
 /* картинка: убрать «скелетон», если уже не сделали */
 .details-cover img { display: block; width: 100%; height: auto; border-radius: 12px; }
+
+/* РОВНО по центру для iOS/Android */
+#cafe-item-details-quantity-decrease-button,
+#cafe-item-details-quantity-increase-button {
+  position: relative;
+  display: grid;             /* идеальное центрирование */
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06);
+  color: inherit;
+
+  /* прячем текст '+' и '−', будем рисовать сами */
+  font-size: 0;
+  line-height: 0;
+  padding: 0;
+}
+
+/* Горизонтальная палочка — и для '+' и для '−' */
+#cafe-item-details-quantity-decrease-button::before,
+#cafe-item-details-quantity-increase-button::before {
+  content: "";
+  width: 14px;               /* длина минуса */
+  height: 2px;               /* толщина минуса */
+  background: currentColor;
+  border-radius: 2px;
+}
+
+/* Вертикальная палочка — добавляем только для '+' */
+#cafe-item-details-quantity-increase-button::after {
+  content: "";
+  position: absolute;
+  width: 2px;                /* толщина плюса */
+  height: 14px;              /* длина плюса */
+  background: currentColor;
+  border-radius: 2px;
+}
