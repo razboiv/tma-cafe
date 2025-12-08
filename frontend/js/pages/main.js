@@ -1,219 +1,137 @@
 // frontend/js/pages/main.js
-
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
-import {
-  getInfo,
-  getCategories,
-  getPopularMenu,
-} from "../requests/requests.js";
+import { getInfo, getCategories, getPopularMenu } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-// ---- MainButton logic for "MY CART" ----
-const MB_REFRESH_MS = 700;
-
-function getCartCount() {
-  try {
-    const items = (Cart.getItems && Cart.getItems()) || [];
-    return items.reduce((sum, it) => sum + Number(it?.quantity || it?.count || 0), 0);
-  } catch (e) {
-    return 0;
-  }
+/* ——— лёгкий raw-рендер на случай, если template не найдётся ——— */
+function renderPopularRaw(items = []) {
+  const cont = document.querySelector("#cafe-popular");
+  if (!cont) return;
+  document.querySelector("#cafe-section-popular-title")?.classList.remove("shimmer");
+  cont.classList.remove("shimmer");
+  cont.innerHTML = "";
+  (Array.isArray(items) ? items : []).forEach((it) => {
+    const card = document.createElement("div");
+    card.className = "cafe-item-container";
+    const img = document.createElement("img");
+    img.className = "cafe-item-image";
+    if (it?.image) img.src = it.image;
+    const name = document.createElement("h6");
+    name.className = "cafe-item-name";
+    name.textContent = it?.name ?? "";
+    const d = document.createElement("p");
+    d.className = "small cafe-item-description";
+    d.textContent = it?.description ?? "";
+    card.append(img, name, d);
+    card.addEventListener("click", () => {
+      navigateTo("details", JSON.stringify({ id: it?.id, categoryId: it?.categoryId || undefined }));
+    });
+    cont.append(card);
+  });
 }
 
-// фрагмент в load() главной страницы
-TelegramSDK.hideBackButton();
-// expand() только здесь, один раз
-TelegramSDK.ready?.();
-TelegramSDK.expand?.();
-function readCart() { try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; } }
-function cartCount() { return readCart().reduce((s, x) => s + (x.qty || 0), 0); }
-
-const MB = window.Telegram?.WebApp?.MainButton;
-const count = cartCount();
-
-if (count > 0) {
-  const suffix = count === 1 ? "POSITION" : "POSITIONS";
-  document.body.dataset.mainbutton = "cart";
-  try {
-    MB.setText(`MY CART · ${count} ${suffix}`);
-    MB.onClick(() => navigateTo("cart"));
-    MB.show();
-  } catch {}
-} else {
-  document.body.dataset.mainbutton = "";
-  try { MB.hide(); } catch {}
-}
-
-function refreshMainButton(force = false) {
-  const n = getCartCount();
-  if (n > 0) {
-    document.body.dataset.mainbutton = 'cart'; // наш «умный» хук включится
-    TelegramSDK.showMainButton(`MY CART · ${n}`, () => navigateTo('cart'));
-  } else {
-    document.body.dataset.mainbutton = ''; // хук выключится
-    TelegramSDK.hideMainButton();
-  }
-}
-
-/**
- * Главная страница: инфо о кафе, категории, популярное меню.
- */
 export default class MainPage extends Route {
   constructor() {
     super("root", "/pages/main.html");
   }
 
-  async load(params) {
-    console.log("[MainPage] load", params);
-    TelegramSDK.expand();
+  async load() {
+    // только на главной — скрыть back, показать нормальную анимацию
+    TelegramSDK.hideBackButton();
+    TelegramSDK.ready?.();
+    TelegramSDK.expand?.();
 
-    // ===== основная кнопка (MY CART …) =====
-    const portionCount = Cart.getPortionCount();
-    if (portionCount > 0) {
-      TelegramSDK.showMainButton(
-        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
-        () => navigateTo("cart"),
-      );
-    } else {
-      TelegramSDK.hideMainButton();
-    }
+    this.updateMainButton();
 
-    // параллельно грузим всё с бэка
     await Promise.allSettled([
-      this.#loadCafeInfo(),
-      this.#loadCategories(),
-      this.#loadPopularMenu(),
+      this.loadCafeInfo(),
+      this.loadCategories(),
+      this.loadPopularMenu(), // с фолбэком ниже
     ]);
   }
 
-  // ===== инфо о кафе =====
-  async #loadCafeInfo() {
+  updateMainButton() {
+    const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
+    if (count > 0) {
+      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () => navigateTo("cart"));
+      document.body.dataset.mainbutton = "cart";
+    } else {
+      TelegramSDK.hideMainButton();
+      document.body.dataset.mainbutton = "";
+    }
+  }
+
+  async loadCafeInfo() {
     try {
       const info = await getInfo();
-      console.log("[MainPage] info", info);
-
-      // картинка-обложка
-      if (info?.coverImage) {
-        loadImage($("#cafe-cover"), info.coverImage);
-        $("#cafe-cover").removeClass("shimmer");
-      }
-
-      // логотип (круглый значок справа)
-      if (info?.logoImage) {
-        loadImage($("#cafe-logo"), info.logoImage);
-        $("#cafe-logo").removeClass("shimmer");
-      }
-
-      // название
-      if (info?.name) {
-        $("#cafe-name").text(info.name);
-      }
-
-      // подпись под названием – берём kitchenCategories
-      if (info?.kitchenCategories) {
-        $("#cafe-kitchen-categories").text(info.kitchenCategories);
-      }
-
-      // рейтинг
-      if (info?.rating) {
-        $("#cafe-rating").text(info.rating);
-      }
-
-      // время доставки
-      if (info?.cookingTime) {
-        $("#cafe-cooking-time").text(info.cookingTime);
-      }
-
-      // статус (Open / Closed)
-      if (info?.status) {
-        $("#cafe-status").text(info.status);
-      }
-
-      // убираем скелет-анимацию у блока инфы
-      $("#cafe-info").removeClass("shimmer");
-      $("#cafe-name").removeClass("shimmer");
-      $("#cafe-kitchen-categories").removeClass("shimmer");
-      $(".cafe-parameters-container").removeClass("shimmer");
+      if (info?.coverImage) { loadImage($("#cafe-cover"), info.coverImage); $("#cafe-cover").removeClass("shimmer"); }
+      if (info?.logoImage)  { loadImage($("#cafe-logo"),  info.logoImage);  $("#cafe-logo").removeClass("shimmer"); }
+      if (info?.name) $("#cafe-name").text(info.name);
+      if (info?.kitchenCategories) $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      if (info?.rating) $("#cafe-rating").text(info.rating);
+      if (info?.cookingTime) $("#cafe-cooking-time").text(info.cookingTime);
+      if (info?.status) $("#cafe-status").text(info.status);
+      $("#cafe-info, #cafe-name, #cafe-kitchen-categories, .cafe-parameters-container").removeClass("shimmer");
     } catch (e) {
       console.error("[MainPage] failed to load info", e);
     }
   }
 
-  // ===== категории =====
-  async #loadCategories() {
+  async loadCategories() {
     try {
       const categories = await getCategories();
-      console.log("[MainPage] categories", categories);
-
-      // снимаем shimmer с заголовка
       $("#cafe-section-categories-title").removeClass("shimmer");
-
       replaceShimmerContent(
-        "#cafe-categories",       // контейнер
-        "#cafe-category-template",// <template>
-        "#cafe-category-icon",    // картинка внутри шаблона
-        categories,
-        (template, category) => {
-          template.attr("id", category.id);
-          template.css("background-color", category.backgroundColor || "");
-          template.find("#cafe-category-name").text(category.name ?? "");
-
-          const img = template.find("#cafe-category-icon");
-          if (category.icon) {
-            loadImage(img, category.icon);
-          }
-
-          template.on("click", () => {
-            const params = JSON.stringify({ id: category.id });
-            navigateTo("category", params);
-          });
-        },
+        "#cafe-categories",
+        "#cafe-category-template",
+        "#cafe-category-icon",
+        Array.isArray(categories) ? categories : [],
+        (tpl, category) => {
+          tpl.attr("id", category.id);
+          tpl.css("background-color", category.backgroundColor || "");
+          tpl.find("#cafe-category-name").text(category.name ?? "");
+          const img = tpl.find("#cafe-category-icon");
+          if (category.icon) loadImage(img, category.icon);
+          tpl.on("click", () => navigateTo("category", JSON.stringify({ id: category.id })));
+        }
       );
     } catch (e) {
       console.error("[MainPage] failed to load categories", e);
     }
   }
 
-  // ===== популярное меню =====
-  async #loadPopularMenu() {
+  async loadPopularMenu() {
     try {
       const items = await getPopularMenu();
-      console.log("[MainPage] popular", items);
-
-      // снимаем shimmer с заголовка
       $("#cafe-section-popular-title").removeClass("shimmer");
-
-      replaceShimmerContent(
-        "#cafe-popular",      // контейнер
-        "#cafe-item-template",// <template>
-        "#cafe-item-image",   // картинка внутри шаблона
-        items,
-        (template, item) => {
-          template.find("#cafe-item-name").text(item.name ?? "");
-          template
-            .find("#cafe-item-description")
-            .text(item.description ?? "");
-
-          const img = template.find("#cafe-item-image");
-          if (item.image) {
-            loadImage(img, item.image);
+      // пробуем через template
+      if (document.querySelector("#cafe-item-template")) {
+        replaceShimmerContent(
+          "#cafe-popular",
+          "#cafe-item-template",
+          "#cafe-item-image",
+          Array.isArray(items) ? items : [],
+          (tpl, item) => {
+            tpl.find("#cafe-item-name").text(item?.name ?? "");
+            tpl.find("#cafe-item-description").text(item?.description ?? "");
+            const img = tpl.find("#cafe-item-image");
+            if (item?.image) loadImage(img, item.image);
+            tpl.on("click", () => {
+              navigateTo("details", JSON.stringify({ id: item?.id, categoryId: item?.categoryId || undefined }));
+            });
           }
-
-          template.on("click", () => {
-            const params = JSON.stringify({ id: item.id });
-            navigateTo("details", params);
-          });
-        },
-      );
+        );
+      } else {
+        // безопасный фолбэк
+        renderPopularRaw(items);
+      }
     } catch (e) {
       console.error("[MainPage] failed to load popular menu", e);
+      // ещё один фолбэк — если сеть подвела, покажем пустой блок без шимеров
+      renderPopularRaw([]);
     }
-  }
-
-  #getDisplayPositionCount(count) {
-    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
