@@ -31,7 +31,7 @@ function renderPopularFromCacheIfMainPresent() {
   const cached = getPopularCache();
   if (!Array.isArray(cached) || cached.length === 0) return false;
 
-  // если уже заполнено – не дублируем
+  // уже заполнено — выходим
   if (container.dataset.filled === "1" && container.children.length > 0) return true;
 
   // снять shimmer с заголовка
@@ -67,13 +67,34 @@ function renderPopularFromCacheIfMainPresent() {
 /* === Дождаться появления main.html и дорисовать Popular из кэша === */
 function waitAndRenderPopularFromCache(maxMs = 3000) {
   const start = Date.now();
-  const tryOnce = () => {
+
+  // 1) моментальная попытка на ближайшем тике
+  requestAnimationFrame(() => {
     if (renderPopularFromCacheIfMainPresent()) return;
-    if (Date.now() - start >= maxMs) return;
-    setTimeout(tryOnce, 50);
-  };
-  // на следующем тике, когда роутер успеет подменить DOM
-  requestAnimationFrame(tryOnce);
+
+    // 2) MutationObserver — ждём вставку #cafe-popular
+    const observer = new MutationObserver(() => {
+      if (renderPopularFromCacheIfMainPresent()) {
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 3) таймаут на всякий случай
+    const tick = () => {
+      if (renderPopularFromCacheIfMainPresent()) {
+        observer.disconnect();
+        return;
+      }
+      if (Date.now() - start >= maxMs) {
+        observer.disconnect();
+        return;
+      }
+      setTimeout(tick, 50);
+    };
+    setTimeout(tick, 50);
+  });
 }
 
 /* === Глобальные хуки: при возврате — гарантированно дорисуем Popular из cache === */
@@ -92,8 +113,8 @@ export default class MainPage extends Route {
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
 
-    // мгновенно показать Popular из кэша (если есть),
-    // а если main.html вставится чуточку позже — «страховка» тоже сработает
+    // мгновенно попробовать показать Popular из кэша,
+    // а если DOM вставится позже — сработает waitAndRenderPopularFromCache()
     waitAndRenderPopularFromCache();
 
     // кнопка корзины
@@ -124,26 +145,20 @@ export default class MainPage extends Route {
     try {
       const info = await getInfo();
 
-      // обложка
       if (info?.coverImage) {
         loadImage($("#cafe-cover"), info.coverImage);
         $("#cafe-cover").removeClass("shimmer");
       }
-
-      // логотип
       if (info?.logoImage) {
         loadImage($("#cafe-logo"), info.logoImage);
         $("#cafe-logo").removeClass("shimmer");
       }
-
-      // тексты
       if (info?.name) $("#cafe-name").text(info.name);
       if (info?.kitchenCategories) $("#cafe-kitchen-categories").text(info.kitchenCategories);
       if (info?.rating) $("#cafe-rating").text(info.rating);
       if (info?.cookingTime) $("#cafe-cooking-time").text(info.cookingTime);
       if (info?.status) $("#cafe-status").text(info.status);
 
-      // снять shimmer
       $("#cafe-info, #cafe-name, #cafe-kitchen-categories, .cafe-parameters-container")
         .removeClass("shimmer");
     } catch (e) {
@@ -156,7 +171,6 @@ export default class MainPage extends Route {
     try {
       const categories = await getCategories();
 
-      // снять shimmer с заголовка
       $("#cafe-section-categories-title").removeClass("shimmer");
 
       replaceShimmerContent(
@@ -209,18 +223,15 @@ export default class MainPage extends Route {
       }
     );
 
-    // пометим контейнер как заполненный (для страховочного рендера)
     const container = document.querySelector("#cafe-popular");
     if (container) container.dataset.filled = "1";
   }
 
   /* ----- Popular: загрузка с кэшем ----- */
   async loadPopularMenu() {
-    // A) мгновенно показать из кэша (если уже открывали бота)
     const cached = getPopularCache();
     if (Array.isArray(cached) && cached.length) this.renderPopular(cached);
 
-    // B) обновить данные и перерисовать
     try {
       const items = await getPopularMenu();
       setPopularCache(items);
