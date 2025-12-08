@@ -1,196 +1,141 @@
 // frontend/js/routing/router.js
-import TelegramSDK from "../telegram/telegram.js";
+import Route from "./route.js";
 
-console.log("[ROUTER] v13 loaded");
+// === Страницы (СТАТИЧЕСКИЕ ИМПОРТЫ!) ===
+import MainPage    from "../pages/main.js";
+import CategoryPage from "../pages/category.js";
+import DetailsPage  from "../pages/details.js";
+import CartPage     from "../pages/cart.js";
 
-// Карта маршрутов
-const ROUTES = {
-  main:     { html: "pages/main.html",     module: "../pages/main.js",     inst: null },
-  category: { html: "pages/category.html", module: "../pages/category.js", inst: null },
-  details:  { html: "pages/details.html",  module: "../pages/details.js",  inst: null },
-  cart:     { html: "pages/cart.html",     module: "../pages/cart.js",     inst: null },
-};
+// ==== Настройки путей ====
+const routePaths = new Map([
+  ["main",     "/frontend/pages/main.html"],
+  ["category", "/frontend/pages/category.html"],
+  ["details",  "/frontend/pages/details.html"],
+  ["cart",     "/frontend/pages/cart.html"],
+]);
 
-// Кэш HTML
-const htmlCache = Object.create(null);
-async function getHtml(path) {
-  if (!path) throw new Error("HTML path is undefined");
-  if (htmlCache[path]) return htmlCache[path];
-  const resp = await fetch(path, { cache: "no-cache" });
-  if (!resp.ok) throw new Error(`HTML load failed: ${path}`);
-  const text = await resp.text();
-  htmlCache[path] = text;
-  return text;
+// Алиасы: Telegram иногда присылает route=root
+const ROUTE_ALIASES = new Map([
+  ["root",  "main"],
+  ["home",  "main"],
+  ["index", "main"],
+]);
+
+function normalizeRoute(name) {
+  const r = (name || "main").trim();
+  return ROUTE_ALIASES.get(r) || r;
 }
 
-// Разбор hash
-function parseHash() {
-  const h = location.hash || "";
+// === Роутер ===
+class Router {
+  constructor() {
+    this.pages = {
+      main:     new MainPage(),
+      category: new CategoryPage(),
+      details:  new DetailsPage(),
+      cart:     new CartPage(),
+    };
 
-  // "#/dest?..."
-  let m = h.match(/^#\/([^?]+)(?:\?(.*))?$/);
-  if (m) {
-    const dest = decodeURIComponent(m[1] || "main");
-    const sp = new URLSearchParams(m[2] || "");
-    let p = sp.get("p");
-    if (p) { try { p = JSON.parse(decodeURIComponent(p)); } catch { p = null; } }
-    else p = null;
-    return { dest, params: p };
+    this.$current = $("#page-current");
+    this.$next    = $("#page-next");
+
+    // popstate (стрелка «Назад» браузера / Telegram back)
+    window.addEventListener("popstate", () => {
+      const { route, params } = this._readState();
+      this._load(route, params, { animate: true, push: false });
+    });
+
+    console.log("[ROUTER] v10 loaded");
   }
 
-  // "#/?dest=...&params=..."
-  const q = h.includes("?") ? h.slice(h.indexOf("?") + 1) : "";
-  const sp = new URLSearchParams(q);
-  const dest = sp.get("dest") || "main";
-  let p = sp.get("params");
-  if (p) { try { p = JSON.parse(decodeURIComponent(p)); } catch { p = null; } }
-  else p = null;
-  return { dest, params: p };
-}
-
-// Универсальная загрузка инстанса страницы
-async function loadPageInstance(modulePath) {
-  const sep = modulePath.includes("?") ? "&" : "?";
-  const url = `${modulePath}${sep}v=${Date.now()}`; // cache-buster
-
-  const mod = await import(url);
-
-  // Собираем все потенциальные кандидаты
-  const candPool = new Set();
-
-  function pushIf(v) { if (v != null) candPool.add(v); }
-
-  pushIf(mod.Page);
-  pushIf(mod.default);
-  pushIf(mod.createPage);
-
-  // все named-экспорты
-  Object.values(mod).forEach(pushIf);
-  // вложенные внутри default
-  if (mod.default && typeof mod.default === "object") {
-    Object.values(mod.default).forEach(pushIf);
+  start() {
+    const { route, params } = this._readState();
+    this._load(route, params, { animate: false, push: false });
   }
 
-  // Функция проверки/создания инстанса
-  const tryMake = (x) => {
-    // объект с load()
-    if (x && typeof x === "object" && typeof x.load === "function") return x;
+  navigateTo(route, params = {}) {
+    const normalized = normalizeRoute(route);
+    this._load(normalized, params, { animate: true, push: true });
+  }
 
-    // класс/функция с прототипом load()
-    if (typeof x === "function") {
-      // 1) если прототип уже содержит load — это то, что надо
-      if (x.prototype && typeof x.prototype.load === "function") {
-        try { return new x(); } catch {}
-      }
-      // 2) фабрика — попробуем вызвать без аргументов
-      try {
-        const r = x();
-        if (r && typeof r.load === "function") return r;
-      } catch {}
+  _readState() {
+    const url = new URL(window.location.href);
+    const queryRoute = url.searchParams.get("route");
+    const route = normalizeRoute(
+      (history.state && history.state.route) || queryRoute || "main"
+    );
+    const params = (history.state && history.state.params) || {};
+    if (!routePaths.has(route)) {
+      console.warn("[ROUTER] Unknown route -> fallback main:", route);
+      return { route: "main", params: {} };
     }
-    return null;
-  };
-
-  // Приоритет: Page, default, всё остальное
-  const ordered = [];
-  if (mod.Page) ordered.push(mod.Page);
-  if (mod.default) ordered.push(mod.default);
-  candPool.forEach(v => { if (!ordered.includes(v)) ordered.push(v); });
-
-  for (const c of ordered) {
-    const inst = tryMake(c);
-    if (inst) return inst;
+    return { route, params };
   }
 
-  console.warn("[Router] Could not resolve Page from module, using Noop:", mod);
-  return { async load() {} }; // безопасная заглушка
-}
+  async _load(route, params, { animate, push }) {
+    const path = routePaths.get(route);
+    const Page = this.pages[route];
 
-// Ленивая инициализация
-async function ensureInstance(name) {
-  const meta = ROUTES[name];
-  if (!meta) return null;
-  if (meta.inst) return meta.inst;
-  meta.inst = await loadPageInstance(meta.module);
-  return meta.inst;
-}
+    // 1) Подготовка контейнера next: грузим HTML шаблон страницы
+    this.$next.html(await this._fetchHtml(path)).show();
+    this.$current.show();
 
-// Рендер
-async function render(name, params) {
-  const meta = ROUTES[name];
-  if (!meta) throw new Error(`Route meta not found: ${name}`);
-
-  const curr = document.getElementById("page-current");
-  const next = document.getElementById("page-next");
-
-  const html = await getHtml(meta.html);
-  next.innerHTML = html;
-
-  next.style.display = "";
-  curr.style.display = "none";
-
-  // swap id
-  curr.id = "page-next";
-  next.id = "page-current";
-
-  // восстановить page-next, если вдруг пропал
-  if (!document.getElementById("page-next")) {
-    const d = document.createElement("div");
-    d.id = "page-next";
-    d.className = "page";
-    d.style.display = "none";
-    (document.getElementById("content") || document.body).appendChild(d);
-  }
-
-  const page = await ensureInstance(name);
-  if (page && typeof page.load === "function") {
-    await page.load(params || null);
-  }
-}
-
-// Навигация
-export function navigateTo(dest, params = null) {
-  let hash = `#/${encodeURIComponent(dest)}`;
-  if (params) {
-    try { hash += `?p=${encodeURIComponent(JSON.stringify(params))}`; } catch {}
-  }
-  if (location.hash === hash) handleLocation();
-  else location.hash = hash;
-}
-
-// Обработчик переходов
-export async function handleLocation() {
-  try {
-    const { dest, params } = parseHash();
-    const name = dest || "main";
-
-    if (!ROUTES[name]) {
-      console.warn("[Router] Unknown route → fallback main:", name);
-      return navigateTo("main");
+    // 2) Анимация смены страниц
+    if (animate) {
+      await this._animateSwap();
+    } else {
+      // без анимации — просто заменить
+      this.$current.html(this.$next.html());
+      this.$next.hide().empty();
     }
 
-    TelegramSDK.ready?.();
-    TelegramSDK.expand?.();
-    TelegramSDK.hideMainButton?.();
-    TelegramSDK.hideSecondaryButton?.();
+    // 3) История
+    if (push) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("route", route);
+      history.pushState({ route, params }, "", url);
+    } else {
+      // при первой загрузке корректируем state, чтобы back работал
+      const url = new URL(window.location.href);
+      url.searchParams.set("route", route);
+      history.replaceState({ route, params }, "", url);
+    }
 
-    await render(name, params);
-  } catch (e) {
-    console.error("[Router] handleLocation error:", e);
+    // 4) Вызов логики страницы
+    try {
+      await Page.load(params || {});
+    } catch (e) {
+      console.error("[ROUTER] page load error:", e);
+    }
+  }
+
+  async _fetchHtml(path) {
+    const res = await fetch(path, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Failed to fetch page: ${path}`);
+    return await res.text();
+  }
+
+  _animateSwap() {
+    // классическая анимация «свайпом»
+    return new Promise((resolve) => {
+      const duration = 220;
+
+      this.$next.css({ x: "100%", opacity: 1, display: "block" });
+      this.$current.css({ x: "0%",   opacity: 1, display: "block" });
+
+      this.$next.transition({ x: "0%" }, duration, "easeOutCubic");
+      this.$current
+        .transition({ x: "-30%", opacity: 0.3 }, duration, "easeOutCubic", () => {
+          this.$current.html(this.$next.html()).css({ x: "0%", opacity: 1 });
+          this.$next.hide().empty().css({ x: "100%", opacity: 1 });
+          resolve();
+        });
+    });
   }
 }
 
-// Старт
-export function bootRouter() {
-  if (!location.hash || location.hash === "#/" || location.hash === "#") {
-    navigateTo("main");
-  } else {
-    handleLocation();
-  }
-}
-
-window.navigateTo = navigateTo;
-window.handleLocation = handleLocation;
-window.bootRouter   = bootRouter;
-
-export default { navigateTo, handleLocation, bootRouter };
+// === Синглтон роутера и экспорт хелперов ===
+export const router = new Router();
+export const navigateTo = (route, params) => router.navigateTo(route, params);
+export default Router;
