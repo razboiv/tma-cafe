@@ -1,9 +1,10 @@
 // frontend/js/pages/category.js
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
+import { getMenuCategory } from "../requests/requests.js"; // ВАЖНО: правильное имя экспорта
 import TelegramSDK from "../telegram/telegram.js";
-import { loadImage, replaceShimmerContent } from "../utils/dom.js";
-import { getMenuByCategory } from "../requests/requests.js"; // если у тебя иначе — оставь свой импорт
+import { replaceShimmerContent, loadImage } from "../utils/dom.js";
+import { Cart } from "../cart/cart.js";
 
 export default class CategoryPage extends Route {
   constructor() {
@@ -12,28 +13,30 @@ export default class CategoryPage extends Route {
   }
 
   _onBack() {
-    // системный back с анимацией
+    // системный back с анимацией роутера
     window.history.back();
   }
 
   async load(params) {
-    // включаем системную кнопку Назад (стрелка в хедере Telegram)
+    // включаем кнопку «Назад» Telegram
     TelegramSDK.showBackButton(this._onBack);
+    TelegramSDK.ready?.();
+    TelegramSDK.expand?.();
 
-    const { id: categoryId } = (params ? JSON.parse(params) : {});
-    if (!categoryId) {
-      // если вдруг зашли без id — просто вернёмся на главную
-      return this._onBack();
-    }
+    // обновить кнопку корзины
+    this.updateMainButton();
+
+    const { id: categoryId } = params ? JSON.parse(params) : {};
+    if (!categoryId) return this._onBack();
 
     try {
-      const items = await getMenuByCategory(categoryId);
+      const items = await getMenuCategory(categoryId);
 
-      // рендерим карточки категории (id-ы соответствуют твоей разметке)
+      // если в category.html у тебя другие id — замени селекторы ниже
       replaceShimmerContent(
-        "#category-items",
-        "#category-item-template",
-        "#category-item-image",
+        "#category-items",          // контейнер
+        "#category-item-template",  // <template>
+        "#category-item-image",     // id картинки внутри шаблона
         Array.isArray(items) ? items : [],
         (tpl, item) => {
           tpl.find("#category-item-name").text(item?.name ?? "");
@@ -41,10 +44,9 @@ export default class CategoryPage extends Route {
           const img = tpl.find("#category-item-image");
           if (item?.image) loadImage(img, item.image);
 
-          // ВАЖНО: передаём categoryId, чтобы из details вернуться сюда же
+          // Пробрасываем categoryId, чтобы из деталей вернуться в ту же категорию
           tpl.on("click", () => {
-            const p = JSON.stringify({ id: item?.id, categoryId });
-            navigateTo("details", p);
+            navigateTo("details", JSON.stringify({ id: item?.id, categoryId }));
           });
         }
       );
@@ -53,9 +55,19 @@ export default class CategoryPage extends Route {
     }
   }
 
-  // на выходе со страницы убираем кнопку Назад
   destroy() {
     try { TelegramSDK.hideBackButton(); } catch {}
     try { TelegramSDK.offBackButton?.(this._onBack); } catch {}
+  }
+
+  updateMainButton() {
+    const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
+    if (count > 0) {
+      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () => navigateTo("cart"));
+      document.body.dataset.mainbutton = "cart";
+    } else {
+      TelegramSDK.hideMainButton();
+      document.body.dataset.mainbutton = "";
+    }
   }
 }
