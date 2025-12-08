@@ -14,28 +14,44 @@ export default class CategoryPage extends Route {
   async load(params) {
     console.log("[CategoryPage] load", params);
     TelegramSDK.expand();
-
     this.updateMainButton();
 
-    const categoryId = params && typeof params === "object" ? params.id : null;
-    if (!categoryId) {
+    // --- 1) безопасно распарсим то, что пришло из роутера ---
+    let p = {};
+    try {
+      p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {});
+    } catch (_) {
+      p = params || {};
+    }
+
+    // --- 2) поддерживаем id / categoryId / slug ---
+    const categoryId = p.categoryId || p.id || p.slug;
+
+    // --- 3) валидация ---
+    if (!categoryId || typeof categoryId !== "string") {
       console.error("[CategoryPage] no valid id in params:", params);
+      navigateTo("root");
       return;
     }
 
+    // --- 4) загрузка и рендер ---
     const items = await getMenuCategory(categoryId);
-    const html = (items || []).map(i => `
+    const html = (items || [])
+      .map(
+        (i) => `
       <div class="menu-card" data-item-id="${i.id}">
         <div class="menu-card__cover"><img src="${i.photo || ""}" alt=""></div>
         <div class="menu-card__title">${i.name || ""}</div>
         <div class="menu-card__subtitle">${i.short || ""}</div>
-      </div>
-    `).join("");
+      </div>`
+      )
+      .join("");
     replaceShimmerContent("#category-list", html);
 
-    document.querySelectorAll("[data-item-id]").forEach($el => {
+    // --- 5) переход на детали, пробрасываем и categoryId ---
+    document.querySelectorAll("[data-item-id]").forEach(($el) => {
       $el.addEventListener("click", () =>
-        navigateTo("details", { id: $el.getAttribute("data-item-id") })
+        navigateTo("details", { id: $el.getAttribute("data-item-id"), categoryId })
       );
     });
   }
@@ -43,9 +59,8 @@ export default class CategoryPage extends Route {
   updateMainButton() {
     const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
     if (count > 0) {
-      TelegramSDK.showMainButton(
-        `MY CART · ${count} POSITIONS`,
-        () => navigateTo("cart")
+      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () =>
+        navigateTo("cart")
       );
       document.body.dataset.mainbutton = "cart";
     } else {
