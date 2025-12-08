@@ -1,177 +1,172 @@
-/* frontend/js/routing/router.js
- * Универсальный роутер для Telegram WebApp.
- * Не делает предположений о названии экспортов страниц.
- */
+// frontend/js/routing/router.js
 
-const log = (...a) => console.log("[ROUTER]", ...a);
+import TelegramSDK from "../telegram/telegram.js";
 
-// ---- Карта маршрутов -> динамические импорты страниц ----
-const ROUTES = {
-  main:      () => import("../pages/main.js"),
-  category:  () => import("../pages/category.js"),
-  details:   () => import("../pages/details.js"),
-  // при необходимости можно добавить cart: () => import("../pages/cart.js"),
+console.log("[ROUTER] v13 loaded");
+
+// ---- карта лениво подгружаемых страниц ----
+const PAGES = {
+  main:     () => import("../pages/main.js?v=13"),
+  category: () => import("../pages/category.js?v=13"),
+  details:  () => import("../pages/details.js?v=13"),
+  cart:     () => import("../pages/cart.js?v=13"),
 };
 
-// ---- утилиты для поиска «класса/экземпляра страницы» в модуле ----
-function pickPageCtorOrInstance(mod, wantedName) {
-  if (!mod) return null;
-
-  // 1) самый частый случай — default
-  if (mod.default) return mod.default;
-
-  // 2) типичные именованные варианты
-  const candidatesByName = [
-    "Page",
-    "MainPage",
-    "CategoryPage",
-    "DetailsPage",
-    wantedName && (wantedName[0].toUpperCase() + wantedName.slice(1) + "Page"),
-  ].filter(Boolean);
-
-  for (const k of candidatesByName) {
-    if (mod[k]) return mod[k];
-  }
-
-  // 3) fallback — первая функция из экспортов
-  const anyFn = Object.values(mod).find(v => typeof v === "function");
-  if (anyFn) return anyFn;
-
-  // 4) крайний случай — если экспортирован объект со .load
-  const anyObjWithLoad = Object.values(mod).find(
-    v => v && typeof v === "object" && typeof v.load === "function"
-  );
-  if (anyObjWithLoad) return anyObjWithLoad;
-
-  return null;
-}
-
-function asInstance(value) {
+// ---- утилиты распознавания экспорта страницы ----
+function resolveCtorOrInstance(mod, nameHint) {
   try {
-    // если это класс/функция-конструктор — создать экземпляр
-    if (typeof value === "function") {
-      // если у прототипа есть load/unload — это «страничный класс»
-      if (value.prototype && (value.prototype.load || value.prototype.unload)) {
-        return new value();
-      }
-      // а вдруг это фабрика, возвращающая объект страницы
-      const produced = value();
-      if (produced) return produced;
+    // 1) default экспорт (класс или инстанс)
+    if (mod && "default" in mod && mod.default) {
+      const d = mod.default;
+      if (typeof d === "function") return d;      // класс/фабрика
+      if (typeof d === "object")   return d;      // готовый инстанс
     }
-    // если это уже объект — вернуть как есть
-    if (value && typeof value === "object") return value;
-  } catch (_) {}
-  return null;
+
+    // 2) набор распространённых имён классов/инстансов
+    const title = nameHint ? nameHint[0].toUpperCase() + nameHint.slice(1) : null;
+    const candidates = [
+      "Page",
+      "MainPage",
+      "CategoryPage",
+      "DetailsPage",
+      "CartPage",
+      title && `${title}Page`,
+    ].filter(Boolean);
+
+    for (const key of candidates) {
+      const v = mod[key];
+      if (typeof v === "function") return v;
+      if (v && typeof v === "object") return v;
+    }
+
+    // 3) модуль экспортирует только функции жизненного цикла (load/unload)
+    if (typeof mod.load === "function") {
+      return {
+        load:    (...args) => mod.load(...args),
+        unload:  typeof mod.unload === "function" ? (...a) => mod.unload(...a) : undefined,
+      };
+    }
+
+    // 4) взять первый “вменяемый” экспорт (класс/функция/объект c load)
+    for (const [k, v] of Object.entries(mod)) {
+      if (typeof v === "function") return v;
+      if (v && typeof v === "object" && typeof v.load === "function") return v;
+    }
+  } catch (e) {
+    console.warn("[ROUTER] resolve error:", e);
+  }
+
+  console.warn("[ROUTER] Could not resolve Page from module, using Noop:", mod);
+  return { load() {} }; // безопасный no-op инстанс
 }
 
-// ---- Router ----
+function asInstance(ctorOrObj, params) {
+  if (typeof ctorOrObj === "function") {
+    // это класс или фабрика
+    try {
+      return new ctorOrObj(params);
+    } catch {
+      const maybeObj = ctorOrObj(params);
+      if (maybeObj && typeof maybeObj === "object") return maybeObj;
+      // если это была просто функция без возврата — вернём заглушку
+      return { load() {} };
+    }
+  }
+  return ctorOrObj || { load() {} };
+}
+
+// ---- сам роутер ----
 class Router {
-  constructor(startRoute = "main") {
-    this.history = [];
+  constructor() {
+    this.stack = []; // { name, page }
     this.current = null;
-    this.startRoute = startRoute;
 
-    this._onBack = this._onBack.bind(this);
-    this._tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || null;
-
-    if (this._tg) {
-      // слушаем аппаратную back-кнопку
-      this._tg.onEvent("back_button_pressed", this._onBack);
-      this._tg.BackButton.hide(); // спрячем — будем сами показывать когда есть куда вернуться
-    }
+    // обработчик системной “назад”
+    TelegramSDK.onBackButton(() => this.back());
   }
 
-  async start(params = null) {
-    log("v13 loaded");
-    await this.go(this.startRoute, params, { replace: true });
-  }
-
-  async go(name, params = null, { replace = false } = {}) {
-    const loader = ROUTES[name] || ROUTES.main;
+  async loadModule(name) {
+    const loader = PAGES[name] || PAGES.main; // fallback
     const mod = await loader();
+    // небольшая подсказка в логи — какие ключи есть у модуля
+    try {
+      console.debug(`[ROUTER] module '${name}' keys:`, Object.keys(mod));
+    } catch {}
+    return mod;
+  }
 
-    const exported = pickPageCtorOrInstance(mod, name);
-    if (!exported) {
-      throw new Error(`[ROUTER] Cannot resolve page class from module (${name})`);
+  async go(name, params = {}) {
+    // выгрузим текущую
+    if (this.current?.page?.unload) {
+      try { await this.current.page.unload(); } catch (e) { console.warn(e); }
     }
 
-    const page = asInstance(exported) || exported; // на случай, если это объект с .load
-    // выгрузим предыдущую страницу
-    if (this.current && this.current.instance && typeof this.current.instance.unload === "function") {
-      try { await this.current.instance.unload(); } catch (_) {}
-    }
+    const mod = await this.loadModule(name);
+    const ctorOrInstance = resolveCtorOrInstance(mod, name);
+    const page = asInstance(ctorOrInstance, params);
 
-    this.current = { name, instance: page, params };
-    // обновим историю
-    if (replace && this.history.length) {
-      this.history[this.history.length - 1] = { name, params };
-    } else if (!replace) {
-      this.history.push({ name, params });
+    this.current = { name, page };
+    this.stack.push(this.current);
+
+    // показать/скрыть back в зависимости от глубины
+    TelegramSDK.showBackButton(this.stack.length > 1);
+
+    // плавная прокрутка к началу, чтоб не “прыгало”
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+
+    // загрузка страницы
+    if (typeof page.load === "function") {
+      await page.load(params);
     } else {
-      this.history = [{ name, params }];
+      console.warn(`[ROUTER] page '${name}' has no load()`);
     }
-
-    // показать back кнопку, если есть куда вернуться
-    if (this._tg) {
-      if (this.history.length > 1) this._tg.BackButton.show();
-      else this._tg.BackButton.hide();
-    }
-
-    // вызовем загрузку страницы
-    if (page && typeof page.load === "function") {
-      await page.load(params ?? null);
-    }
-
-    // плавная анимация (чуть-чуть «дышим» после рендера)
-    requestAnimationFrame(() => {
-      document.documentElement.style.scrollBehavior = "smooth";
-      setTimeout(() => (document.documentElement.style.scrollBehavior = ""), 120);
-    });
   }
 
   async back() {
-    if (this.history.length <= 1) return; // некуда
-    // снимаем верхнюю
-    this.history.pop();
-    const prev = this.history[this.history.length - 1];
-    await this.go(prev.name, prev.params, { replace: true });
-  }
+    if (this.stack.length <= 1) {
+      TelegramSDK.showBackButton(false);
+      return; // корень — нечего назад
+    }
 
-  async _onBack() {
-    await this.back();
-  }
+    // убрать текущую
+    const current = this.stack.pop();
+    if (current?.page?.unload) {
+      try { await current.page.unload(); } catch (e) { console.warn(e); }
+    }
 
-  destroy() {
-    if (this._tg) {
-      try {
-        this._tg.offEvent("back_button_pressed", this._onBack);
-        this._tg.BackButton.hide();
-      } catch (_) {}
+    const prev = this.stack[this.stack.length - 1];
+    this.current = prev;
+    TelegramSDK.showBackButton(this.stack.length > 1);
+
+    // перерисовать предыдущую (без повторной загрузки модуля)
+    if (prev?.page?.load) {
+      await prev.page.load(prev.params || {});
     }
   }
+
+  // стартует приложение
+  async start(startName = "main", params = {}) {
+    await this.go(startName, params);
+  }
 }
 
-let _router = null;
+// ---- синглтон + API, которое ждут остальные файлы ----
+let _router;
 
-// ---- Публичный API (как у тебя в проекте) ----
-export function navigateTo(name, params = null) {
-  if (_router) return _router.go(name, params);
+export function bootRouter(start = "main", params = {}) {
+  if (!_router) _router = new Router();
+  _router.start(start, params);
+  return _router;
 }
 
-export function goBack() {
-  if (_router) return _router.back();
+export function navigateTo(name, params = {}) {
+  if (!_router) bootRouter();
+  return _router.go(name, params);
 }
 
-export function bootRouter(start = "main", params = null) {
-  if (_router) _router.destroy();
-  _router = new Router(start);
-  return _router.start(params);
+export function handleLocation(name = "main", params = {}) {
+  // совместимость со старым index.js
+  return navigateTo(name, params);
 }
 
-// Совместимость со старым index.js, который ожидает handleLocation()
-export function handleLocation() {
-  return bootRouter();
-}
-
-// На всякий случай экспортируем Router (может пригодиться)
-export { Router };
+export default Router;
