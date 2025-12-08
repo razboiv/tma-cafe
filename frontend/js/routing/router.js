@@ -151,3 +151,9 @@ export function bootRouter() {
 
 export const navigateTo = (route, params) => router.navigateTo(route, params);
 export default Router;
+
+// --- совместимость со старым index.js ---
+export function handleLocation() {
+  // старый код вызывал её на старте — делаем то же самое
+  return bootRouter();
+}
