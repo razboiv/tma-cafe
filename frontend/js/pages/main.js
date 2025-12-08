@@ -11,8 +11,14 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-// простой кэш, живёт пока открыт WebView
+// кэш популярного меню на время жизни WebView
 window.__POPULAR_CACHE__ = window.__POPULAR_CACHE__ || null;
+
+// helper: "1 POSITION" / "N POSITIONS" (вместо приватного #getDisplayPositionCount)
+function getDisplayPositionCount(count) {
+  count = Number(count) || 0;
+  return count === 1 ? "1 POSITION" : `${count} POSITIONS`;
+}
 
 // ---- MainButton logic for "MY CART" ----
 const MB_REFRESH_MS = 700;
@@ -26,7 +32,6 @@ function getCartCount() {
   }
 }
 
-// фрагмент в load() главной страницы
 function readCart() { try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; } }
 function cartCount() { return readCart().reduce((s, x) => s + (x.qty || 0), 0); }
 
@@ -49,10 +54,10 @@ if (count > 0) {
 function refreshMainButton(force = false) {
   const n = getCartCount();
   if (n > 0) {
-    document.body.dataset.mainbutton = 'cart'; // наш «умный» хук включится
-    TelegramSDK.showMainButton(`MY CART · ${n}`, () => navigateTo('cart'));
+    document.body.dataset.mainbutton = "cart";
+    TelegramSDK.showMainButton(`MY CART · ${n}`, () => navigateTo("cart"));
   } else {
-    document.body.dataset.mainbutton = ''; // хук выключится
+    document.body.dataset.mainbutton = "";
     TelegramSDK.hideMainButton();
   }
 }
@@ -66,17 +71,18 @@ export default class MainPage extends Route {
   }
 
   async load(params) {
+    // важное: системные кнопки/expand — только на главной
     TelegramSDK.hideBackButton();
-    // expand() только здесь, один раз
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
+
     console.log("[MainPage] load", params);
 
     // ===== основная кнопка (MY CART …) =====
-    const portionCount = Cart.getPortionCount();
+    const portionCount = Cart.getPortionCount ? Cart.getPortionCount() : getCartCount();
     if (portionCount > 0) {
       TelegramSDK.showMainButton(
-        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        `MY CART · ${getDisplayPositionCount(portionCount)}`,
         () => navigateTo("cart"),
       );
     } else {
@@ -85,14 +91,14 @@ export default class MainPage extends Route {
 
     // параллельно грузим всё с бэка
     await Promise.allSettled([
-      this.#loadCafeInfo(),
-      this.#loadCategories(),
-      this.#loadPopularMenu(),
+      this.loadCafeInfo(),
+      this.loadCategories(),
+      this.loadPopularMenu(), // с кэшем
     ]);
   }
 
   // ===== инфо о кафе =====
-  async #loadCafeInfo() {
+  async loadCafeInfo() {
     try {
       const info = await getInfo();
       console.log("[MainPage] info", info);
@@ -145,7 +151,7 @@ export default class MainPage extends Route {
   }
 
   // ===== категории =====
-  async #loadCategories() {
+  async loadCategories() {
     try {
       const categories = await getCategories();
       console.log("[MainPage] categories", categories);
@@ -154,9 +160,9 @@ export default class MainPage extends Route {
       $("#cafe-section-categories-title").removeClass("shimmer");
 
       replaceShimmerContent(
-        "#cafe-categories",       // контейнер
-        "#cafe-category-template",// <template>
-        "#cafe-category-icon",    // картинка внутри шаблона
+        "#cafe-categories",        // контейнер
+        "#cafe-category-template", // <template>
+        "#cafe-category-icon",     // картинка внутри шаблона
         categories,
         (template, category) => {
           template.attr("id", category.id);
@@ -179,52 +185,50 @@ export default class MainPage extends Route {
     }
   }
 
-// ===== популярное меню (с кэшем) =====
-async #loadPopularMenu() {
-  // отрисовка (общая функция, используем и для кэша, и для свежих данных)
-  const render = (items) => {
-    // сняли shimmer с заголовка
-    $("#cafe-section-popular-title").removeClass("shimmer");
+  // ===== популярное меню (с кэшем) =====
+  async loadPopularMenu() {
+    // общая отрисовка (используем и для кэша, и для свежих данных)
+    const render = (items) => {
+      $("#cafe-section-popular-title").removeClass("shimmer");
 
-    replaceShimmerContent(
-      "#cafe-popular",          // контейнер
-      "#cafe-item-template",    // <template>
-      "#cafe-item-image",       // картинка внутри шаблона
-      Array.isArray(items) ? items : [],
-      (template, item) => {
-        template.find("#cafe-item-name").text(item.name ?? "");
-        template.find("#cafe-item-description").text(item.description ?? "");
+      replaceShimmerContent(
+        "#cafe-popular",          // контейнер
+        "#cafe-item-template",    // <template>
+        "#cafe-item-image",       // картинка внутри шаблона
+        Array.isArray(items) ? items : [],
+        (template, item) => {
+          template.find("#cafe-item-name").text(item.name ?? "");
+          template.find("#cafe-item-description").text(item.description ?? "");
 
-        const img = template.find("#cafe-item-image");
-        if (item.image) {
-          // твоя утилита для плавной загрузки
-          loadImage(img, item.image);
-        }
+          const img = template.find("#cafe-item-image");
+          if (item.image) {
+            loadImage(img, item.image);
+          }
 
-        template.on("click", () => {
-          // передаём id, можно добавить origin categoryId если есть
-          const params = JSON.stringify({
-            id: item.id,
-            categoryId: item.categoryId || undefined,
+          template.on("click", () => {
+            const params = JSON.stringify({
+              id: item.id,
+              categoryId: item.categoryId || undefined,
+            });
+            navigateTo("details", params);
           });
-          navigateTo("details", params);
-        });
+        }
+      );
+    };
+
+    try {
+      // 0) если есть кэш — показать сразу
+      if (Array.isArray(window.__POPULAR_CACHE__) && window.__POPULAR_CACHE__.length) {
+        render(window.__POPULAR_CACHE__);
       }
-    );
-  };
 
-  try {
-    // 0) если есть кэш — показать СРАЗУ (без скелетонов и ожиданий)
-    if (Array.isArray(window.__POPULAR_CACHE__) && window.__POPULAR_CACHE__.length) {
-      render(window.__POPULAR_CACHE__);
+      // 1) получить свежие данные и перерисовать
+      const items = await getPopularMenu();
+      window.__POPULAR_CACHE__ = items;
+      render(items);
+
+    } catch (e) {
+      console.error("[MainPage] failed to load popular menu", e);
     }
-
-    // 1) получить свежие данные и перерисовать
-    const items = await getPopularMenu();
-    window.__POPULAR_CACHE__ = items;
-    render(items);
-
-  } catch (e) {
-    console.error("[MainPage] failed to load popular menu", e);
   }
 }
