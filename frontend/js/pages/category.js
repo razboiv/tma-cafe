@@ -1,5 +1,4 @@
 // frontend/js/pages/category.js
-
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
@@ -7,48 +6,16 @@ import TelegramSDK from "../telegram/telegram.js";
 import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-/**
- * Страница категории: список блюд из выбранной категории.
- * Разметка из /frontend/pages/category.html:
- *  - контейнер:   #cafe-category
- *  - <template>:  #cafe-item-template
- *  - картинка:    #cafe-item-image
- */
 export default class CategoryPage extends Route {
   constructor() {
     super("category", "/pages/category.html");
+    this._onBack = this._onBack.bind(this);
   }
 
-  async load(params) {
-    // Кнопка «Назад» — всегда на главную
-    TelegramSDK.showBackButton(() => navigateTo("root"));
-
-    // Счётчик корзины в главной кнопке
-    const count = this.#cartCount();
-    if (count > 0) {
-      TelegramSDK.showMainButton(
-        `MY CART · ${this.#formatPositions(count)}`,
-        () => navigateTo("cart")
-      );
-    } else {
-      TelegramSDK.hideMainButton();
-    }
-
-    // Загрузка меню выбранной категории
-    try {
-      const categoryId = params ? JSON.parse(params).id : null;
-      if (!categoryId) {
-        console.error("[CategoryPage] categoryId is empty in params:", params);
-        return;
-      }
-      const items = await getMenuCategory(categoryId);
-      this.#fillMenu(items, categoryId);
-    } catch (e) {
-      console.error("[CategoryPage] failed to load category menu:", e);
-    }
+  _onBack() {
+    window.history.back();
   }
 
-  // Кол-во позиций в корзине
   #cartCount() {
     try {
       const items = (Cart.getItems && Cart.getItems()) || [];
@@ -56,29 +23,59 @@ export default class CategoryPage extends Route {
     } catch { return 0; }
   }
 
-  // Рендер карточек: меняем shimmer на данные
-  #fillMenu(items, categoryId) {
-    replaceShimmerContent(
-      "#cafe-category",        // контейнер
-      "#cafe-item-template",   // <template>
-      "#cafe-item-image",      // картинка внутри шаблона
-      items,
-      (template, item) => {
-        template.find("#cafe-item-name").text(item.name ?? "");
-        template.find("#cafe-item-description").text(item.description ?? "");
-        const img = template.find("#cafe-item-image");
-        if (img && item.image) img.attr("src", item.image);
+  async load(params) {
+    TelegramSDK.showBackButton(this._onBack);
+    TelegramSDK.ready?.();
+    TelegramSDK.expand?.();
 
-        // переход на страницу товара
-        template.on("click", () => {
-          const p = JSON.stringify({ id: item.id, categoryId });
-          navigateTo("details", p);
-        });
-      }
-    );
+    // main button (корзина)
+    const count = this.#cartCount();
+    if (count > 0) {
+      TelegramSDK.showMainButton(`MY CART · ${count === 1 ? "1 POSITION" : `${count} POSITIONS`}`, () => navigateTo("cart"));
+      document.body.dataset.mainbutton = "cart";
+    } else {
+      TelegramSDK.hideMainButton();
+      document.body.dataset.mainbutton = "";
+    }
+
+    // === ключевое: снимаем shimmer до рендера ===
+    const $container = $("#cafe-category");
+    $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
+
+    try {
+      const categoryId = params ? JSON.parse(params).id : null;
+      if (!categoryId) return this._onBack();
+
+      const items = await getMenuCategory(categoryId);
+
+      replaceShimmerContent(
+        "#cafe-category",        // контейнер
+        "#cafe-item-template",   // template
+        "#cafe-item-image",      // img в шаблоне
+        Array.isArray(items) ? items : [],
+        (tpl, item) => {
+          tpl.find("#cafe-item-name").text(item?.name ?? "");
+          tpl.find("#cafe-item-description").text(item?.description ?? "");
+          const img = tpl.find("#cafe-item-image");
+          if (img && item?.image) img.attr("src", item.image);
+
+          tpl.on("click", () => {
+            navigateTo("details", JSON.stringify({ id: item?.id, categoryId }));
+          });
+        }
+      );
+
+      // и после — на всякий случай ещё раз
+      $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
+    } catch (e) {
+      console.error("[CategoryPage] failed to load category menu:", e);
+      // на фейле тоже уберём скелетон, чтобы не висел серым
+      $container.removeClass("shimmer").find(".shimmer").removeClass("shimmer");
+    }
   }
 
-  #formatPositions(n) {
-    return n === 1 ? `${n} POSITION` : `${n} POSITIONS`;
+  destroy() {
+    try { TelegramSDK.hideBackButton(); } catch {}
+    try { TelegramSDK.offBackButton?.(this._onBack); } catch {}
   }
 }
