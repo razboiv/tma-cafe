@@ -23,16 +23,16 @@ function pluralizePositions(n) {
   return n === 1 ? "1 POSITION" : `${n} POSITIONS`;
 }
 
-/* === «Страховочный» рендер Popular из кэша (вне класса) === */
+/* === Рендер Popular из кэша (возвращает true, если отрисовали) === */
 function renderPopularFromCacheIfMainPresent() {
   const container = document.querySelector("#cafe-popular");
-  if (!container) return;
+  if (!container) return false;
 
   const cached = getPopularCache();
-  if (!Array.isArray(cached) || cached.length === 0) return;
+  if (!Array.isArray(cached) || cached.length === 0) return false;
 
-  // если уже заполнено – выходим (чтобы не дублировать)
-  if (container.dataset.filled === "1" && container.children.length > 0) return;
+  // если уже заполнено – не дублируем
+  if (container.dataset.filled === "1" && container.children.length > 0) return true;
 
   // снять shimmer с заголовка
   const title = document.querySelector("#cafe-section-popular-title");
@@ -61,15 +61,24 @@ function renderPopularFromCacheIfMainPresent() {
   );
 
   container.dataset.filled = "1";
+  return true;
 }
 
-/* === Глобальные хуки: если роутер сделал fallback, дорисуем Popular из cache === */
-function scheduleEnsurePopular() {
-  // дождаться, когда роутер заменит DOM
-  requestAnimationFrame(() => setTimeout(renderPopularFromCacheIfMainPresent, 0));
+/* === Дождаться появления main.html и дорисовать Popular из кэша === */
+function waitAndRenderPopularFromCache(maxMs = 3000) {
+  const start = Date.now();
+  const tryOnce = () => {
+    if (renderPopularFromCacheIfMainPresent()) return;
+    if (Date.now() - start >= maxMs) return;
+    setTimeout(tryOnce, 50);
+  };
+  // на следующем тике, когда роутер успеет подменить DOM
+  requestAnimationFrame(tryOnce);
 }
-window.addEventListener("popstate", scheduleEnsurePopular);
-try { window.Telegram?.WebApp?.onEvent?.("back_button_pressed", scheduleEnsurePopular); } catch {}
+
+/* === Глобальные хуки: при возврате — гарантированно дорисуем Popular из cache === */
+window.addEventListener("popstate", () => waitAndRenderPopularFromCache());
+try { window.Telegram?.WebApp?.onEvent?.("back_button_pressed", () => waitAndRenderPopularFromCache()); } catch {}
 
 /* === Main page === */
 export default class MainPage extends Route {
@@ -83,13 +92,14 @@ export default class MainPage extends Route {
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
 
-    // сразу попробовать показать Popular из кэша (мгновенно)
-    renderPopularFromCacheIfMainPresent();
+    // мгновенно показать Popular из кэша (если есть),
+    // а если main.html вставится чуточку позже — «страховка» тоже сработает
+    waitAndRenderPopularFromCache();
 
-    // Обновим/скроем нижнюю кнопку корзины
+    // кнопка корзины
     this.updateMainButton();
 
-    // Параллельно грузим данные
+    // параллельно загрузим данные и перерисуем
     await Promise.allSettled([
       this.loadCafeInfo(),
       this.loadCategories(),
@@ -133,7 +143,7 @@ export default class MainPage extends Route {
       if (info?.cookingTime) $("#cafe-cooking-time").text(info.cookingTime);
       if (info?.status) $("#cafe-status").text(info.status);
 
-      // снять shimmer с текста/параметров
+      // снять shimmer
       $("#cafe-info, #cafe-name, #cafe-kitchen-categories, .cafe-parameters-container")
         .removeClass("shimmer");
     } catch (e) {
@@ -217,7 +227,6 @@ export default class MainPage extends Route {
       this.renderPopular(items);
     } catch (e) {
       console.warn("[MainPage] getPopularMenu failed:", e);
-      // если кэша нет вообще — просто уберём shimmer с пустым рендером
       if (!cached) this.renderPopular([]);
     }
   }
