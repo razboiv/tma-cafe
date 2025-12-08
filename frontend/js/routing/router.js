@@ -1,13 +1,34 @@
 // frontend/js/routing/router.js
 import Route from "./route.js";
 
-// === Страницы (СТАТИЧЕСКИЕ ИМПОРТЫ!) ===
-import MainPage    from "../pages/main.js";
-import CategoryPage from "../pages/category.js";
-import DetailsPage  from "../pages/details.js";
-import CartPage     from "../pages/cart.js";
+// — статические импорты, но без требования default —
+import * as MainMod     from "../pages/main.js";
+import * as CategoryMod from "../pages/category.js";
+import * as DetailsMod  from "../pages/details.js";
+import * as CartMod     from "../pages/cart.js";
 
-// ==== Настройки путей ====
+// выбираем класс страницы из модуля
+function pickPage(mod, fallbackName) {
+  return (
+    mod?.default ||
+    mod?.[fallbackName] ||   // например MainPage, CategoryPage и т.п.
+    mod?.Page ||             // если класс называется просто Page
+    null
+  );
+}
+
+function newPage(mod, name) {
+  const Ctor = pickPage(mod, name);
+  if (!Ctor) {
+    throw new Error(
+      `[ROUTER] Cannot resolve page class from module (${name}). ` +
+      `Ensure it exports default or class ${name}/Page`
+    );
+  }
+  return new Ctor();
+}
+
+// — карты путей (HTML шаблоны страниц) —
 const routePaths = new Map([
   ["main",     "/frontend/pages/main.html"],
   ["category", "/frontend/pages/category.html"],
@@ -15,7 +36,7 @@ const routePaths = new Map([
   ["cart",     "/frontend/pages/cart.html"],
 ]);
 
-// Алиасы: Telegram иногда присылает route=root
+// алиасы маршрутов (Telegram иногда шлёт route=root)
 const ROUTE_ALIASES = new Map([
   ["root",  "main"],
   ["home",  "main"],
@@ -27,20 +48,19 @@ function normalizeRoute(name) {
   return ROUTE_ALIASES.get(r) || r;
 }
 
-// === Роутер ===
 class Router {
   constructor() {
     this.pages = {
-      main:     new MainPage(),
-      category: new CategoryPage(),
-      details:  new DetailsPage(),
-      cart:     new CartPage(),
+      main:     newPage(MainMod,     "MainPage"),
+      category: newPage(CategoryMod, "CategoryPage"),
+      details:  newPage(DetailsMod,  "DetailsPage"),
+      cart:     newPage(CartMod,     "CartPage"),
     };
 
     this.$current = $("#page-current");
     this.$next    = $("#page-next");
 
-    // popstate (стрелка «Назад» браузера / Telegram back)
+    // back (история браузера/Telegram back)
     window.addEventListener("popstate", () => {
       const { route, params } = this._readState();
       this._load(route, params, { animate: true, push: false });
@@ -77,32 +97,25 @@ class Router {
     const path = routePaths.get(route);
     const Page = this.pages[route];
 
-    // 1) Подготовка контейнера next: грузим HTML шаблон страницы
+    // 1) грузим HTML следующей страницы в #page-next
     this.$next.html(await this._fetchHtml(path)).show();
     this.$current.show();
 
-    // 2) Анимация смены страниц
+    // 2) анимация
     if (animate) {
       await this._animateSwap();
     } else {
-      // без анимации — просто заменить
       this.$current.html(this.$next.html());
       this.$next.hide().empty();
     }
 
-    // 3) История
-    if (push) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("route", route);
-      history.pushState({ route, params }, "", url);
-    } else {
-      // при первой загрузке корректируем state, чтобы back работал
-      const url = new URL(window.location.href);
-      url.searchParams.set("route", route);
-      history.replaceState({ route, params }, "", url);
-    }
+    // 3) история
+    const url = new URL(window.location.href);
+    url.searchParams.set("route", route);
+    if (push) history.pushState({ route, params }, "", url);
+    else      history.replaceState({ route, params }, "", url);
 
-    // 4) Вызов логики страницы
+    // 4) логика страницы
     try {
       await Page.load(params || {});
     } catch (e) {
@@ -117,7 +130,7 @@ class Router {
   }
 
   _animateSwap() {
-    // классическая анимация «свайпом»
+    // два слоя: #page-current и #page-next
     return new Promise((resolve) => {
       const duration = 220;
 
@@ -135,7 +148,6 @@ class Router {
   }
 }
 
-// === Синглтон роутера и экспорт хелперов ===
 export const router = new Router();
 export const navigateTo = (route, params) => router.navigateTo(route, params);
 export default Router;
