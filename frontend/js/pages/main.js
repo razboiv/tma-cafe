@@ -1,69 +1,221 @@
 // frontend/js/pages/main.js
+
 import { Route } from "../routing/route.js";
-import TelegramSDK from "../telegram/telegram.js";
 import { navigateTo } from "../routing/router.js";
-import { getInfo, getCategories, getPopularMenu } from "../requests/requests.js";
+import {
+  getInfo,
+  getCategories,
+  getPopularMenu,
+} from "../requests/requests.js";
+import TelegramSDK from "../telegram/telegram.js";
+import { loadImage, replaceShimmerContent } from "../utils/dom.js";
+import { Cart } from "../cart/cart.js";
 
-const CACHE = window.__MAIN_CACHE__ || (window.__MAIN_CACHE__ = {});
+// простой кэш, живёт пока открыт WebView
+window.__POPULAR_CACHE__ = window.__POPULAR_CACHE__ || null;
 
+// ---- MainButton logic for "MY CART" ----
+const MB_REFRESH_MS = 700;
+
+function getCartCount() {
+  try {
+    const items = (Cart.getItems && Cart.getItems()) || [];
+    return items.reduce((sum, it) => sum + Number(it?.quantity || it?.count || 0), 0);
+  } catch (e) {
+    return 0;
+  }
+}
+
+// фрагмент в load() главной страницы
+function readCart() { try { return JSON.parse(localStorage.getItem("cart") || "[]"); } catch { return []; } }
+function cartCount() { return readCart().reduce((s, x) => s + (x.qty || 0), 0); }
+
+const MB = window.Telegram?.WebApp?.MainButton;
+const count = cartCount();
+
+if (count > 0) {
+  const suffix = count === 1 ? "POSITION" : "POSITIONS";
+  document.body.dataset.mainbutton = "cart";
+  try {
+    MB.setText(`MY CART · ${count} ${suffix}`);
+    MB.onClick(() => navigateTo("cart"));
+    MB.show();
+  } catch {}
+} else {
+  document.body.dataset.mainbutton = "";
+  try { MB.hide(); } catch {}
+}
+
+function refreshMainButton(force = false) {
+  const n = getCartCount();
+  if (n > 0) {
+    document.body.dataset.mainbutton = 'cart'; // наш «умный» хук включится
+    TelegramSDK.showMainButton(`MY CART · ${n}`, () => navigateTo('cart'));
+  } else {
+    document.body.dataset.mainbutton = ''; // хук выключится
+    TelegramSDK.hideMainButton();
+  }
+}
+
+/**
+ * Главная страница: инфо о кафе, категории, популярное меню.
+ */
 export default class MainPage extends Route {
   constructor() {
     super("root", "/pages/main.html");
   }
 
-  async load() {
-    // На главной «Назад» прячем, expand/ready только тут
+  async load(params) {
     TelegramSDK.hideBackButton();
+    // expand() только здесь, один раз
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
+    console.log("[MainPage] load", params);
 
-    // Если уже есть кэш Popular — сразу покажем, без скелетонов
-    if (Array.isArray(CACHE.popular)) {
-      this.renderPopular(CACHE.popular);
+    // ===== основная кнопка (MY CART …) =====
+    const portionCount = Cart.getPortionCount();
+    if (portionCount > 0) {
+      TelegramSDK.showMainButton(
+        `MY CART · ${this.#getDisplayPositionCount(portionCount)}`,
+        () => navigateTo("cart"),
+      );
+    } else {
+      TelegramSDK.hideMainButton();
     }
 
-    // Обновим данные в фоне
+    // параллельно грузим всё с бэка
+    await Promise.allSettled([
+      this.#loadCafeInfo(),
+      this.#loadCategories(),
+      this.#loadPopularMenu(),
+    ]);
+  }
+
+  // ===== инфо о кафе =====
+  async #loadCafeInfo() {
     try {
-      const [info, categories, popular] = await Promise.all([
-        getInfo(),
-        getCategories(),
-        getPopularMenu(),
-      ]);
+      const info = await getInfo();
+      console.log("[MainPage] info", info);
 
-      CACHE.info = info;
-      CACHE.categories = categories;
-      CACHE.popular = popular;
+      // картинка-обложка
+      if (info?.coverImage) {
+        loadImage($("#cafe-cover"), info.coverImage);
+        $("#cafe-cover").removeClass("shimmer");
+      }
 
-      // здесь оставь свою текущую отрисовку info/categories, если она у тебя есть
-      // (или добавь по аналогии с popular через this.renderCategories(categories))
+      // логотип (круглый значок справа)
+      if (info?.logoImage) {
+        loadImage($("#cafe-logo"), info.logoImage);
+        $("#cafe-logo").removeClass("shimmer");
+      }
 
-      this.renderPopular(popular);
+      // название
+      if (info?.name) {
+        $("#cafe-name").text(info.name);
+      }
+
+      // подпись под названием – берём kitchenCategories
+      if (info?.kitchenCategories) {
+        $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      }
+
+      // рейтинг
+      if (info?.rating) {
+        $("#cafe-rating").text(info.rating);
+      }
+
+      // время доставки
+      if (info?.cookingTime) {
+        $("#cafe-cooking-time").text(info.cookingTime);
+      }
+
+      // статус (Open / Closed)
+      if (info?.status) {
+        $("#cafe-status").text(info.status);
+      }
+
+      // убираем скелет-анимацию у блока инфы
+      $("#cafe-info").removeClass("shimmer");
+      $("#cafe-name").removeClass("shimmer");
+      $("#cafe-kitchen-categories").removeClass("shimmer");
+      $(".cafe-parameters-container").removeClass("shimmer");
     } catch (e) {
-      console.warn("[MainPage] background fetch failed", e);
+      console.error("[MainPage] failed to load info", e);
     }
   }
 
-  // Универсальная отрисовка блока Popular (без зависимостей от replaceShimmerContent)
-  renderPopular(items) {
-    const root = document.querySelector("#cafe-popular");
-    if (!root) return;
+  // ===== категории =====
+  async #loadCategories() {
+    try {
+      const categories = await getCategories();
+      console.log("[MainPage] categories", categories);
 
-    root.innerHTML = "";
-    (Array.isArray(items) ? items : []).forEach((i) => {
-      const card = document.createElement("div");
-      card.className = "popular-card";
+      // снимаем shimmer с заголовка
+      $("#cafe-section-categories-title").removeClass("shimmer");
 
-      card.innerHTML = `
-        <img class="popular-card__img" src="${(i.image || i.photo || "").trim()}" alt="">
-        <div class="popular-card__title">${i.name || ""}</div>
-        <div class="popular-card__subtitle">${i.short || i.description || ""}</div>
-      `;
+      replaceShimmerContent(
+        "#cafe-categories",       // контейнер
+        "#cafe-category-template",// <template>
+        "#cafe-category-icon",    // картинка внутри шаблона
+        categories,
+        (template, category) => {
+          template.attr("id", category.id);
+          template.css("background-color", category.backgroundColor || "");
+          template.find("#cafe-category-name").text(category.name ?? "");
 
-      card.addEventListener("click", () =>
-        navigateTo("details", { id: String(i.id), categoryId: i.categoryId || "" })
+          const img = template.find("#cafe-category-icon");
+          if (category.icon) {
+            loadImage(img, category.icon);
+          }
+
+          template.on("click", () => {
+            const params = JSON.stringify({ id: category.id });
+            navigateTo("category", params);
+          });
+        },
       );
+    } catch (e) {
+      console.error("[MainPage] failed to load categories", e);
+    }
+  }
 
-      root.appendChild(card);
-    });
+  // ===== популярное меню =====
+  async #loadPopularMenu() {
+    try {
+      const items = await getPopularMenu();
+      console.log("[MainPage] popular", items);
+
+      // снимаем shimmer с заголовка
+      $("#cafe-section-popular-title").removeClass("shimmer");
+
+      replaceShimmerContent(
+        "#cafe-popular",      // контейнер
+        "#cafe-item-template",// <template>
+        "#cafe-item-image",   // картинка внутри шаблона
+        items,
+        (template, item) => {
+          template.find("#cafe-item-name").text(item.name ?? "");
+          template
+            .find("#cafe-item-description")
+            .text(item.description ?? "");
+
+          const img = template.find("#cafe-item-image");
+          if (item.image) {
+            loadImage(img, item.image);
+          }
+
+          template.on("click", () => {
+            const params = JSON.stringify({ id: item.id });
+            navigateTo("details", params);
+          });
+        },
+      );
+    } catch (e) {
+      console.error("[MainPage] failed to load popular menu", e);
+    }
+  }
+
+  #getDisplayPositionCount(count) {
+    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
