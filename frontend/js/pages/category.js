@@ -16,44 +16,56 @@ export default class CategoryPage extends Route {
     TelegramSDK.expand();
     this.updateMainButton();
 
-    // --- 1) безопасно распарсим то, что пришло из роутера ---
+    // 1) распарсим параметры (строка/объект), поддержим id | categoryId | slug
     let p = {};
     try {
-      p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {});
+      p =
+        typeof params === "string"
+          ? JSON.parse(params || "{}")
+          : params || {};
     } catch (_) {
       p = params || {};
     }
-
-    // --- 2) поддерживаем id / categoryId / slug ---
     const categoryId = p.categoryId || p.id || p.slug;
 
-    // --- 3) валидация ---
     if (!categoryId || typeof categoryId !== "string") {
       console.error("[CategoryPage] no valid id in params:", params);
       navigateTo("root");
       return;
     }
 
-    // --- 4) загрузка и рендер ---
+    // 2) загрузим блюда категории
     const items = await getMenuCategory(categoryId);
-    const html = (items || [])
-      .map(
-        (i) => `
-      <div class="menu-card" data-item-id="${i.id}">
-        <div class="menu-card__cover"><img src="${i.photo || ""}" alt=""></div>
-        <div class="menu-card__title">${i.name || ""}</div>
-        <div class="menu-card__subtitle">${i.short || ""}</div>
-      </div>`
-      )
-      .join("");
-    replaceShimmerContent("#category-list", html);
+    console.log("[CategoryPage] items", items);
 
-    // --- 5) переход на детали, пробрасываем и categoryId ---
-    document.querySelectorAll("[data-item-id]").forEach(($el) => {
-      $el.addEventListener("click", () =>
-        navigateTo("details", { id: $el.getAttribute("data-item-id"), categoryId })
-      );
-    });
+    // 3) отрисуем карточки через replaceShimmerContent
+    //    (контейнер, <template>, селектор картинки, массив, заполнитель)
+    replaceShimmerContent(
+      "#cafe-category",
+      "#cafe-item-template",
+      "#cafe-item-image",
+      Array.isArray(items) ? items : [],
+      (template, item) => {
+        // у нас в данных поле картинки может называться image (из оригинала) или photo
+        const imageUrl = item.image || item.photo || "";
+        if (imageUrl) {
+          template.find("#cafe-item-image").attr("src", imageUrl);
+        }
+        template.find("#cafe-item-name").text(item.name || "");
+        // подпись: из данных это либо description (оригинал), либо short (ваш вариант)
+        template
+          .find("#cafe-item-description")
+          .text(item.description || item.short || "");
+
+        // переход на детали
+        template.on("click", () =>
+          navigateTo("details", {
+            id: String(item.id),
+            categoryId, // пробрасываем текущую категорию
+          })
+        );
+      }
+    );
   }
 
   updateMainButton() {
