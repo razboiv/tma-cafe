@@ -1,20 +1,20 @@
 // frontend/js/pages/details.js
-
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
-import { loadImage } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-/**
- * Страница деталей блюда: фото, описание, варианты и количество.
- * Разметка берётся из /pages/details.html — все id начинаются с `details-`.
- */
+// простой helper: убрать скелетоны и показать контент
+function revealContent() {
+  document.querySelectorAll("[data-skeleton]").forEach(n => n.remove());
+  document.querySelectorAll("[data-content]").forEach(n => (n.style.display = ""));
+}
+
 export default class DetailsPage extends Route {
   #item = null;
-  #selectedVariant = null;
+  #variant = null;
   #qty = 1;
 
   constructor() {
@@ -25,106 +25,105 @@ export default class DetailsPage extends Route {
     console.log("[DetailsPage] load", params);
     TelegramSDK.expand();
 
-    // разобрать параметры (может прийти строка или объект)
+    // params может быть строкой
     let p = {};
     try { p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {}); }
     catch { p = params || {}; }
 
-    const itemId = p?.id ? String(p.id) : "";
-    if (!itemId) {
+    const id = p?.id ? String(p.id) : "";
+    if (!id) {
       console.error("[DetailsPage] no item id in params:", params);
       return;
     }
 
-    try {
-      const item = await getMenuItem(itemId);
-      if (!item) {
-        console.error("[DetailsPage] item not found:", itemId);
-        return;
-      }
-
-      this.#item = item;
-      this.#selectedVariant = Array.isArray(item.variants) && item.variants.length
-        ? item.variants[0]
-        : null;
-      this.#qty = 1;
-
-      this.#renderItem();
-      this.#wireQtyControls();
-
-      TelegramSDK.showMainButton("ADD TO CART", () => this.#addToCart());
-    } catch (e) {
-      console.error("[DetailsPage] failed to load item", e);
+    const item = await getMenuItem(id);
+    if (!item) {
+      console.error("[DetailsPage] item not found:", id);
+      return;
     }
+
+    this.#item = item;
+    this.#variant = Array.isArray(item.variants) && item.variants.length ? item.variants[0] : null;
+    this.#qty = 1;
+
+    this.#render();
+    this.#wireQtyControls();
+    TelegramSDK.showMainButton("ADD TO CART", () => this.#addToCart());
   }
 
-  // ---- render ----
-  #renderItem() {
+  #render() {
     const it = this.#item;
 
-    // фото, название, описание
-    loadImage($("#details-image"), (it.image || it.photo || "").trim());
-    $("#details-name").text(it.name || "");
-    $("#details-description").text(it.description || it.short || "");
+    // изображение
+    const img = document.getElementById("cafe-item-details-image");
+    const cover = img?.closest(".details-cover");
+    img.onload = () => {
+      img.style.display = "block";
+      cover?.querySelectorAll("[data-skeleton]").forEach(n => n.remove());
+    };
+    img.onerror = () => { img.style.display = "none"; };
+    img.src = (it.image || it.photo || "").trim();
 
-    // варианты (Small/Large и т.п.)
-    const $variants = $("#details-variants");
-    $variants.empty();
+    // текстовые поля
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ""; };
+    setText("cafe-item-details-name", it.name);
+    setText("cafe-item-details-description", it.description || it.short);
 
-    const tpl = document.getElementById("details-variant-template");
-    if (tpl && Array.isArray(it.variants)) {
+    // варианты
+    const box = document.getElementById("cafe-item-details-variants");
+    box.innerHTML = "";
+    if (Array.isArray(it.variants)) {
       it.variants.forEach(v => {
-        const node = tpl.content.firstElementChild.cloneNode(true);
-        node.dataset.variantId = String(v.id);
-        node.querySelector(".details-variant-name").textContent = v.name || v.id;
-        node.addEventListener("click", () => {
-          this.#selectedVariant = v;
+        const b = document.createElement("button");
+        b.className = "cafe-item-details-variant";
+        b.dataset.variantId = String(v.id);
+        b.textContent = v.name || v.id;
+        b.addEventListener("click", () => {
+          this.#variant = v;
           this.#updateVariantUI();
         });
-        $variants.append(node);
+        box.appendChild(b);
       });
     }
 
     this.#updateVariantUI();
     this.#updateQtyUI();
+    revealContent();
   }
 
   #updateVariantUI() {
-    const v = this.#selectedVariant;
-    const cost = Number(v?.cost || v?.price || 0);
+    const v = this.#variant;
+    const price = Number(v?.cost || v?.price || 0);
     const weight = v?.weight || "";
 
-    // подсветка выбранного варианта
+    // подсветка активного варианта (класс .active)
     const selectedId = String(v?.id || "");
-    document.querySelectorAll("#details-variants .cafe-item-details-variant")
-      .forEach(btn => btn.classList.toggle("selected", btn.dataset.variantId === selectedId));
+    document
+      .querySelectorAll("#cafe-item-details-variants .cafe-item-details-variant")
+      .forEach(btn => btn.classList.toggle("active", btn.dataset.variantId === selectedId));
 
-    // вес + цена
-    $("#details-selected-variant-weight").text(weight);
-    $("#details-price-value").text(toDisplayCost(cost));
+    // цена и вес
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || ""; };
+    setText("cafe-item-details-selected-variant-price", toDisplayCost(price));
+    setText("cafe-item-details-selected-variant-weight", weight);
   }
 
   #updateQtyUI() {
-    $("#details-quantity-value").text(this.#qty);
+    const el = document.getElementById("cafe-item-details-quantity-value");
+    if (el) el.textContent = String(this.#qty);
   }
 
   #wireQtyControls() {
-    $("#details-quantity-decrease-button").off("click").on("click", () => {
-      if (this.#qty > 1) this.#qty -= 1;
-      this.#updateQtyUI();
-    });
-
-    $("#details-quantity-increase-button").off("click").on("click", () => {
-      this.#qty += 1;
-      this.#updateQtyUI();
-    });
+    const dec = document.getElementById("cafe-item-details-quantity-decrease-button");
+    const inc = document.getElementById("cafe-item-details-quantity-increase-button");
+    dec?.addEventListener("click", () => { if (this.#qty > 1) { this.#qty--; this.#updateQtyUI(); } });
+    inc?.addEventListener("click", () => { this.#qty++; this.#updateQtyUI(); });
   }
 
   #addToCart() {
-    if (!this.#item || !this.#selectedVariant) return;
-    Cart.addItem(this.#item, this.#selectedVariant, this.#qty);
+    if (!this.#item || !this.#variant) return;
+    Cart.addItem(this.#item, this.#variant, this.#qty);
 
-    // показать кнопку корзины
     const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
     const label = count === 1 ? "MY CART · 1 POSITION" : `MY CART · ${count} POSITIONS`;
     TelegramSDK.showMainButton(label, () => navigateTo("cart"));
