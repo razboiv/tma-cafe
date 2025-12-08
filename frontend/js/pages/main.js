@@ -23,6 +23,54 @@ function pluralizePositions(n) {
   return n === 1 ? "1 POSITION" : `${n} POSITIONS`;
 }
 
+/* === «Страховочный» рендер Popular из кэша (вне класса) === */
+function renderPopularFromCacheIfMainPresent() {
+  const container = document.querySelector("#cafe-popular");
+  if (!container) return;
+
+  const cached = getPopularCache();
+  if (!Array.isArray(cached) || cached.length === 0) return;
+
+  // если уже заполнено – выходим (чтобы не дублировать)
+  if (container.dataset.filled === "1" && container.children.length > 0) return;
+
+  // снять shimmer с заголовка
+  const title = document.querySelector("#cafe-section-popular-title");
+  if (title) title.classList.remove("shimmer");
+
+  replaceShimmerContent(
+    "#cafe-popular",
+    "#cafe-item-template",
+    "#cafe-item-image",
+    cached,
+    (template, item) => {
+      template.find("#cafe-item-name").text(item?.name ?? "");
+      template.find("#cafe-item-description").text(item?.description ?? "");
+
+      const img = template.find("#cafe-item-image");
+      if (item?.image) loadImage(img, item.image);
+
+      template.on("click", () => {
+        const params = JSON.stringify({
+          id: item?.id,
+          categoryId: item?.categoryId || undefined,
+        });
+        navigateTo("details", params);
+      });
+    }
+  );
+
+  container.dataset.filled = "1";
+}
+
+/* === Глобальные хуки: если роутер сделал fallback, дорисуем Popular из cache === */
+function scheduleEnsurePopular() {
+  // дождаться, когда роутер заменит DOM
+  requestAnimationFrame(() => setTimeout(renderPopularFromCacheIfMainPresent, 0));
+}
+window.addEventListener("popstate", scheduleEnsurePopular);
+try { window.Telegram?.WebApp?.onEvent?.("back_button_pressed", scheduleEnsurePopular); } catch {}
+
 /* === Main page === */
 export default class MainPage extends Route {
   constructor() {
@@ -34,6 +82,9 @@ export default class MainPage extends Route {
     TelegramSDK.hideBackButton();
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
+
+    // сразу попробовать показать Popular из кэша (мгновенно)
+    renderPopularFromCacheIfMainPresent();
 
     // Обновим/скроем нижнюю кнопку корзины
     this.updateMainButton();
@@ -99,9 +150,9 @@ export default class MainPage extends Route {
       $("#cafe-section-categories-title").removeClass("shimmer");
 
       replaceShimmerContent(
-        "#cafe-categories",         // контейнер
-        "#cafe-category-template",  // <template>
-        "#cafe-category-icon",      // картинка внутри шаблона
+        "#cafe-categories",
+        "#cafe-category-template",
+        "#cafe-category-icon",
         Array.isArray(categories) ? categories : [],
         (template, category) => {
           template.attr("id", category.id);
@@ -127,9 +178,9 @@ export default class MainPage extends Route {
     $("#cafe-section-popular-title").removeClass("shimmer");
 
     replaceShimmerContent(
-      "#cafe-popular",        // контейнер
-      "#cafe-item-template",  // <template>
-      "#cafe-item-image",     // картинка внутри шаблона
+      "#cafe-popular",
+      "#cafe-item-template",
+      "#cafe-item-image",
       Array.isArray(items) ? items : [],
       (template, item) => {
         template.find("#cafe-item-name").text(item?.name ?? "");
@@ -147,15 +198,17 @@ export default class MainPage extends Route {
         });
       }
     );
+
+    // пометим контейнер как заполненный (для страховочного рендера)
+    const container = document.querySelector("#cafe-popular");
+    if (container) container.dataset.filled = "1";
   }
 
   /* ----- Popular: загрузка с кэшем ----- */
   async loadPopularMenu() {
     // A) мгновенно показать из кэша (если уже открывали бота)
     const cached = getPopularCache();
-    if (Array.isArray(cached) && cached.length) {
-      this.renderPopular(cached);
-    }
+    if (Array.isArray(cached) && cached.length) this.renderPopular(cached);
 
     // B) обновить данные и перерисовать
     try {
