@@ -179,43 +179,52 @@ export default class MainPage extends Route {
     }
   }
 
-  // ===== популярное меню =====
-  async #loadPopularMenu() {
-    try {
-      const items = await getPopularMenu();
-      console.log("[MainPage] popular", items);
+// ===== популярное меню (с кэшем) =====
+async #loadPopularMenu() {
+  // отрисовка (общая функция, используем и для кэша, и для свежих данных)
+  const render = (items) => {
+    // сняли shimmer с заголовка
+    $("#cafe-section-popular-title").removeClass("shimmer");
 
-      // снимаем shimmer с заголовка
-      $("#cafe-section-popular-title").removeClass("shimmer");
+    replaceShimmerContent(
+      "#cafe-popular",          // контейнер
+      "#cafe-item-template",    // <template>
+      "#cafe-item-image",       // картинка внутри шаблона
+      Array.isArray(items) ? items : [],
+      (template, item) => {
+        template.find("#cafe-item-name").text(item.name ?? "");
+        template.find("#cafe-item-description").text(item.description ?? "");
 
-      replaceShimmerContent(
-        "#cafe-popular",      // контейнер
-        "#cafe-item-template",// <template>
-        "#cafe-item-image",   // картинка внутри шаблона
-        items,
-        (template, item) => {
-          template.find("#cafe-item-name").text(item.name ?? "");
-          template
-            .find("#cafe-item-description")
-            .text(item.description ?? "");
+        const img = template.find("#cafe-item-image");
+        if (item.image) {
+          // твоя утилита для плавной загрузки
+          loadImage(img, item.image);
+        }
 
-          const img = template.find("#cafe-item-image");
-          if (item.image) {
-            loadImage(img, item.image);
-          }
-
-          template.on("click", () => {
-            const params = JSON.stringify({ id: item.id });
-            navigateTo("details", params);
+        template.on("click", () => {
+          // передаём id, можно добавить origin categoryId если есть
+          const params = JSON.stringify({
+            id: item.id,
+            categoryId: item.categoryId || undefined,
           });
-        },
-      );
-    } catch (e) {
-      console.error("[MainPage] failed to load popular menu", e);
-    }
-  }
+          navigateTo("details", params);
+        });
+      }
+    );
+  };
 
-  #getDisplayPositionCount(count) {
-    return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
+  try {
+    // 0) если есть кэш — показать СРАЗУ (без скелетонов и ожиданий)
+    if (Array.isArray(window.__POPULAR_CACHE__) && window.__POPULAR_CACHE__.length) {
+      render(window.__POPULAR_CACHE__);
+    }
+
+    // 1) получить свежие данные и перерисовать
+    const items = await getPopularMenu();
+    window.__POPULAR_CACHE__ = items;
+    render(items);
+
+  } catch (e) {
+    console.error("[MainPage] failed to load popular menu", e);
   }
 }
