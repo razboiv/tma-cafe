@@ -1,34 +1,23 @@
 // frontend/js/routing/router.js
 import Route from "./route.js";
 
-// — статические импорты, но без требования default —
+// Загружаем модули страниц (может быть default или именованный экспорт)
 import * as MainMod     from "../pages/main.js";
 import * as CategoryMod from "../pages/category.js";
 import * as DetailsMod  from "../pages/details.js";
 import * as CartMod     from "../pages/cart.js";
 
-// выбираем класс страницы из модуля
+// Берём класс страницы из модуля (default, MainPage/CategoryPage/... или Page)
 function pickPage(mod, fallbackName) {
-  return (
-    mod?.default ||
-    mod?.[fallbackName] ||   // например MainPage, CategoryPage и т.п.
-    mod?.Page ||             // если класс называется просто Page
-    null
-  );
+  return mod?.default || mod?.[fallbackName] || mod?.Page || null;
 }
-
 function newPage(mod, name) {
   const Ctor = pickPage(mod, name);
-  if (!Ctor) {
-    throw new Error(
-      `[ROUTER] Cannot resolve page class from module (${name}). ` +
-      `Ensure it exports default or class ${name}/Page`
-    );
-  }
+  if (!Ctor) throw new Error(`[ROUTER] Cannot resolve page class from module (${name}).`);
   return new Ctor();
 }
 
-// — карты путей (HTML шаблоны страниц) —
+// Пути к HTML-шаблонам страниц
 const routePaths = new Map([
   ["main",     "/frontend/pages/main.html"],
   ["category", "/frontend/pages/category.html"],
@@ -36,7 +25,7 @@ const routePaths = new Map([
   ["cart",     "/frontend/pages/cart.html"],
 ]);
 
-// алиасы маршрутов (Telegram иногда шлёт route=root)
+// Алиасы маршрутов (на случай, если прилетает route=root)
 const ROUTE_ALIASES = new Map([
   ["root",  "main"],
   ["home",  "main"],
@@ -60,13 +49,13 @@ class Router {
     this.$current = $("#page-current");
     this.$next    = $("#page-next");
 
-    // back (история браузера/Telegram back)
+    // обрабатываем аппаратную кнопку «Назад» и history
     window.addEventListener("popstate", () => {
       const { route, params } = this._readState();
       this._load(route, params, { animate: true, push: false });
     });
 
-    console.log("[ROUTER] v10 loaded");
+    console.log("[ROUTER] v13 loaded");
   }
 
   start() {
@@ -97,11 +86,12 @@ class Router {
     const path = routePaths.get(route);
     const Page = this.pages[route];
 
-    // 1) грузим HTML следующей страницы в #page-next
-    this.$next.html(await this._fetchHtml(path)).show();
+    // 1) грузим HTML следующей страницы во второй слой
+    const html = await this._fetchHtml(path);
+    this.$next.html(html).show();
     this.$current.show();
 
-    // 2) анимация
+    // 2) анимируем своп слоёв
     if (animate) {
       await this._animateSwap();
     } else {
@@ -109,13 +99,13 @@ class Router {
       this.$next.hide().empty();
     }
 
-    // 3) история
+    // 3) записываем историю/URL ?route=...
     const url = new URL(window.location.href);
     url.searchParams.set("route", route);
     if (push) history.pushState({ route, params }, "", url);
     else      history.replaceState({ route, params }, "", url);
 
-    // 4) логика страницы
+    // 4) запускаем логику страницы
     try {
       await Page.load(params || {});
     } catch (e) {
@@ -149,5 +139,15 @@ class Router {
 }
 
 export const router = new Router();
+
+// Совместимость с твоим index.js — он импортирует именованный bootRouter
+export function bootRouter() {
+  try {
+    router.start();
+  } catch (e) {
+    console.error("[ROUTER] bootRouter failed:", e);
+  }
+}
+
 export const navigateTo = (route, params) => router.navigateTo(route, params);
 export default Router;
