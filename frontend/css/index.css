@@ -922,41 +922,48 @@ p.small {
 /* картинка: убрать «скелетон», если уже не сделали */
 .details-cover img { display: block; width: 100%; height: auto; border-radius: 12px; }
 
-/* РОВНО по центру для iOS/Android */
+/* + / − строго по центру в круге (iOS/Android-safe) */
 #cafe-item-details-quantity-decrease-button,
-#cafe-item-details-quantity-increase-button {
+#cafe-item-details-quantity-increase-button,
+.details-qty-row .qty-btn {
   position: relative;
-  display: grid;             /* идеальное центрирование */
-  place-items: center;
+  display: inline-block;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,.15);
   background: rgba(255,255,255,.06);
   color: inherit;
-
-  /* прячем текст '+' и '−', будем рисовать сами */
-  font-size: 0;
-  line-height: 0;
   padding: 0;
+
+  /* прячем текст внутри кнопки (например, "+", "−") */
+  font-size: 0 !important;
+  line-height: 0 !important;
 }
 
-/* Горизонтальная палочка — и для '+' и для '−' */
+/* горизонтальная черта (и для +, и для −) */
 #cafe-item-details-quantity-decrease-button::before,
 #cafe-item-details-quantity-increase-button::before {
   content: "";
-  width: 14px;               /* длина минуса */
-  height: 2px;               /* толщина минуса */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 2px;
+  transform: translate(-50%, -50%);
   background: currentColor;
   border-radius: 2px;
 }
 
-/* Вертикальная палочка — добавляем только для '+' */
+/* вертикальная черта — только для "+" */
 #cafe-item-details-quantity-increase-button::after {
   content: "";
   position: absolute;
-  width: 2px;                /* толщина плюса */
-  height: 14px;              /* длина плюса */
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  transform: translate(-50%, -50%);
   background: currentColor;
   border-radius: 2px;
 }
