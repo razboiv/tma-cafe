@@ -1,201 +1,179 @@
-// frontend/js/routing/router.js
+// frontend/js/routing/router.js  (v14)
 
+import { Route } from "./route.js";
 import TelegramSDK from "../telegram/telegram.js";
 
-console.log("[ROUTER] v13 loaded");
+// ---- утилиты ---------------------------------------------------------------
+const qs = (sel, root = document) => root.querySelector(sel);
+const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-// ---------- совместимость с разными обёртками Telegram SDK ----------
+const VERSION = (window.__BUILD_VERSION__ || Date.now()) + ""; // кэш-бастер
 
-function bindBackHandler(handler) {
-  const t = window.Telegram?.WebApp;
-
-  // варианты в твоём telegram.js
-  if (TelegramSDK && typeof TelegramSDK.onBackButton === "function") {
-    TelegramSDK.onBackButton(handler);
-    return;
-  }
-  if (TelegramSDK && typeof TelegramSDK.onBackButtonClick === "function") {
-    TelegramSDK.onBackButtonClick(handler);
-    return;
-  }
-  if (TelegramSDK?.BackButton && typeof TelegramSDK.BackButton.onClick === "function") {
-    TelegramSDK.BackButton.onClick(handler);
-    return;
-  }
-
-  // нативный Telegram.WebApp
-  if (t?.BackButton && typeof t.BackButton.onClick === "function") {
-    t.BackButton.onClick(handler);
-    return;
-  }
-
-  // совсем уж запасной вариант (браузерная «назад»)
-  window.addEventListener("popstate", () => handler());
-}
-
-function setBackButtonVisible(isVisible) {
-  const t = window.Telegram?.WebApp;
-
-  // обёртки
-  if (typeof TelegramSDK?.showBackButton === "function") {
-    TelegramSDK.showBackButton(isVisible);
-    return;
-  }
-  if (typeof TelegramSDK?.setBackButtonVisible === "function") {
-    TelegramSDK.setBackButtonVisible(isVisible);
-    return;
-  }
-  if (TelegramSDK?.BackButton) {
-    const BB = TelegramSDK.BackButton;
-    if (isVisible && typeof BB.show === "function") return BB.show();
-    if (!isVisible && typeof BB.hide === "function") return BB.hide();
-  }
-
-  // нативный Telegram.WebApp
-  if (t?.BackButton) {
-    if (isVisible && typeof t.BackButton.show === "function") t.BackButton.show();
-    if (!isVisible && typeof t.BackButton.hide === "function") t.BackButton.hide();
-  }
-}
-
-// ---------- ленивые модули страниц ----------
-
-const PAGES = {
-  main:     () => import("../pages/main.js?v=13"),
-  category: () => import("../pages/category.js?v=13"),
-  details:  () => import("../pages/details.js?v=13"),
-  cart:     () => import("../pages/cart.js?v=13"),
+const PAGE_HTML = {
+  main:     "../pages/main.html",
+  category: "../pages/category.html",
+  details:  "../pages/details.html",
+  cart:     "../pages/cart.html",
 };
 
-// извлекаем класс/инстанс страницы из модуля «как получится»
-function resolveCtorOrInstance(mod, nameHint) {
-  try {
-    if (mod && "default" in mod && mod.default) {
-      const d = mod.default;
-      if (typeof d === "function") return d;
-      if (typeof d === "object")   return d;
-    }
-    const title = nameHint ? nameHint[0].toUpperCase() + nameHint.slice(1) : null;
-    const candidates = [
-      "Page","MainPage","CategoryPage","DetailsPage","CartPage",
-      title && `${title}Page`,
-    ].filter(Boolean);
+// Жёсткие импортёры модулей страниц (чтобы не было проблем с относительными путями)
+const importers = {
+  main:     () => import(`../pages/main.js?v=${VERSION}`),
+  category: () => import(`../pages/category.js?v=${VERSION}`),
+  details:  () => import(`../pages/details.js?v=${VERSION}`),
+  cart:     () => import(`../pages/cart.js?v=${VERSION}`),
+};
 
-    for (const key of candidates) {
-      const v = mod[key];
-      if (typeof v === "function") return v;
-      if (v && typeof v === "object") return v;
-    }
-
-    if (typeof mod.load === "function") {
-      return {
-        load:   (...a) => mod.load(...a),
-        unload: typeof mod.unload === "function" ? (...a) => mod.unload(...a) : undefined,
-      };
-    }
-
-    for (const v of Object.values(mod)) {
-      if (typeof v === "function") return v;
-      if (v && typeof v === "object" && typeof v.load === "function") return v;
-    }
-  } catch (e) {
-    console.warn("[ROUTER] resolve error:", e);
-  }
-  console.warn("[ROUTER] Could not resolve Page from module, using Noop");
-  return { load() {} };
+// ---- базовый no-op объект страницы ----------------------------------------
+class NoopPage extends Route {
+  constructor(ctx = {}) { super(ctx); this.name = ctx.name || "noop"; }
+  async load() {}
+  async unload() {}
 }
 
-function asInstance(ctorOrObj, params) {
-  if (typeof ctorOrObj === "function") {
-    try { return new ctorOrObj(params); } catch {
-      const maybe = ctorOrObj(params);
-      return (maybe && typeof maybe === "object") ? maybe : { load() {} };
-    }
-  }
-  return ctorOrObj || { load() {} };
+// ---- загрузка HTML шаблона в #app-content ---------------------------------
+async function loadHTML(page) {
+  const url = PAGE_HTML[page];
+  if (!url) throw new Error(`[ROUTER] Unknown page html: ${page}`);
+
+  const res = await fetch(`${url}?v=${VERSION}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`[ROUTER] Failed to fetch html for ${page}: ${res.status}`);
+  const html = await res.text();
+
+  const host = qs("#app-content") || document.body;
+  host.innerHTML = html;
 }
 
-// ---------- сам роутер ----------
+// ---- извлечение конструктора/инстанса из модуля ---------------------------
+function resolveCtorOrInstance(pageName, mod, ctx) {
+  // модуль может экспортировать по-разному
+  const candidates = [
+    mod?.default,
+    mod?.MainPage,
+    mod?.Page,
+    mod?.[`${pageName[0].toUpperCase()}${pageName.slice(1)}Page`],
+  ].filter(Boolean);
 
-class Router {
+  if (candidates.length) {
+    const Ctor = candidates[0];
+    try {
+      // класс/функция-конструктор?
+      const inst = typeof Ctor === "function" ? new Ctor(ctx) : Ctor;
+      if (inst && typeof inst.load === "function") return inst;
+    } catch (e) {
+      console.warn("[ROUTER] Failed to construct page from export, fallback to function shape", e);
+    }
+  }
+
+  // возможно экспортированы функции load/unload
+  if (typeof mod?.load === "function") {
+    const loadFn = mod.load;
+    const unloadFn = typeof mod.unload === "function" ? mod.unload : () => {};
+    return {
+      name: pageName,
+      async load(p) { await loadFn(p, ctx); },
+      async unload() { await unloadFn(ctx); }
+    };
+  }
+
+  console.warn("[ROUTER] Could not resolve Page from module, using Noop:", mod);
+  return new NoopPage(ctx);
+}
+
+// ---- сам роутер ------------------------------------------------------------
+export class Router {
   constructor() {
-    this.stack = [];
-    this.current = null;
-    bindBackHandler(() => this.back());
+    this.current = null;        // текущий инстанс страницы
+    this.currentName = null;    // имя страницы
+    this.history = [];          // стек имён страниц
+    this.isBooted = false;
   }
 
-  async loadModule(name) {
-    const loader = PAGES[name] || PAGES.main;
-    const mod = await loader();
-    try { console.debug(`[ROUTER] module '${name}' keys:`, Object.keys(mod)); } catch {}
-    return mod;
-  }
+  async start() {
+    if (this.isBooted) return;
+    this.isBooted = true;
 
-  async go(name, params = {}) {
-    if (this.current?.page?.unload) {
-      try { await this.current.page.unload(); } catch (e) { console.warn(e); }
-    }
+    console.info("[ROUTER] v14 loaded");
 
-    const mod = await this.loadModule(name);
-    const ctorOrInstance = resolveCtorOrInstance(mod, name);
-    const page = asInstance(ctorOrInstance, params);
+    // подписка на кнопку «Назад»
+    TelegramSDK.onEvent("back_button_pressed", async () => {
+      await this.back();
+    });
 
-    this.current = { name, page, params };
-    this.stack.push(this.current);
-
-    setBackButtonVisible(this.stack.length > 1);
-
-    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-
-    if (typeof page.load === "function") {
-      await page.load(params);
-    } else {
-      console.warn(`[ROUTER] page '${name}' has no load()`);
-    }
+    await this.go("main");
   }
 
   async back() {
-    if (this.stack.length <= 1) {
-      setBackButtonVisible(false);
-      return;
-    }
-
-    const cur = this.stack.pop();
-    if (cur?.page?.unload) {
-      try { await cur.page.unload(); } catch (e) { console.warn(e); }
-    }
-
-    const prev = this.stack[this.stack.length - 1];
-    this.current = prev;
-    setBackButtonVisible(this.stack.length > 1);
-
-    if (prev?.page?.load) {
-      await prev.page.load(prev.params || {});
-    }
+    if (this.history.length <= 1) return;        // уже на корне
+    // снять вершину (текущую) и взять предыдущую
+    this.history.pop();
+    const prev = this.history.pop();             // go() снова положит
+    await this.go(prev || "main");
   }
 
-  async start(startName = "main", params = {}) {
-    await this.go(startName, params);
+  async go(name, params = {}) {
+    // если идём на ту же страницу — просто перерисуем (например, после back)
+    const same = this.currentName === name;
+
+    // 1) HTML шаблон
+    await loadHTML(name);
+
+    // 2) выгрузить прошлую страницу
+    if (this.current && typeof this.current.unload === "function") {
+      try { await this.current.unload(); } catch (e) { console.warn("[ROUTER] unload error", e); }
+    }
+
+    // 3) импорт модуля страницы (с кэш-бастером и жёсткими путями)
+    let mod;
+    try {
+      const importer = importers[name];
+      if (!importer) throw new Error(`No importer for page ${name}`);
+      mod = await importer();
+    } catch (e) {
+      console.error(`[ROUTER] Failed dynamic import for ${name}`, e);
+      mod = {}; // пусть уйдём в Noop — не уронит приложение
+    }
+
+    // 4) создать инстанс страницы
+    const ctx = { name, params, $, $$: qsa };
+    const page = resolveCtorOrInstance(name, mod, ctx);
+
+    // 5) отрисовать
+    try {
+      await page.load(params);
+    } catch (e) {
+      console.error(`[ROUTER] page.load() failed for ${name}`, e);
+    }
+
+    // 6) состояние «Назад»
+    this.current = page;
+    this.currentName = name;
+    if (!same) this.history.push(name);
+
+    const isRoot = name === "main";
+    TelegramSDK.BackButton?.[isRoot ? "hide" : "show"]?.();
+
+    return page;
   }
 }
 
-// ---------- экспорт API, совместимый со старым кодом ----------
+// --- публичные помощники ----------------------------------------------------
+let __router = null;
 
-let _router;
-
-export function bootRouter(start = "main", params = {}) {
-  if (!_router) _router = new Router();
-  _router.start(start, params);
-  return _router;
+export function bootRouter() {
+  if (!__router) __router = new Router();
+  __router.start();
+  return __router;
 }
 
 export function navigateTo(name, params = {}) {
-  if (!_router) bootRouter();
-  return _router.go(name, params);
+  if (!__router) __router = new Router();
+  return __router.go(name, params);
 }
 
-export function handleLocation(name = "main", params = {}) {
-  return navigateTo(name, params);
+export function handleLocation() {
+  // для совместимости со старым индексом
+  return bootRouter();
 }
 
-export default Router;
+export default { Router, bootRouter, navigateTo, handleLocation };
