@@ -3,7 +3,6 @@ import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuCategory } from "../requests/requests.js";
 import TelegramSDK from "../telegram/telegram.js";
-import { replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
 export default class CategoryPage extends Route {
@@ -16,56 +15,62 @@ export default class CategoryPage extends Route {
     TelegramSDK.expand();
     this.updateMainButton();
 
-    // 1) распарсим параметры (строка/объект), поддержим id | categoryId | slug
+    // 1) распарсим параметры (строка/объект), примем id | categoryId | slug
     let p = {};
     try {
-      p =
-        typeof params === "string"
-          ? JSON.parse(params || "{}")
-          : params || {};
-    } catch (_) {
-      p = params || {};
-    }
-    const categoryId = p.categoryId || p.id || p.slug;
+      p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {});
+    } catch (_) { p = params || {}; }
 
+    const categoryId = p.categoryId || p.id || p.slug;
     if (!categoryId || typeof categoryId !== "string") {
       console.error("[CategoryPage] no valid id in params:", params);
       navigateTo("root");
       return;
     }
 
-    // 2) загрузим блюда категории
+    // 2) запросим список блюд
     const items = await getMenuCategory(categoryId);
     console.log("[CategoryPage] items", items);
 
-    // 3) отрисуем карточки через replaceShimmerContent
-    //    (контейнер, <template>, селектор картинки, массив, заполнитель)
-    replaceShimmerContent(
-      "#cafe-category",
-      "#cafe-item-template",
-      "#cafe-item-image",
-      Array.isArray(items) ? items : [],
-      (template, item) => {
-        // у нас в данных поле картинки может называться image (из оригинала) или photo
-        const imageUrl = item.image || item.photo || "";
-        if (imageUrl) {
-          template.find("#cafe-item-image").attr("src", imageUrl);
-        }
-        template.find("#cafe-item-name").text(item.name || "");
-        // подпись: из данных это либо description (оригинал), либо short (ваш вариант)
-        template
-          .find("#cafe-item-description")
-          .text(item.description || item.short || "");
+    // 3) контейнер и отрисовка без utils/dom.js
+    const root = document.querySelector("#cafe-category");
+    if (!root) return;
 
-        // переход на детали
-        template.on("click", () =>
-          navigateTo("details", {
-            id: String(item.id),
-            categoryId, // пробрасываем текущую категорию
-          })
-        );
-      }
-    );
+    // очистим «скелетоны»
+    root.innerHTML = "";
+
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const el = document.createElement("div");
+      el.className = "cafe-item-container";
+
+      // картинка
+      const img = document.createElement("img");
+      img.className = "cafe-item-image shimmer";
+      img.alt = "";
+      img.src = (item.image || item.photo || "").trim();
+      img.addEventListener("load", () => img.classList.remove("shimmer"));
+
+      // заголовок
+      const title = document.createElement("h6");
+      title.className = "cafe-item-name";
+      title.textContent = item.name || "";
+
+      // подпись
+      const desc = document.createElement("p");
+      desc.className = "small cafe-item-description";
+      desc.textContent = item.description || item.short || "";
+
+      el.appendChild(img);
+      el.appendChild(title);
+      el.appendChild(desc);
+
+      // переход на детали; пробрасываем categoryId
+      el.addEventListener("click", () =>
+        navigateTo("details", { id: String(item.id), categoryId })
+      );
+
+      root.appendChild(el);
+    });
   }
 
   updateMainButton() {
