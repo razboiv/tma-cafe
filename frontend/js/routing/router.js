@@ -1,159 +1,177 @@
-// frontend/js/routing/router.js
-import Route from "./route.js";
+/* frontend/js/routing/router.js
+ * Универсальный роутер для Telegram WebApp.
+ * Не делает предположений о названии экспортов страниц.
+ */
 
-// Загружаем модули страниц (может быть default или именованный экспорт)
-import * as MainMod     from "../pages/main.js";
-import * as CategoryMod from "../pages/category.js";
-import * as DetailsMod  from "../pages/details.js";
-import * as CartMod     from "../pages/cart.js";
+const log = (...a) => console.log("[ROUTER]", ...a);
 
-// Берём класс страницы из модуля (default, MainPage/CategoryPage/... или Page)
-function pickPage(mod, fallbackName) {
-  return mod?.default || mod?.[fallbackName] || mod?.Page || null;
-}
-function newPage(mod, name) {
-  const Ctor = pickPage(mod, name);
-  if (!Ctor) throw new Error(`[ROUTER] Cannot resolve page class from module (${name}).`);
-  return new Ctor();
-}
+// ---- Карта маршрутов -> динамические импорты страниц ----
+const ROUTES = {
+  main:      () => import("../pages/main.js"),
+  category:  () => import("../pages/category.js"),
+  details:   () => import("../pages/details.js"),
+  // при необходимости можно добавить cart: () => import("../pages/cart.js"),
+};
 
-// Пути к HTML-шаблонам страниц
-const routePaths = new Map([
-  ["main",     "/frontend/pages/main.html"],
-  ["category", "/frontend/pages/category.html"],
-  ["details",  "/frontend/pages/details.html"],
-  ["cart",     "/frontend/pages/cart.html"],
-]);
+// ---- утилиты для поиска «класса/экземпляра страницы» в модуле ----
+function pickPageCtorOrInstance(mod, wantedName) {
+  if (!mod) return null;
 
-// Алиасы маршрутов (на случай, если прилетает route=root)
-const ROUTE_ALIASES = new Map([
-  ["root",  "main"],
-  ["home",  "main"],
-  ["index", "main"],
-]);
+  // 1) самый частый случай — default
+  if (mod.default) return mod.default;
 
-function normalizeRoute(name) {
-  const r = (name || "main").trim();
-  return ROUTE_ALIASES.get(r) || r;
-}
+  // 2) типичные именованные варианты
+  const candidatesByName = [
+    "Page",
+    "MainPage",
+    "CategoryPage",
+    "DetailsPage",
+    wantedName && (wantedName[0].toUpperCase() + wantedName.slice(1) + "Page"),
+  ].filter(Boolean);
 
-class Router {
-  constructor() {
-    this.pages = {
-      main:     newPage(MainMod,     "MainPage"),
-      category: newPage(CategoryMod, "CategoryPage"),
-      details:  newPage(DetailsMod,  "DetailsPage"),
-      cart:     newPage(CartMod,     "CartPage"),
-    };
-
-    this.$current = $("#page-current");
-    this.$next    = $("#page-next");
-
-    // обрабатываем аппаратную кнопку «Назад» и history
-    window.addEventListener("popstate", () => {
-      const { route, params } = this._readState();
-      this._load(route, params, { animate: true, push: false });
-    });
-
-    console.log("[ROUTER] v13 loaded");
+  for (const k of candidatesByName) {
+    if (mod[k]) return mod[k];
   }
 
-  start() {
-    const { route, params } = this._readState();
-    this._load(route, params, { animate: false, push: false });
-  }
+  // 3) fallback — первая функция из экспортов
+  const anyFn = Object.values(mod).find(v => typeof v === "function");
+  if (anyFn) return anyFn;
 
-  navigateTo(route, params = {}) {
-    const normalized = normalizeRoute(route);
-    this._load(normalized, params, { animate: true, push: true });
-  }
+  // 4) крайний случай — если экспортирован объект со .load
+  const anyObjWithLoad = Object.values(mod).find(
+    v => v && typeof v === "object" && typeof v.load === "function"
+  );
+  if (anyObjWithLoad) return anyObjWithLoad;
 
-  _readState() {
-    const url = new URL(window.location.href);
-    const queryRoute = url.searchParams.get("route");
-    const route = normalizeRoute(
-      (history.state && history.state.route) || queryRoute || "main"
-    );
-    const params = (history.state && history.state.params) || {};
-    if (!routePaths.has(route)) {
-      console.warn("[ROUTER] Unknown route -> fallback main:", route);
-      return { route: "main", params: {} };
-    }
-    return { route, params };
-  }
-
-  async _load(route, params, { animate, push }) {
-    const path = routePaths.get(route);
-    const Page = this.pages[route];
-
-    // 1) грузим HTML следующей страницы во второй слой
-    const html = await this._fetchHtml(path);
-    this.$next.html(html).show();
-    this.$current.show();
-
-    // 2) анимируем своп слоёв
-    if (animate) {
-      await this._animateSwap();
-    } else {
-      this.$current.html(this.$next.html());
-      this.$next.hide().empty();
-    }
-
-    // 3) записываем историю/URL ?route=...
-    const url = new URL(window.location.href);
-    url.searchParams.set("route", route);
-    if (push) history.pushState({ route, params }, "", url);
-    else      history.replaceState({ route, params }, "", url);
-
-    // 4) запускаем логику страницы
-    try {
-      await Page.load(params || {});
-    } catch (e) {
-      console.error("[ROUTER] page load error:", e);
-    }
-  }
-
-  async _fetchHtml(path) {
-    const res = await fetch(path, { cache: "no-store" });
-    if (!res.ok) throw new Error(`Failed to fetch page: ${path}`);
-    return await res.text();
-  }
-
-  _animateSwap() {
-    // два слоя: #page-current и #page-next
-    return new Promise((resolve) => {
-      const duration = 220;
-
-      this.$next.css({ x: "100%", opacity: 1, display: "block" });
-      this.$current.css({ x: "0%",   opacity: 1, display: "block" });
-
-      this.$next.transition({ x: "0%" }, duration, "easeOutCubic");
-      this.$current
-        .transition({ x: "-30%", opacity: 0.3 }, duration, "easeOutCubic", () => {
-          this.$current.html(this.$next.html()).css({ x: "0%", opacity: 1 });
-          this.$next.hide().empty().css({ x: "100%", opacity: 1 });
-          resolve();
-        });
-    });
-  }
+  return null;
 }
 
-export const router = new Router();
-
-// Совместимость с твоим index.js — он импортирует именованный bootRouter
-export function bootRouter() {
+function asInstance(value) {
   try {
-    router.start();
-  } catch (e) {
-    console.error("[ROUTER] bootRouter failed:", e);
+    // если это класс/функция-конструктор — создать экземпляр
+    if (typeof value === "function") {
+      // если у прототипа есть load/unload — это «страничный класс»
+      if (value.prototype && (value.prototype.load || value.prototype.unload)) {
+        return new value();
+      }
+      // а вдруг это фабрика, возвращающая объект страницы
+      const produced = value();
+      if (produced) return produced;
+    }
+    // если это уже объект — вернуть как есть
+    if (value && typeof value === "object") return value;
+  } catch (_) {}
+  return null;
+}
+
+// ---- Router ----
+class Router {
+  constructor(startRoute = "main") {
+    this.history = [];
+    this.current = null;
+    this.startRoute = startRoute;
+
+    this._onBack = this._onBack.bind(this);
+    this._tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || null;
+
+    if (this._tg) {
+      // слушаем аппаратную back-кнопку
+      this._tg.onEvent("back_button_pressed", this._onBack);
+      this._tg.BackButton.hide(); // спрячем — будем сами показывать когда есть куда вернуться
+    }
+  }
+
+  async start(params = null) {
+    log("v13 loaded");
+    await this.go(this.startRoute, params, { replace: true });
+  }
+
+  async go(name, params = null, { replace = false } = {}) {
+    const loader = ROUTES[name] || ROUTES.main;
+    const mod = await loader();
+
+    const exported = pickPageCtorOrInstance(mod, name);
+    if (!exported) {
+      throw new Error(`[ROUTER] Cannot resolve page class from module (${name})`);
+    }
+
+    const page = asInstance(exported) || exported; // на случай, если это объект с .load
+    // выгрузим предыдущую страницу
+    if (this.current && this.current.instance && typeof this.current.instance.unload === "function") {
+      try { await this.current.instance.unload(); } catch (_) {}
+    }
+
+    this.current = { name, instance: page, params };
+    // обновим историю
+    if (replace && this.history.length) {
+      this.history[this.history.length - 1] = { name, params };
+    } else if (!replace) {
+      this.history.push({ name, params });
+    } else {
+      this.history = [{ name, params }];
+    }
+
+    // показать back кнопку, если есть куда вернуться
+    if (this._tg) {
+      if (this.history.length > 1) this._tg.BackButton.show();
+      else this._tg.BackButton.hide();
+    }
+
+    // вызовем загрузку страницы
+    if (page && typeof page.load === "function") {
+      await page.load(params ?? null);
+    }
+
+    // плавная анимация (чуть-чуть «дышим» после рендера)
+    requestAnimationFrame(() => {
+      document.documentElement.style.scrollBehavior = "smooth";
+      setTimeout(() => (document.documentElement.style.scrollBehavior = ""), 120);
+    });
+  }
+
+  async back() {
+    if (this.history.length <= 1) return; // некуда
+    // снимаем верхнюю
+    this.history.pop();
+    const prev = this.history[this.history.length - 1];
+    await this.go(prev.name, prev.params, { replace: true });
+  }
+
+  async _onBack() {
+    await this.back();
+  }
+
+  destroy() {
+    if (this._tg) {
+      try {
+        this._tg.offEvent("back_button_pressed", this._onBack);
+        this._tg.BackButton.hide();
+      } catch (_) {}
+    }
   }
 }
 
-export const navigateTo = (route, params) => router.navigateTo(route, params);
-export default Router;
+let _router = null;
 
-// --- совместимость со старым index.js ---
+// ---- Публичный API (как у тебя в проекте) ----
+export function navigateTo(name, params = null) {
+  if (_router) return _router.go(name, params);
+}
+
+export function goBack() {
+  if (_router) return _router.back();
+}
+
+export function bootRouter(start = "main", params = null) {
+  if (_router) _router.destroy();
+  _router = new Router(start);
+  return _router.start(params);
+}
+
+// Совместимость со старым index.js, который ожидает handleLocation()
 export function handleLocation() {
-  // старый код вызывал её на старте — делаем то же самое
   return bootRouter();
 }
+
+// На всякий случай экспортируем Router (может пригодиться)
+export { Router };
