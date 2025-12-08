@@ -1,7 +1,20 @@
 // frontend/js/requests/requests.js
 
-// Базовый URL бэкенда на Render.
-const API_BASE = "web-production-razboiv.up.railway.app".replace(/\/+$/, "");
+// Абсолютный адрес бэкенда (по умолчанию — Railway).
+const DEFAULT_API_BASE = "https://web-production-razboiv.up.railway.app";
+
+// Берём из ENV, если сборка это поддерживает (Next/Vercel), иначе — дефолт.
+// Если в ENV придёт относительный путь, приклеим его к origin фронта.
+const envBase =
+  (typeof process !== "undefined" &&
+    process.env &&
+    process.env.NEXT_PUBLIC_BACKEND_URL) ||
+  DEFAULT_API_BASE;
+
+const API_BASE = (/^https?:\/\//i.test(envBase)
+  ? envBase
+  : (window.location.origin + "/" + envBase.replace(/^\/+/, ""))
+).replace(/\/+$/, "");
 
 // Собираем полный URL.
 function url(path) {
@@ -19,12 +32,7 @@ async function fetchWithRetry(path, options = {}, retries = 2) {
       const ct = res.headers.get("content-type") || "";
       const isJson = ct.includes("application/json");
 
-      let data;
-      if (isJson) {
-        data = await res.json();
-      } else {
-        data = await res.text();
-      }
+      const data = isJson ? await res.json() : await res.text();
 
       if (!res.ok) {
         const msg =
@@ -42,49 +50,37 @@ async function fetchWithRetry(path, options = {}, retries = 2) {
         );
       }
 
-      // Успешный JSON-ответ
       return data;
     } catch (err) {
       lastError = err;
-      // если есть ещё попытки — пробуем ещё раз
-      if (attempt < retries) {
-        continue;
-      }
+      if (attempt < retries) continue;
     }
   }
-
-  // Если все попытки провалились — кидаем последнюю ошибку
   throw lastError;
 }
 
 // ===== Публичные функции, которые импортирует фронт =====
 
-// /info
 export function getInfo() {
   return fetchWithRetry("/info");
 }
 
-// /categories
 export function getCategories() {
   return fetchWithRetry("/categories");
 }
 
-// /menu/popular
 export function getPopularMenu() {
   return fetchWithRetry("/menu/popular");
 }
 
-// /menu/<categoryId> (burgers, pizza, pasta, coffee, ice-cream)
 export function getMenuCategory(categoryId) {
   return fetchWithRetry(`/menu/${encodeURIComponent(categoryId)}`);
 }
 
-// /menu/details/<itemId> (burger-1, pizza-2 и т.п.)
 export function getMenuItem(itemId) {
   return fetchWithRetry(`/menu/details/${encodeURIComponent(itemId)}`);
 }
 
-// POST /order
 export function createOrder(payload) {
   return fetchWithRetry("/order", {
     method: "POST",
