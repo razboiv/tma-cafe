@@ -8,6 +8,11 @@ from telebot.types import LabeledPrice
 from app import auth, bot                         # наш модуль бота
 from app.bot import process_update, refresh_webhook
 
+@app.route("/refresh_webhook")
+def refresh_webhook_route():
+    refresh_webhook()
+    return jsonify({"message": "webhook is alive"})
+
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 CORS(app, resources={r"/*": {"origins": os.getenv("CORS_ORIGINS", "*")}})
