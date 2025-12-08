@@ -4,7 +4,62 @@ import TelegramSDK from "../telegram/telegram.js";
 
 console.log("[ROUTER] v13 loaded");
 
-// ---- карта лениво подгружаемых страниц ----
+// ---------- совместимость с разными обёртками Telegram SDK ----------
+
+function bindBackHandler(handler) {
+  const t = window.Telegram?.WebApp;
+
+  // варианты в твоём telegram.js
+  if (TelegramSDK && typeof TelegramSDK.onBackButton === "function") {
+    TelegramSDK.onBackButton(handler);
+    return;
+  }
+  if (TelegramSDK && typeof TelegramSDK.onBackButtonClick === "function") {
+    TelegramSDK.onBackButtonClick(handler);
+    return;
+  }
+  if (TelegramSDK?.BackButton && typeof TelegramSDK.BackButton.onClick === "function") {
+    TelegramSDK.BackButton.onClick(handler);
+    return;
+  }
+
+  // нативный Telegram.WebApp
+  if (t?.BackButton && typeof t.BackButton.onClick === "function") {
+    t.BackButton.onClick(handler);
+    return;
+  }
+
+  // совсем уж запасной вариант (браузерная «назад»)
+  window.addEventListener("popstate", () => handler());
+}
+
+function setBackButtonVisible(isVisible) {
+  const t = window.Telegram?.WebApp;
+
+  // обёртки
+  if (typeof TelegramSDK?.showBackButton === "function") {
+    TelegramSDK.showBackButton(isVisible);
+    return;
+  }
+  if (typeof TelegramSDK?.setBackButtonVisible === "function") {
+    TelegramSDK.setBackButtonVisible(isVisible);
+    return;
+  }
+  if (TelegramSDK?.BackButton) {
+    const BB = TelegramSDK.BackButton;
+    if (isVisible && typeof BB.show === "function") return BB.show();
+    if (!isVisible && typeof BB.hide === "function") return BB.hide();
+  }
+
+  // нативный Telegram.WebApp
+  if (t?.BackButton) {
+    if (isVisible && typeof t.BackButton.show === "function") t.BackButton.show();
+    if (!isVisible && typeof t.BackButton.hide === "function") t.BackButton.hide();
+  }
+}
+
+// ---------- ленивые модули страниц ----------
+
 const PAGES = {
   main:     () => import("../pages/main.js?v=13"),
   category: () => import("../pages/category.js?v=13"),
@@ -12,24 +67,17 @@ const PAGES = {
   cart:     () => import("../pages/cart.js?v=13"),
 };
 
-// ---- утилиты распознавания экспорта страницы ----
+// извлекаем класс/инстанс страницы из модуля «как получится»
 function resolveCtorOrInstance(mod, nameHint) {
   try {
-    // 1) default экспорт (класс или инстанс)
     if (mod && "default" in mod && mod.default) {
       const d = mod.default;
-      if (typeof d === "function") return d;      // класс/фабрика
-      if (typeof d === "object")   return d;      // готовый инстанс
+      if (typeof d === "function") return d;
+      if (typeof d === "object")   return d;
     }
-
-    // 2) набор распространённых имён классов/инстансов
     const title = nameHint ? nameHint[0].toUpperCase() + nameHint.slice(1) : null;
     const candidates = [
-      "Page",
-      "MainPage",
-      "CategoryPage",
-      "DetailsPage",
-      "CartPage",
+      "Page","MainPage","CategoryPage","DetailsPage","CartPage",
       title && `${title}Page`,
     ].filter(Boolean);
 
@@ -39,64 +87,51 @@ function resolveCtorOrInstance(mod, nameHint) {
       if (v && typeof v === "object") return v;
     }
 
-    // 3) модуль экспортирует только функции жизненного цикла (load/unload)
     if (typeof mod.load === "function") {
       return {
-        load:    (...args) => mod.load(...args),
-        unload:  typeof mod.unload === "function" ? (...a) => mod.unload(...a) : undefined,
+        load:   (...a) => mod.load(...a),
+        unload: typeof mod.unload === "function" ? (...a) => mod.unload(...a) : undefined,
       };
     }
 
-    // 4) взять первый “вменяемый” экспорт (класс/функция/объект c load)
-    for (const [k, v] of Object.entries(mod)) {
+    for (const v of Object.values(mod)) {
       if (typeof v === "function") return v;
       if (v && typeof v === "object" && typeof v.load === "function") return v;
     }
   } catch (e) {
     console.warn("[ROUTER] resolve error:", e);
   }
-
-  console.warn("[ROUTER] Could not resolve Page from module, using Noop:", mod);
-  return { load() {} }; // безопасный no-op инстанс
+  console.warn("[ROUTER] Could not resolve Page from module, using Noop");
+  return { load() {} };
 }
 
 function asInstance(ctorOrObj, params) {
   if (typeof ctorOrObj === "function") {
-    // это класс или фабрика
-    try {
-      return new ctorOrObj(params);
-    } catch {
-      const maybeObj = ctorOrObj(params);
-      if (maybeObj && typeof maybeObj === "object") return maybeObj;
-      // если это была просто функция без возврата — вернём заглушку
-      return { load() {} };
+    try { return new ctorOrObj(params); } catch {
+      const maybe = ctorOrObj(params);
+      return (maybe && typeof maybe === "object") ? maybe : { load() {} };
     }
   }
   return ctorOrObj || { load() {} };
 }
 
-// ---- сам роутер ----
+// ---------- сам роутер ----------
+
 class Router {
   constructor() {
-    this.stack = []; // { name, page }
+    this.stack = [];
     this.current = null;
-
-    // обработчик системной “назад”
-    TelegramSDK.onBackButton(() => this.back());
+    bindBackHandler(() => this.back());
   }
 
   async loadModule(name) {
-    const loader = PAGES[name] || PAGES.main; // fallback
+    const loader = PAGES[name] || PAGES.main;
     const mod = await loader();
-    // небольшая подсказка в логи — какие ключи есть у модуля
-    try {
-      console.debug(`[ROUTER] module '${name}' keys:`, Object.keys(mod));
-    } catch {}
+    try { console.debug(`[ROUTER] module '${name}' keys:`, Object.keys(mod)); } catch {}
     return mod;
   }
 
   async go(name, params = {}) {
-    // выгрузим текущую
     if (this.current?.page?.unload) {
       try { await this.current.page.unload(); } catch (e) { console.warn(e); }
     }
@@ -105,16 +140,13 @@ class Router {
     const ctorOrInstance = resolveCtorOrInstance(mod, name);
     const page = asInstance(ctorOrInstance, params);
 
-    this.current = { name, page };
+    this.current = { name, page, params };
     this.stack.push(this.current);
 
-    // показать/скрыть back в зависимости от глубины
-    TelegramSDK.showBackButton(this.stack.length > 1);
+    setBackButtonVisible(this.stack.length > 1);
 
-    // плавная прокрутка к началу, чтоб не “прыгало”
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
 
-    // загрузка страницы
     if (typeof page.load === "function") {
       await page.load(params);
     } else {
@@ -124,33 +156,31 @@ class Router {
 
   async back() {
     if (this.stack.length <= 1) {
-      TelegramSDK.showBackButton(false);
-      return; // корень — нечего назад
+      setBackButtonVisible(false);
+      return;
     }
 
-    // убрать текущую
-    const current = this.stack.pop();
-    if (current?.page?.unload) {
-      try { await current.page.unload(); } catch (e) { console.warn(e); }
+    const cur = this.stack.pop();
+    if (cur?.page?.unload) {
+      try { await cur.page.unload(); } catch (e) { console.warn(e); }
     }
 
     const prev = this.stack[this.stack.length - 1];
     this.current = prev;
-    TelegramSDK.showBackButton(this.stack.length > 1);
+    setBackButtonVisible(this.stack.length > 1);
 
-    // перерисовать предыдущую (без повторной загрузки модуля)
     if (prev?.page?.load) {
       await prev.page.load(prev.params || {});
     }
   }
 
-  // стартует приложение
   async start(startName = "main", params = {}) {
     await this.go(startName, params);
   }
 }
 
-// ---- синглтон + API, которое ждут остальные файлы ----
+// ---------- экспорт API, совместимый со старым кодом ----------
+
 let _router;
 
 export function bootRouter(start = "main", params = {}) {
@@ -165,7 +195,6 @@ export function navigateTo(name, params = {}) {
 }
 
 export function handleLocation(name = "main", params = {}) {
-  // совместимость со старым index.js
   return navigateTo(name, params);
 }
 
