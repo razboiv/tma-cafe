@@ -12,27 +12,24 @@ export default class CategoryPage extends Route {
 
   async load(params) {
     console.log("[CategoryPage] load", params);
-    TelegramSDK.expand();
 
-    // Показать системную кнопку «Назад» → на главную
+    // Показываем системную кнопку «Назад»
     TelegramSDK.showBackButton(() => navigateTo("root"));
 
     this.updateMainButton();
 
     // распарсим параметры (строка/объект), примем id | categoryId | slug
     let p = {};
-    try {
-      p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {});
-    } catch { p = params || {}; }
-
+    try { p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {}); }
+    catch { p = params || {}; }
     const categoryId = p.categoryId || p.id || p.slug;
+
     if (!categoryId || typeof categoryId !== "string") {
       console.error("[CategoryPage] no valid id in params:", params);
-      navigateTo("root");
-      return;
+      navigateTo("root"); return;
     }
 
-    // запросим список блюд
+    // запрос списка блюд
     const items = await getMenuCategory(categoryId);
     console.log("[CategoryPage] items", items);
 
@@ -59,9 +56,7 @@ export default class CategoryPage extends Route {
       desc.className = "small cafe-item-description";
       desc.textContent = item.description || item.short || "";
 
-      el.appendChild(img);
-      el.appendChild(title);
-      el.appendChild(desc);
+      el.appendChild(img); el.appendChild(title); el.appendChild(desc);
 
       // переход на детали; пробрасываем categoryId
       el.addEventListener("click", () =>
@@ -75,9 +70,7 @@ export default class CategoryPage extends Route {
   updateMainButton() {
     const count = Cart.getPortionCount ? Cart.getPortionCount() : 0;
     if (count > 0) {
-      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () =>
-        navigateTo("cart")
-      );
+      TelegramSDK.showMainButton(`MY CART · ${count} POSITIONS`, () => navigateTo("cart"));
       document.body.dataset.mainbutton = "cart";
     } else {
       TelegramSDK.hideMainButton();
