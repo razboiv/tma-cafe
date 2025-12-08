@@ -4,14 +4,14 @@
 
 import TelegramSDK from "../telegram/telegram.js";
 
-console.log("[ROUTER] v10 loaded");
+console.log("[ROUTER] v11 loaded");
 
-// Карта маршрутов: относительные пути (без начального /)
+// Карта маршрутов
 const ROUTES = {
-  main:     { html: "pages/main.html",     js: () => import("../pages/main.js"),     inst: null },
-  category: { html: "pages/category.html", js: () => import("../pages/category.js"), inst: null },
-  details:  { html: "pages/details.html",  js: () => import("../pages/details.js"),  inst: null },
-  cart:     { html: "pages/cart.html",     js: () => import("../pages/cart.js"),     inst: null },
+  main:     { html: "pages/main.html",     module: "../pages/main.js",     inst: null },
+  category: { html: "pages/category.html", module: "../pages/category.js", inst: null },
+  details:  { html: "pages/details.html",  module: "../pages/details.js",  inst: null },
+  cart:     { html: "pages/cart.html",     module: "../pages/cart.js",     inst: null },
 };
 
 // Кэш HTML
@@ -51,14 +51,39 @@ function parseHash() {
   return { dest, params: p };
 }
 
+// Универсальная загрузка класса страницы из модуля
+async function loadPageCtor(modulePath) {
+  // cache-buster, чтобы гарантированно подхватывать свежую версию модулей
+  const sep = modulePath.includes("?") ? "&" : "?";
+  const url = `${modulePath}${sep}v=${Date.now()}`;
+
+  const mod = await import(url);
+
+  // 1) named export Page
+  let Ctor = mod.Page;
+  // 2) default export
+  if (typeof Ctor !== "function") Ctor = mod.default;
+  // 3) запасной вариант — любая экспортированная функция/класс
+  if (typeof Ctor !== "function") {
+    const anyFn = Object.values(mod).find(v => typeof v === "function");
+    if (typeof anyFn === "function") Ctor = anyFn;
+  }
+
+  if (typeof Ctor !== "function") {
+    console.error("[Router] Bad page module exports:", mod);
+    throw new TypeError("Page is not a constructor");
+  }
+  return Ctor;
+}
+
 // Ленивая инициализация класса страницы
 async function ensureInstance(name) {
   const meta = ROUTES[name];
   if (!meta) return null;
   if (meta.inst) return meta.inst;
-  const mod = await meta.js();
-  const Page = mod.default || mod[name];
-  meta.inst = new Page();
+
+  const PageCtor = await loadPageCtor(meta.module);
+  meta.inst = new PageCtor();
   return meta.inst;
 }
 
@@ -114,10 +139,10 @@ export async function handleLocation() {
       return navigateTo("main");
     }
 
-    TelegramSDK.ready();
-    TelegramSDK.expand();
-    TelegramSDK.hideMainButton();
-    TelegramSDK.hideSecondaryButton();
+    TelegramSDK.ready?.();
+    TelegramSDK.expand?.();
+    TelegramSDK.hideMainButton?.();
+    TelegramSDK.hideSecondaryButton?.();
 
     await render(name, params);
   } catch (e) {
