@@ -7,7 +7,7 @@ import TelegramSDK from "../telegram/telegram.js";
 import { loadImage, replaceShimmerContent } from "../utils/dom.js";
 import { Cart } from "../cart/cart.js";
 
-/* =================== cache =================== */
+/* ================= cache ================= */
 const POPULAR_CACHE_KEY = "tma-popular-cache-v1";
 const getPopularCache = () => {
   try { return JSON.parse(sessionStorage.getItem(POPULAR_CACHE_KEY) || "null"); }
@@ -17,19 +17,18 @@ const setPopularCache = (items) => {
   try { sessionStorage.setItem(POPULAR_CACHE_KEY, JSON.stringify(items)); } catch {}
 };
 
-/* =================== helpers =================== */
+/* =============== helpers =============== */
 const pluralizePositions = (n) => (Number(n) === 1 ? "1 POSITION" : `${Number(n)||0} POSITIONS`);
 
-/* ------ низкоуровневый, «ручной» рендер карточек на случай, если <template> ещё нет ------ */
+/* ===== низкоуровневый «ручной» рендер (если template ещё не в DOM) ===== */
 function renderPopularRaw(items = []) {
   const cont = document.querySelector("#cafe-popular");
   if (!cont) return false;
 
-  // снять shimmer у секции и контейнера
   document.querySelector("#cafe-section-popular-title")?.classList.remove("shimmer");
   cont.classList.remove("shimmer");
-
   cont.innerHTML = "";
+
   (Array.isArray(items) ? items : []).forEach((it) => {
     const card = document.createElement("div");
     card.className = "cafe-item-container";
@@ -58,9 +57,8 @@ function renderPopularRaw(items = []) {
   return true;
 }
 
-/* ------ обычный рендер, если шаблон и наша утилита доступны ------ */
+/* ===== обычный рендер через template/утилиту ===== */
 function renderPopularWithTemplate(items = []) {
-  // снять shimmer у секции и контейнера
   $("#cafe-section-popular-title").removeClass("shimmer");
   $("#cafe-popular").removeClass("shimmer");
 
@@ -87,16 +85,13 @@ function renderPopularWithTemplate(items = []) {
   return true;
 }
 
-/* ------ умный рендер: если есть <template> — используем его, иначе «ручной» ------ */
+/* ===== умный рендер: если есть <template> — используем, иначе «сыро» ===== */
 function renderPopularSmart(items = []) {
   const hasTemplate = !!document.querySelector("#cafe-item-template");
-  if (hasTemplate && typeof replaceShimmerContent === "function") {
-    return renderPopularWithTemplate(items);
-  }
-  return renderPopularRaw(items);
+  return hasTemplate ? renderPopularWithTemplate(items) : renderPopularRaw(items);
 }
 
-/* ------ гарантированный показ Popular из cache при любом возврате/вклейке DOM ------ */
+/* ===== гарантированный показ Popular из cache при ЛЮБОЙ вклейке главной ===== */
 let lastEnsureTs = 0;
 function ensurePopularFromCache() {
   const now = Date.now();
@@ -111,13 +106,15 @@ function ensurePopularFromCache() {
   renderPopularSmart(cached);
 }
 
-/* постоянный наблюдатель за DOM — ловим момент, когда вставится главная */
-const __observer = new MutationObserver(ensurePopularFromCache);
-__observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
-// первая попытка для текущего состояния
+/* Постоянный наблюдатель — ловим появление #cafe-popular */
+const __popularObserver = new MutationObserver(ensurePopularFromCache);
+__popularObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+// watchdog: иногда роутер меняет DOM «молча» — периодически проверим состояние
+setInterval(ensurePopularFromCache, 250);
+// сразу попробуем на текущем состоянии
 ensurePopularFromCache();
 
-/* =================== Main page =================== */
+/* ================= Main page ================= */
 export default class MainPage extends Route {
   constructor() {
     super("root", "/pages/main.html");
@@ -129,17 +126,17 @@ export default class MainPage extends Route {
     TelegramSDK.ready?.();
     TelegramSDK.expand?.();
 
-    // мгновенно попытаться показать Popular из кэша
+    // показать Popular из cache ещё до сети (если есть)
     ensurePopularFromCache();
 
     // нижняя кнопка корзины
     this.updateMainButton();
 
-    // параллельно тянем данные
+    // параллельно тянем данные и перерисовываем
     await Promise.allSettled([
       this.loadCafeInfo(),
       this.loadCategories(),
-      this.loadPopularMenu(), // перерисует и обновит кеш
+      this.loadPopularMenu(), // обновит cache и перерисует
     ]);
   }
 
@@ -161,13 +158,14 @@ export default class MainPage extends Route {
       if (info?.coverImage) { loadImage($("#cafe-cover"), info.coverImage); $("#cafe-cover").removeClass("shimmer"); }
       if (info?.logoImage)  { loadImage($("#cafe-logo"),  info.logoImage);  $("#cafe-logo").removeClass("shimmer"); }
 
-      if (info?.name)               $("#cafe-name").text(info.name);
-      if (info?.kitchenCategories)  $("#cafe-kitchen-categories").text(info.kitchenCategories);
-      if (info?.rating)             $("#cafe-rating").text(info.rating);
-      if (info?.cookingTime)        $("#cafe-cooking-time").text(info.cookingTime);
-      if (info?.status)             $("#cafe-status").text(info.status);
+      if (info?.name)              $("#cafe-name").text(info.name);
+      if (info?.kitchenCategories) $("#cafe-kitchen-categories").text(info.kitchenCategories);
+      if (info?.rating)            $("#cafe-rating").text(info.rating);
+      if (info?.cookingTime)       $("#cafe-cooking-time").text(info.cookingTime);
+      if (info?.status)            $("#cafe-status").text(info.status);
 
-      $("#cafe-info, #cafe-name, #cafe-kitchen-categories, .cafe-parameters-container").removeClass("shimmer");
+      $("#cafe-info, #cafe-name, #cafe-kitchen-categories, .cafe-parameters-container")
+        .removeClass("shimmer");
     } catch (e) {
       console.error("[MainPage] failed to load info", e);
     }
@@ -188,9 +186,14 @@ export default class MainPage extends Route {
           tpl.attr("id", category.id);
           tpl.css("background-color", category.backgroundColor || "");
           tpl.find("#cafe-category-name").text(category.name ?? "");
+
           const img = tpl.find("#cafe-category-icon");
           if (category.icon) loadImage(img, category.icon);
-          tpl.on("click", () => navigateTo("category", JSON.stringify({ id: category.id })));
+
+          tpl.on("click", () => {
+            const params = JSON.stringify({ id: category.id });
+            navigateTo("category", params);
+          });
         }
       );
     } catch (e) {
@@ -198,17 +201,16 @@ export default class MainPage extends Route {
     }
   }
 
-  /* === Popular === */
+  /* Popular */
   renderPopular(items = []) {
     renderPopularSmart(items);
   }
 
   async loadPopularMenu() {
-    // показать кэш сразу
+    // сразу кэш, если есть
     const cached = getPopularCache();
     if (Array.isArray(cached) && cached.length) this.renderPopular(cached);
 
-    // подтянуть свежие и обновить кэш
     try {
       const items = await getPopularMenu();
       setPopularCache(items);
