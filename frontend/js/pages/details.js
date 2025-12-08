@@ -3,7 +3,7 @@ import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import TelegramSDK from "../telegram/telegram.js";
 import { loadImage } from "../utils/dom.js";
-import { getMenuItem } from "../requests/requests.js"; // если имя другое — оставь свой импорт
+import { getMenuItem } from "../requests/requests.js"; // правильный экспорт
 
 export default class DetailsPage extends Route {
   constructor() {
@@ -12,45 +12,45 @@ export default class DetailsPage extends Route {
   }
 
   _onBack() {
-    // системный back с анимацией
-    window.history.back();
+    window.history.back(); // системный back с анимацией
   }
 
   async load(params) {
-    // включаем системную кнопку Назад (стрелка)
     TelegramSDK.showBackButton(this._onBack);
+    TelegramSDK.ready?.();
+    TelegramSDK.expand?.();
 
-    const { id, categoryId } = (params ? JSON.parse(params) : {});
-
-    // на всякий случай: если нет истории (открыли детали «холодно»)
-    // дадим запасной маршрут
+    const { id, categoryId } = params ? JSON.parse(params) : {};
     this._fallbackBack = () => {
       if (categoryId) navigateTo("category", JSON.stringify({ id: categoryId }));
-      else navigateTo("root"); // главная
+      else navigateTo("root");
     };
 
     try {
       const item = await getMenuItem(id);
 
-      // проставляем контент карточки товара (свои селекторы оставь как у тебя)
-      if (item?.image) loadImage($("#details-image"), item.image);
-      $("#details-name").text(item?.name ?? "");
-      $("#details-description").text(item?.description ?? "");
-      $("#details-price").text(item?.price ? `$${item.price}` : "");
+      // Подставь свои селекторы, если отличаются
+      if (item?.image) {
+        loadImage($("#cafe-item-details-image"), item.image);
+        $("#cafe-item-details-image").show();
+      }
+      $("#cafe-item-details-name").text(item?.name ?? "");
+      $("#cafe-item-details-description").text(item?.description ?? "");
+      if (item?.price != null) $("#cafe-item-details-price").text(`$${item.price}`);
+      if (item?.mass) $("#cafe-item-details-mass").text(item.mass);
 
-      // кнопки размеров/кол-ва остаются как у тебя
-      // ...
+      // Убери скелетоны, если они у тебя помечены data-skeleton
+      $("[data-skeleton]").remove();
+      $("[data-content]").show();
     } catch (e) {
       console.error("[DetailsPage] load failed", e);
+      // на всякий случай вернём пользователя назад по запасному маршруту
+      this._fallbackBack?.();
     }
   }
 
   destroy() {
     try { TelegramSDK.hideBackButton(); } catch {}
     try { TelegramSDK.offBackButton?.(this._onBack); } catch {}
-
-    // Если вдруг пользователь «закрывает» WebView и back не сработал,
-    // можно вызвать запасной маршрут:
-    // this._fallbackBack?.();
   }
 }
