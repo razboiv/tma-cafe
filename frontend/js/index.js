@@ -1,10 +1,15 @@
 // frontend/js/index.js
+
 import TelegramSDK from "./telegram/telegram.js";
-// версия в query — чтобы перебить кэш
-import { bootRouter, handleLocation } from "./routing/router.js?v=10";
+// версию в query оставляем для перебития кэша в браузере
+import { bootRouter, handleLocation } from "./routing/router.js?v=13";
 
-TelegramSDK.ready();
-TelegramSDK.expand();
+// корректная и безопасная инициализация Telegram WebApp
+TelegramSDK.ready?.();
+TelegramSDK.expand?.();
 
+// запуск роутера (ТОЛЬКО ОДИН РАЗ!)
 bootRouter();
-window.addEventListener("hashchange", handleLocation);
+
+// слушаем смену хэша и передаём в роутер
+window.addEventListener("hashchange", handleLocation, { passive: true });
