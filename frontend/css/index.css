@@ -876,3 +876,48 @@ p.small {
     line-height: 28px;
     color: white; /* или другой цвет */
 }
+
+/* ===== Details page layout ===== */
+.details-content { padding: 12px 16px 24px; }
+
+.details-title-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-top: 10px;
+}
+.details-title { font-size: 22px; line-height: 1.25; margin: 0; }
+.details-weight { color: rgba(255,255,255,.65); font-size: 14px; white-space: nowrap; }
+
+.details-description { margin: 8px 0 14px; opacity: .85; }
+
+.details-price-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 6px 0 10px;
+}
+.details-price-label { opacity: .85; }
+.details-price { font-weight: 600; font-size: 18px; }
+
+/* варианты — «пилюли» */
+.details-variants { display: flex; gap: 10px; margin: 6px 0 14px; flex-wrap: wrap; }
+.cafe-item-details-variant {
+  padding: 8px 16px; border-radius: 9999px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06); color: inherit; cursor: pointer;
+}
+.cafe-item-details-variant.active {
+  background: var(--tg-theme-button-color, #3d6cff);
+  color: var(--tg-theme-button-text-color, #fff);
+  border-color: transparent;
+}
+
+/* степпер по центру */
+.details-qty-row {
+  display: flex; align-items: center; justify-content: center; gap: 18px; margin: 6px 0 12px;
+}
+.qty-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06); color: inherit;
+}
+.qty-value { min-width: 28px; text-align: center; font-size: 18px; }
+
+/* картинка: убрать «скелетон», если уже не сделали */
+.details-cover img { display: block; width: 100%; height: auto; border-radius: 12px; }
