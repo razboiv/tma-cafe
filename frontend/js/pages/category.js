@@ -13,13 +13,17 @@ export default class CategoryPage extends Route {
   async load(params) {
     console.log("[CategoryPage] load", params);
     TelegramSDK.expand();
+
+    // Показать системную кнопку «Назад» → на главную
+    TelegramSDK.showBackButton(() => navigateTo("root"));
+
     this.updateMainButton();
 
-    // 1) распарсим параметры (строка/объект), примем id | categoryId | slug
+    // распарсим параметры (строка/объект), примем id | categoryId | slug
     let p = {};
     try {
       p = typeof params === "string" ? JSON.parse(params || "{}") : (params || {});
-    } catch (_) { p = params || {}; }
+    } catch { p = params || {}; }
 
     const categoryId = p.categoryId || p.id || p.slug;
     if (!categoryId || typeof categoryId !== "string") {
@@ -28,34 +32,29 @@ export default class CategoryPage extends Route {
       return;
     }
 
-    // 2) запросим список блюд
+    // запросим список блюд
     const items = await getMenuCategory(categoryId);
     console.log("[CategoryPage] items", items);
 
-    // 3) контейнер и отрисовка без utils/dom.js
+    // ручная отрисовка карточек
     const root = document.querySelector("#cafe-category");
     if (!root) return;
-
-    // очистим «скелетоны»
     root.innerHTML = "";
 
     (Array.isArray(items) ? items : []).forEach((item) => {
       const el = document.createElement("div");
       el.className = "cafe-item-container";
 
-      // картинка
       const img = document.createElement("img");
       img.className = "cafe-item-image shimmer";
       img.alt = "";
       img.src = (item.image || item.photo || "").trim();
       img.addEventListener("load", () => img.classList.remove("shimmer"));
 
-      // заголовок
       const title = document.createElement("h6");
       title.className = "cafe-item-name";
       title.textContent = item.name || "";
 
-      // подпись
       const desc = document.createElement("p");
       desc.className = "small cafe-item-description";
       desc.textContent = item.description || item.short || "";
