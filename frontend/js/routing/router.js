@@ -104,7 +104,15 @@ function loadPage(pageContainerSelector, pagePath, onLoad) {
 
 // ---- Анимация перехода ----
 function animate(run, reverse) {
-  animationRunning = run;
+  // ⛑️ БЕЗОПАСНАЯ ПЕРВАЯ ОТРИСОВКА: если run === false — просто выставим стейты и выйдем
+  if (!run) {
+    $("#page-current").css({ display: "", transform: "", "z-index": nextPageZ });
+    $("#page-next").css({ display: "none", transform: "", "z-index": currentPageZ }).empty();
+    animationRunning = false;
+    return;
+  }
+
+  animationRunning = true;
 
   const curTo = reverse ? nextPageLeftFrom : previousPageLeft;
   const nextFrom = reverse ? previousPageLeft : nextPageLeftFrom;
@@ -160,18 +168,19 @@ function processLocation(reverse = false) {
   const hasCurrentContent = $("#page-current").contents().length > 0;
 
   if (hasCurrentContent) {
+    // обычный переход с анимацией
     cancelCurrentLoad = loadPage("#page-next", currentRoute.contentPath, () => {
       cancelCurrentLoad = null;
       currentRoute.load(params);
     });
     animate(true, reverse);
   } else {
+    // первый рендер — БЕЗ анимации
     cancelCurrentLoad = loadPage("#page-current", currentRoute.contentPath, () => {
       cancelCurrentLoad = null;
       currentRoute.load(params);
     });
-    // первую загрузку показываем без анимации
-    animate(false, false);
+    animate(false, false); // noop: просто корректно выставит состояния контейнеров
   }
 
   if (currentRoute.dest !== "root") {
