@@ -5,16 +5,17 @@
 import TelegramSDK from "../telegram/telegram.js";
 
 const TG = window.Telegram?.WebApp;
+
 function toggleBackButton(routeId) {
-  // на главной «Назад» прячем, на внутренних показываем
-  if (routeId === "main" || routeId === "root" || routeId === "" || routeId === undefined) {
+  // На главной «Назад» прячем, на внутренних показываем
+  if (!routeId || routeId === "main" || routeId === "root") {
     TG?.BackButton?.hide?.();
   } else {
     TG?.BackButton?.show?.();
   }
 }
 
-console.log("[ROUTER] v10 loaded");
+console.log("[ROUTER] v13 loaded");
 
 // Карта маршрутов: относительные пути (без начального /)
 const ROUTES = {
@@ -128,6 +129,7 @@ export async function handleLocation() {
     TelegramSDK.expand();
     TelegramSDK.hideMainButton();
     TelegramSDK.hideSecondaryButton();
+    toggleBackButton(name);             // ← добавили переключение Back
 
     await render(name, params);
   } catch (e) {
@@ -136,7 +138,17 @@ export async function handleLocation() {
 }
 
 // Старт
+let backBound = false;
 export function bootRouter() {
+  // один раз вешаем обработчик на системную кнопку «Назад»
+  if (!backBound) {
+    TG?.BackButton?.onClick?.(() => {
+      // история хэшей сама вызовет handleLocation через слушатель
+      history.back();
+    });
+    backBound = true;
+  }
+
   if (!location.hash || location.hash === "#/" || location.hash === "#") {
     navigateTo("main");
   } else {
