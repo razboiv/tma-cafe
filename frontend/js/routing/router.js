@@ -4,6 +4,16 @@
 
 import TelegramSDK from "../telegram/telegram.js";
 
+const TG = window.Telegram?.WebApp;
+function toggleBackButton(routeId) {
+  // на главной «Назад» прячем, на внутренних показываем
+  if (routeId === "main" || routeId === "root" || routeId === "" || routeId === undefined) {
+    TG?.BackButton?.hide?.();
+  } else {
+    TG?.BackButton?.show?.();
+  }
+}
+
 console.log("[ROUTER] v10 loaded");
 
 // Карта маршрутов: относительные пути (без начального /)
