@@ -1,29 +1,31 @@
-// frontend/js/routing/route.js
-class Route {
-  constructor(name, htmlPath) {
-    this.name = name;
-    this.htmlPath = htmlPath;
-    this.node = null;
-  }
+/**
+ * Route is a representation of navigation destination. It holds such data as
+ * dest (e.g. 'cart') and contentPath (e.g. '/pages/cart.html').
+ * This is a base class that does nothing itself. It should be overriden by passing
+ * dest and contentPath values, as well as overriding method load(params).
+ */
+export class Route {
+    constructor(dest, contentPath) {
+        this.dest = dest;
+        this.contentPath = contentPath;
+    }
 
-  async beforeEnter() {}
-  async afterEnter() {}
-  async beforeLeave() {}
-  async afterLeave() {}
-  async load() {}
+    /**
+     * Load content. This method is called when the HTML of the route defined by
+     * contentPath param is loaded and added to DOM.
+     * @param {string} params Params that are needed for content load (e.g. some ID).
+     *                          You can pass it by calling navigateTo(dest, params). 
+     *                          In JSON format.
+     */
+    load(params) { }
 
-  async fetchHtml() {
-    if (!this.htmlPath) throw new Error(`[Route] htmlPath is not set for "${this.name}"`);
-    const url = new URL(this.htmlPath, location.origin).toString();
-    const res = await fetch(url, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`[Route] Failed to load "${this.name}": ${res.status} ${res.statusText}`);
-    return await res.text();
-  }
+    /**
+     * Called when next navigation is started.
+     */
+    onClose() { }
 
-  mount(container, html) {
-    container.innerHTML = html;
-    this.node = container;
-  }
+    /**
+     * Page cache elements to store on HTML level.
+     */
+    cacheElementsToStore() { return 0 }
 }
-export { Route };       // ← именованный экспорт
-export default Route;   // ← и дефолтный тоже
