@@ -61,7 +61,7 @@ function refreshMainButton(force = false) {
 /**
  * Главная страница: инфо о кафе, категории, популярное меню.
  */
-export default class MainPage extends Route {
+export class MainPage extends Route {
   constructor() {
     super("root", "/pages/main.html");
   }
@@ -217,4 +217,3 @@ export default class MainPage extends Route {
     return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
-export { MainPage };
