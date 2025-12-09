@@ -5,7 +5,7 @@ import { Cart } from "../cart/cart.js";
 import { createOrder } from "../requests/requests.js";
 import { toDisplayCost } from "../utils/currency.js";
 
-export default class CartPage extends Route {
+export class CartPage extends Route {
   constructor() {
     super("cart", "/pages/cart.html");
     this._onCheckout = null;
@@ -226,4 +226,3 @@ export default class CartPage extends Route {
     }
   }
 }
-export { CartPage };
