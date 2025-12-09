@@ -1,6 +1,6 @@
 // frontend/js/pages/cart.js
 import { Route } from "../routing/route.js";
-import TelegramSDK from "../telegram/telegram.js";
+import { TelegramSDK } from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 import { createOrder } from "../requests/requests.js";
 import { toDisplayCost } from "../utils/currency.js";
