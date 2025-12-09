@@ -129,3 +129,4 @@ export default class DetailsPage extends Route {
     TelegramSDK.showMainButton(label, () => navigateTo("cart"));
   }
 }
+export { DetailsPage };
