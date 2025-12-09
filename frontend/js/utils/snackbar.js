@@ -1,5 +1,5 @@
 // frontend/js/utils/snackbar.js
-import TelegramSDK from "../telegram/telegram.js";
+import { TelegramSDK } from "../telegram/telegram.js";
 
 /**
  * Util-класс для показа Snackbar.
