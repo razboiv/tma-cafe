@@ -2,7 +2,7 @@
 import { Route } from "../routing/route.js";
 import { navigateTo } from "../routing/router.js";
 import { getMenuItem } from "../requests/requests.js";
-import TelegramSDK from "../telegram/telegram.js";
+import { TelegramSDK } from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 import { toDisplayCost } from "../utils/currency.js";
 
