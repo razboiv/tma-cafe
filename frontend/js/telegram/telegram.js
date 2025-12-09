@@ -87,5 +87,3 @@ export class TelegramSDK {
   static close() { try { Telegram?.WebApp?.close?.(); } catch (_) {} }
   static sendData(data) { try { Telegram?.WebApp?.sendData?.(data); } catch (_) {} }
 }
-
-export default TelegramSDK;
