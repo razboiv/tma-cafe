@@ -226,3 +226,4 @@ export default class CartPage extends Route {
     }
   }
 }
+export { CartPage };
