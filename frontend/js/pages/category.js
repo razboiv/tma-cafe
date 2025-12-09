@@ -86,3 +86,4 @@ export default class CategoryPage extends Route {
     }
   }
 }
+export { CategoryPage };
