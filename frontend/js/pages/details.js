@@ -12,7 +12,7 @@ function revealContent() {
   document.querySelectorAll("[data-content]").forEach(n => (n.style.display = ""));
 }
 
-export default class DetailsPage extends Route {
+export class DetailsPage extends Route {
   #item = null;
   #variant = null;
   #qty = 1;
@@ -129,4 +129,3 @@ export default class DetailsPage extends Route {
     TelegramSDK.showMainButton(label, () => navigateTo("cart"));
   }
 }
-export { DetailsPage };
