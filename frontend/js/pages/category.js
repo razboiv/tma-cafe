@@ -5,7 +5,7 @@ import { getMenuCategory } from "../requests/requests.js";
 import { TelegramSDK } from "../telegram/telegram.js";
 import { Cart } from "../cart/cart.js";
 
-export default class CategoryPage extends Route {
+export class CategoryPage extends Route {
   constructor() {
     super("category", "/pages/category.html");
   }
@@ -86,4 +86,3 @@ export default class CategoryPage extends Route {
     }
   }
 }
-export { CategoryPage };
