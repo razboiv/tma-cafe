@@ -217,3 +217,4 @@ export default class MainPage extends Route {
     return count === 1 ? `${count} POSITION` : `${count} POSITIONS`;
   }
 }
+export { MainPage };
